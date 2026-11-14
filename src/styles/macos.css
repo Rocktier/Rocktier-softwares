@@ -167,14 +167,17 @@ button:focus-visible, select:focus-visible, input:focus-visible,
   background: var(--bg-secondary);
   border-bottom: 1px solid var(--border);
   flex: none;
-  -webkit-app-region: drag;
+  /* 拖拽不走 CSS：`-webkit-app-region` 是 Electron 的，Tauri 的 WKWebView 不认。
+     Tauri 只认 DOM 属性 `data-tauri-drag-region`（在 index.html 的 <header> 上）。
+     2026-11-14 血案：只写了 Electron 那套 + capabilities 缺 `allow-start-dragging`，
+     结果整个标题栏拖不动，但双击能放大（`internal-toggle-maximize` 在默认权限集里），
+     症状看起来像「窗口卡死」。 */
 }
 /* 交通灯由系统绘制（Tauri 装饰窗口），左侧留出 76pt 让位 */
 .titlebar { padding-left: 84px; }
 
 .tb-left, .tb-right {
   display: flex; align-items: center; gap: 6px;
-  -webkit-app-region: no-drag;
 }
 .tb-right { margin-left: auto; }
 

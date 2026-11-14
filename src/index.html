@@ -46,8 +46,12 @@
 <body>
   <div id="app">
 
-    <!-- ===== 标题栏：交通灯浮在左侧 84pt，标题居中，红点在标题旁 ===== -->
-    <header class="titlebar" data-tauri-drag-region>
+    <!-- ===== 标题栏：交通灯浮在左侧 84pt，标题居中，红点在标题旁 =====
+         `deep` 而不是裸属性：裸属性只有「直接点在 <header> 本身」才算拖拽区，
+         点在标题文字/红点/两端容器的空白上都拖不动。deep 让整个子树都能拖，
+         而 button / select / input / a 这些控件本身仍会阻断拖拽（Tauri 的
+         isDragRegion 先看 CLICKABLE_TAGS），所以下拉和按钮不受影响。 -->
+    <header class="titlebar" data-tauri-drag-region="deep">
       <div class="tb-left">
         <!-- 质量：唯一高频参数，做成一个系统下拉，不再三颗药丸 -->
         <select class="quality-menu" id="quality-menu" aria-label="Output quality">
