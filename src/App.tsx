@@ -124,7 +124,9 @@ export default function App() {
   }, [tabs]);
 
   const [view, setView] = useState<ViewMode>("split");
-  const [sidebar, setSidebar] = useState(false);
+  /* 侧栏改成常驻面板之后默认展开：它不再压住正文，而是正文左边的
+     一列（设计稿 lenso 的 .side）。收起仍然只按一次按钮 / ⌘\。 */
+  const [sidebar, setSidebar] = useState(true);
   const [toast, setToast] = useState<{ msg: string; tone: ToastTone } | null>(null);
   const [frontmatterOpen, setFrontmatterOpen] = useState(false);
   const [findReplaceOpen, setFindReplaceOpen] = useState(false);
@@ -1071,7 +1073,7 @@ export default function App() {
   const viewClass = view === "preview" ? "view-preview" : "";
 
   return (
-    <div className={`app-shell ${viewClass} ${sidebar ? "drawer-open" : ""}`}>
+    <div className={`app-shell ${viewClass}`}>
       <Toolbar
         viewMode={view}
         onSelectView={setView}
@@ -1080,8 +1082,8 @@ export default function App() {
         onOpen={doOpen}
         onSave={doSave}
         modified={doc.modified}
-        hasPath={!!doc.path}
         displayName={displayName}
+        filePath={doc.path}
         themeMode={themeMode}
         onToggleTheme={cycleTheme}
         onFindReplace={toggleFindReplace}
@@ -1112,8 +1114,8 @@ export default function App() {
           recent={recent}
           currentPath={doc.path}
           onOpenRecent={(p) => {
+            // 侧栏已改成常驻面板，换文件不再收起它 —— 连续翻文件时才不用反复开
             void openRecentPath(p);
-            setSidebar(false);
           }}
           onJumpTo={(line) => {
             const el = editorRef.current;
@@ -1127,7 +1129,6 @@ export default function App() {
             el.setSelectionRange(pos, pos);
             const lineHeight = parseFloat(getComputedStyle(el).lineHeight) || 25.2;
             el.scrollTop = Math.max(0, (line - 5) * lineHeight);
-            setSidebar(false);
           }}
         />
         <main className="editor-container">
@@ -1171,7 +1172,6 @@ export default function App() {
         words={stats.words}
         lines={totalLines}
         minutes={stats.minutes}
-        displayName={displayName}
         hasPath={!!doc.path}
         modified={doc.modified}
         syncing={syncing}

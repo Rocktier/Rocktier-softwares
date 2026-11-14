@@ -94,6 +94,11 @@
   /* 模态遮罩：点击才出现、几秒就关，压暗本身就是「现在该看这个」的交互语言，
      与玻璃是否透没有关系，保持 .55 不动。 */
   --scrim: rgba(0, 0, 0, 0.55);
+  /* 布局尺寸：这两个在母版 tokens.css 里有默认值（44 / 260），
+     产品层按 lenso 设计稿覆写 —— 标题栏 52px（文件名 + 路径两行），
+     侧栏 220px（设计稿 .side 的 218 + 2px 呼吸）。母版不动。 */
+  --toolbar-h: 52px;
+  --sidebar-w: 220px;
   /* 抽屉遮罩：常驻可开可关的侧栏不是模态，压到 .55 等于把整屏熄灯，
      用户看的是「抽屉浮在文档上」，不是「文档被停用」。2026-11-13 起两档分开
      （原来共用一个 --scrim）。见透率 (1-.20)×(1-.74) = 20.8%。
@@ -152,8 +157,9 @@
   display: flex;
   flex: 1;
   overflow: hidden;
-  /* 面板与窗口边缘之间留出画布，卡片才「浮」得起来 */
-  padding: 0 12px 10px;
+  /* 面板与窗口边缘之间留出画布，卡片才「浮」得起来（设计稿 0 16 16 + 12 缝） */
+  padding: 0 16px 12px;
+  gap: 12px;
 }
 
 .toolbar {
@@ -161,7 +167,7 @@
   align-items: center;
   justify-content: space-between;
   height: var(--toolbar-h);
-  padding: 0 12px;
+  padding: 0 14px;
   background: linear-gradient(180deg, var(--glass-chrome-a) 0%, var(--glass-chrome-b) 100%);
   border-bottom: none;
   position: relative;
@@ -211,100 +217,52 @@ html.is-mac .toolbar {
   gap: 4px;
 }
 
-.brand {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-right: 4px;
-}
-
-.brand-mark {
-  width: 24px;
-  height: 24px;
+/* 品牌收成一枚 18px 图标：标题栏的主角是文档名与路径，不是产品名。
+   设计稿（lenso）里标题栏第一行就是文件名 —— 产品名由窗口标题、
+   应用图标和关于面板承担，不必在界面里再喊一次。 */
+.toolbar-mark {
+  width: 18px;
+  height: 18px;
   flex-shrink: 0;
+  opacity: 0.9;
 }
 
-/* Letter mark — the app-icon tile: dark in both themes so it matches the Dock
-   icon; the hairline border keeps it from vanishing on the near-black toolbar. */
-.brand-mark .brand-tile {
-  fill: #0a0a0a;
-  stroke: var(--border-strong);
-  stroke-width: 1;
+/* 文档标题：两行（文件名 / 所在目录），lenso 的 doc-title。
+   两行都做省略号截断 —— 路径可能很长，宁可截断也不许把分段控件挤走。 */
+.doc-title {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  max-width: 340px;
 }
 
-.brand-mark .brand-letters {
-  fill: #ffffff;
-  font-family: var(--font-sans);
-}
-
-.brand-mark .brand-pip {
-  fill: var(--red);
-}
-
-.brand-mark .brand-badge {
-  fill: #ffffff;
-}
-
-.brand-name {
-  font-size: 13px;
-  font-weight: 600;
-  letter-spacing: -0.01em;
-  color: var(--text-primary);
-  white-space: nowrap;
-}
-
-.brand-name .tag {
-  font-weight: 400;
-  color: var(--text-tertiary);
-  margin-left: 2px;
-}
-
-/* 一句话自述（家族常量 4）：产品名后说明这个软件干什么。窄屏让位给文件名。 */
-.brand-tagline {
-  font-size: 11px;
-  color: var(--text-tertiary);
-  white-space: nowrap;
-  letter-spacing: 0;
-}
-
-.doc-pill {
+.doc-title .name {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 4px 10px;
-  border-radius: var(--radius-pill);
-  /* 文件名胶囊：一枚压在最底层玻璃（chrome）上的小玻璃 */
-  background: linear-gradient(180deg, var(--glass-pill-a) 0%, var(--glass-pill-b) 100%);
-  border: none;
-  box-shadow: inset 0 0 0 0.5px var(--glass-hairline);
-  font-size: 12px;
-  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+  color: var(--text-primary);
+  line-height: 1.25;
   white-space: nowrap;
-  max-width: 260px;
+}
+
+.doc-title .name > :first-child,
+.doc-title .name {
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-/* 名字旁的状态词：未保存（红点+红字，双编码）/ 已保存（灰字，无点）。
-   红点永不单独编码状态 —— 旁边一定有这个词（家族常量 2）。 */
-.doc-pill .state {
-  font-size: 11px;
+.doc-title .path {
+  font-size: 10.5px;
+  line-height: 1.2;
   color: var(--text-tertiary);
-}
-
-.doc-pill.is-unsaved .state {
-  color: var(--red-ink);
-  font-weight: 500;
-}
-
-.doc-pill .dot-live {
-  flex-shrink: 0;
-}
-
-.doc-pill .name {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .tbar-btn {
@@ -513,66 +471,31 @@ html.is-mac .toolbar {
   overflow-y: auto;
 }
 
-/* ── 侧栏：浮在内容之上的玻璃抽屉 ──────────────────────────────
-   四条边都内缩 8px、18px 圆角 —— 它是一块「浮起来的板」，而不是贴在
-   窗口边缘的一条栏。顶部从工具栏下方开始，为的是不盖住 macOS 的
-   红黄绿三键（此前 top:0 时抽屉一打开就把它们压住了）。
-   抽屉背后的内容由 .sidebar-overlay 的遮罩压暗，所以这里的 alpha
-   可以比「浮在正文上」的 toast 低一档：底已经被限定住了。 */
+/* ── 侧栏：常驻玻璃面板（设计稿 .side）──────────────────────────
+   2026-11-14 从「浮层抽屉 + 遮罩」改成**流内常驻面板**。
+   抽屉那套的代价是连锁的：它必须压在内容上，而玻璃要透出东西才有
+   材质感（D-146），于是要遮罩、要让正文左对齐、还要把抽屉遮罩和
+   模态遮罩拆成两档。改成常驻面板后这些补丁全部不需要 —— 它不覆盖
+   任何东西，透出来的是画布与窗口背后的色阶，布局也不再随开合跳动。
+   收起时直接 display:none：位移动画是「浮层」的语言，常驻面板不用。 */
 .sidebar {
-  position: fixed;
-  top: calc(var(--toolbar-h) + 8px);
-  left: 8px;
-  bottom: calc(var(--statusbar-h) + 22px);
+  flex: 0 0 var(--sidebar-w);
   width: var(--sidebar-w);
+  align-self: stretch;
   background: linear-gradient(180deg, var(--glass-drawer-a) 0%, var(--glass-drawer-b) 100%);
   border-radius: var(--glass-radius);
   border-right: none;
   box-shadow: inset 0 0 0 0.5px var(--glass-hairline-strong), var(--glass-shadow);
   backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
   -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
-  transform: translateX(0);
-  transition: transform var(--dur-normal) var(--ease);
-  z-index: 30;
+  z-index: 1;
   display: flex;
   flex-direction: column;
   overflow: hidden;
 }
 
 .sidebar:not(.open) {
-  /* 100% 之外还要多推 8px：抽屉左边内缩了 8px，只推 100% 会留下一条
-     8px 的竖边露在窗口边上。 */
-  transform: translateX(calc(-100% - 8px));
-  /* 只是移出屏外，仍在 Tab 序列与无障碍树里：键盘用户会 tab 进看不见的
-     侧栏。visibility 延迟到滑动结束才切，收起动画不受影响；展开时目标态
-     只声明 transform，visibility 立即恢复。 */
-  visibility: hidden;
-  transition:
-    transform var(--dur-normal) var(--ease),
-    visibility 0s linear var(--dur-normal);
-}
-
-.sidebar-overlay {
-  position: fixed;
-  inset: 0;
-  /* 遮罩值走 --scrim-drawer：玻璃的成像依赖它，两档必须一起调（verify-glass 会算）。
-     抽屉不是模态，不用 --scrim —— 那个是给对话框「熄灯」用的。 */
-  background: var(--scrim-drawer);
-  z-index: 25;
-  backdrop-filter: blur(2px);
-}
-
-/* 抽屉打开时正文栏不再居中，让它跑到抽屉底下。
-   为什么（findings D-146）：.md-viewer 是居中定宽 720，1200pt 窗口下栏左边界
-   落在 240pt，而抽屉右边界是 238pt —— 差 2pt。于是抽屉永远只压在空留白上，
-   backdrop-filter 背后没有内容可糊，玻璃在真机上看着就是一块实色板。
-   这就是「lenso 没效果」的真因，与 alpha / blur 参数无关。
-   左对齐后文字落到抽屉底下，玻璃才有东西可透。
-   只过渡 margin：抽屉是浮层，内容移位要跟着动画走，不能瞬跳。 */
-.app-shell.drawer-open .md-viewer {
-  margin-left: 0;
-  margin-right: auto;
-  transition: margin-left var(--dur-normal) var(--ease);
+  display: none;
 }
 
 /* 抽屉自己的头：高度不再等于工具栏（它已经不在工具栏上了），只留一行标题 */
@@ -864,8 +787,7 @@ html.is-mac .toolbar {
 .toast {
   position: fixed;
   bottom: 52px;
-  left: 50%;
-  transform: translateX(-50%);
+  right: 16px;
   padding: 8px 18px;
   background: linear-gradient(180deg, var(--glass-float-a) 0%, var(--glass-float-b) 100%);
   border: none;
@@ -880,8 +802,8 @@ html.is-mac .toolbar {
 }
 
 @keyframes toastIn {
-  from { opacity: 0; transform: translateX(-50%) translateY(8px); }
-  to { opacity: 1; transform: translateX(-50%) translateY(0); }
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 /* 语气分级（家族铁律 7：保存成功与保存失败必须视觉可区分）。
@@ -922,9 +844,9 @@ html.is-mac .toolbar {
 }
 .toast--error::before { background: var(--danger); }
 
-/* 自述先让位：窄窗口下文件名比口号重要 */
+/* 窄窗口先让出路径行：文件名比「它在哪个目录」重要 */
 @media (max-width: 1040px) {
-  .brand-tagline {
+  .doc-title .path {
     display: none;
   }
 }
@@ -935,9 +857,6 @@ html.is-mac .toolbar {
   }
   /* 竖排时两块面板之间靠 gap 分隔，不再需要一条边线 */
   .toolbar-center {
-    display: none;
-  }
-  .brand {
     display: none;
   }
 }
@@ -1030,8 +949,13 @@ html.is-mac .toolbar {
 .status-bar {
   display: flex;
   align-items: center;
+  align-self: flex-start;
   height: 30px;
-  margin: 0 12px 10px;
+  /* 宽度跟着内容走：lenso 的 floating controls 是一枚短胶囊，
+     不是一条把整行占满的横条。左对齐到面板的左边界（16px）。 */
+  width: fit-content;
+  max-width: calc(100% - 32px);
+  margin: 0 0 12px 16px;
   padding: 0 14px;
   background: linear-gradient(180deg, var(--glass-pill-a) 0%, var(--glass-pill-b) 100%);
   border-top: none;
@@ -1517,11 +1441,13 @@ html.is-mac .toolbar {
   display: flex;
   align-items: center;
   gap: 6px;
-  height: 40px;
-  padding: 0 12px 8px;
-  background: var(--glass-chrome-b);
+  height: auto;
+  padding: 2px 16px 8px;
+  /* 设计稿里标签直接坐在底衬上，没有第二条通栏 —— 再加一层 chrome
+     底就变成「两条工具条叠着」，那是 2010 年代的窗口语言。 */
+  background: transparent;
   border-bottom: none;
-  box-shadow: inset 0 -1px 0 var(--glass-hairline);
+  box-shadow: none;
   flex-shrink: 0;
   overflow: hidden;
 }
@@ -1532,7 +1458,9 @@ html.is-mac .toolbar {
   gap: 6px;
   overflow-x: auto;
   scrollbar-width: none;
-  flex: 1;
+  /* 不再 flex:1：「新建」要贴在最后一张标签右边（设计稿的 .tab-add），
+     而不是被推到窗口最右端，跟标签隔着一整个空白。 */
+  flex: 0 1 auto;
   min-width: 0;
 }
 .tabbar-strip::-webkit-scrollbar { display: none; }

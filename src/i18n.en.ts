@@ -104,6 +104,7 @@ export const en = {
     "status.stats": "{n} words · {lines} lines · {m} min",
     "status.syncing": "Updating preview",
     "status.draft": "Not saved yet",
+    "doc.noPath": "Not on disk yet",
     "status.exportHint": "Export PDF: ⌘⇧P",
     "fm.title": "Document info",
     "fm.titleLabel": "Title",

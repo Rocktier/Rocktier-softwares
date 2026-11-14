@@ -7,7 +7,7 @@ interface Props {
   /** 全文行数（按 \n 计），来自当前内容本身 */
   lines: number;
   minutes: number;
-  displayName: string;
+  /** 是否已落到磁盘：决定状态词是「已保存」还是「草稿」 */
   hasPath: boolean;
   modified: boolean;
   /** 预览还在追当前内容（useDeferredValue 尚未追上）——真实的进行态 */
@@ -22,7 +22,6 @@ export const StatusBar = memo(function StatusBar({
   words,
   lines,
   minutes,
-  displayName,
   hasPath,
   modified,
   syncing,
@@ -58,8 +57,6 @@ export const StatusBar = memo(function StatusBar({
         <span>{stateText}</span>
       </span>
       <span className="sep" />
-      <span className="status-file" title={displayName}>{displayName}</span>
-      <span className="sep" />
       <span className="mono">{t("status.stats", { n: words, lines, m: minutes })}</span>
       {gitBranch && (
         <>
@@ -68,7 +65,6 @@ export const StatusBar = memo(function StatusBar({
         </>
       )}
       <span className="spacer" />
-      <span className="status-hint">{t("status.exportHint")}</span>
       {showLicenseChip && (
         /* 徽标颜色统一由 .badge-license（母版 tokens.css）负责，试用/过期同色，
             不再用 expired 修饰类切警示色。 */

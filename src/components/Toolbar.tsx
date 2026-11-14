@@ -11,9 +11,9 @@ interface Props {
   onOpen: () => void;
   onSave: () => void;
   modified: boolean;
-  /** 是否已落到磁盘：决定名字后面说「已保存」还是什么都不说 */
-  hasPath: boolean;
   displayName: string;
+  /** 当前文档路径：标题栏第二行显示所在目录（设计稿 lenso 的 doc-title） */
+  filePath?: string | null;
   themeMode: "auto" | "light" | "dark";
   onToggleTheme: () => void;
   onFindReplace: () => void;
@@ -32,8 +32,8 @@ export const Toolbar = memo(function Toolbar({
   onOpen,
   onSave,
   modified,
-  hasPath,
   displayName,
+  filePath,
   themeMode,
   onToggleTheme,
   onFindReplace,
@@ -44,9 +44,11 @@ export const Toolbar = memo(function Toolbar({
   onToggleInfo,
 }: Props) {
   useUiLang(); // 语言切换时重渲染
-  /* 状态只由真实状态驱动：有未保存改动才亮呼吸点，且旁边一定有文字。
-     静止态（无改动）只留名字，不放任何红点。 */
-  const docState = modified ? t("doc.unsaved") : hasPath ? t("doc.saved") : "";
+  /* 标题栏第二行：文档所在目录（设计稿 lenso 的 doc-title）。
+     未落盘的新文档没有目录可言，就写「草稿」—— 比留空更能说明状态。 */
+  const dirLabel = filePath
+    ? filePath.replace(/[/\\][^/\\]+$/, "") || filePath
+    : t("doc.noPath");
   return (
     <header className="toolbar">
       <div className="toolbar-side">
@@ -56,18 +58,11 @@ export const Toolbar = memo(function Toolbar({
             <line x1="5.5" y1="1.5" x2="5.5" y2="14.5" />
           </svg>
         </button>
-        <div className="brand">
-          <img className="brand-mark" src="/favicon.png" alt="" />
-          <span className="brand-name">Rocktier<span className="tag">Markdown</span></span>
-          <span className="brand-tagline">{t("brand.tagline")}</span>
-        </div>
-        <div
-          className={`doc-pill ${modified ? "is-unsaved" : ""}`}
-          title={modified ? t("toolbar.unsaved") : displayName}
-        >
-          {modified && <span className="dot-live" role="img" aria-label={docState} />}
-          <span className="name">{displayName}</span>
-          {docState && <span className="state">{docState}</span>}
+        {/* 品牌收成 18px 图标：标题栏的主角是文档名，不是产品名（lenso 设计稿） */}
+        <img className="toolbar-mark" src="/favicon.png" alt="" />
+        <div className="doc-title" title={filePath || displayName}>
+          <span className="name">{displayName}{modified && <span className="dot-live" role="img" aria-label={t("doc.unsaved")} />}</span>
+          <span className="path">{dirLabel}</span>
         </div>
       </div>
 

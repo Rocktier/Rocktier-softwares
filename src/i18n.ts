@@ -130,6 +130,7 @@ const STRINGS = {
     "status.stats": "{n} 字 · {lines} 行 · {m} 分钟",
     "status.syncing": "预览更新中",
     "status.draft": "尚未保存",
+    "doc.noPath": "尚未存到磁盘",
     "status.exportHint": "导出 PDF 用 ⌘⇧P",
     "fm.title": "文档信息",
     "fm.titleLabel": "标题",

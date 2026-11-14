@@ -1,5 +1,6 @@
-// 标签栏。只在有两张以上标签时出现 —— 单文档时它是纯噪音，
-// 而「新建」入口本来就在工具栏上。
+// 标签栏。设计稿 lenso 把它做成常驻的一条胶囊条（第 2 行），
+// 所以不再「≥2 张才出现」—— 单标签时它就是「当前文档 + 新建」，
+// 位置固定，视线不用跟着跳。
 //
 // 交互与浏览器一致：点标题切换、× 关闭、中键关闭、双击未命名标签不做事。
 // 关掉改过的标签会先问一句（由父组件的 doCloseTab 负责），这里不重复实现。
@@ -16,7 +17,7 @@ interface Props {
 }
 
 export function TabBar({ tabs, activeId, onSelect, onClose, onNew }: Props) {
-  if (tabs.length < 2) return null;
+  if (tabs.length === 0) return null;
 
   return (
     <div className="tabbar" role="tablist" aria-label={t("tab.list")}>

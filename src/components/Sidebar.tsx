@@ -34,7 +34,6 @@ export const Sidebar = memo(function Sidebar({ open, onOpen, onClose, headings, 
 
   return (
     <>
-      {open && <div className="sidebar-overlay" onClick={onClose} />}
       <aside className={`sidebar ${open ? "open" : ""}`} aria-label={t("sidebar.files")}>
         <div className="sidebar-header">
           <span className="sidebar-title">{t("sidebar.files")}</span>
