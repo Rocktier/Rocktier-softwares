@@ -60,9 +60,11 @@
   --pane-bg: #17171b;
   /* chrome 从**实色**改成半透：原来是 #1c1c20（alpha=1），模糊一个实色
      背景等于没模糊，工具栏 / 标签栏 / 状态条因此从来就不是玻璃。
-     半透之后它至少会吃到一点画布色，配上内描边才有材质感。 */
-  --glass-chrome-a: rgba(30, 30, 35, 0.94);
-  --glass-chrome-b: rgba(24, 24, 29, 0.92);
+     2026-11-15：.94/.92 仍然是「几乎不透」—— 那是 11-12 那版没有柔光底时
+     撑对比度用的补救值。画布有了 --wash-* 之后，**透出来的就是颜色本身**，
+     这里直接回到 lenso 原值 .92/.78（设计稿 rgba(28,28,31,.92→.78)）。 */
+  --glass-chrome-a: rgba(28, 28, 31, 0.92);
+  --glass-chrome-b: rgba(28, 28, 31, 0.78);
   /* 深色档的 panel 比设计稿暗一档（lenso 原值是 rgba(58,58,64,…)）。
      2026-11-13：--danger 已从玻璃上撤走（错误提示改自带不透明底），
      这条「必须压到 30 附近」的约束随之解除，面板 .96 → .78，
@@ -87,6 +89,13 @@
   /* 内描边加亮：玻璃之所以看着像玻璃，一半靠这条 0.5px 的边缘光。
      画布压到纯黑之后，.14 在屏幕上会被吃掉，抬到 .18。 */
   --glass-hairline-strong: rgba(255, 255, 255, 0.18);
+  /* 标题栏底缝：设计稿 .glass-chrome 的 `inset 0 -1px 0 rgba(0,0,0,.3)`。
+     深色档这里**不是**发光细线，是一条暗缝 —— 玻璃片压在窗口上，缝在
+     下方；画成亮线会变成「两条工具条叠着」的时代感。 */
+  --glass-seam: rgba(0, 0, 0, 0.30);
+  /* 顶边高光：lenso 的 sheen，玻璃被上方光源打亮的那一道。
+     只在标题栏出现，因为只有它贴着窗口上沿。 */
+  --glass-top-sheen: rgba(255, 255, 255, 0.07);
   --glass-sheen: rgba(255, 255, 255, 0.06);
   --glass-blur: 50px;
   --glass-saturate: 160%;
@@ -131,9 +140,12 @@
   /* 浅色档的三级层次本来就成立（灰画布 + 白纸），不动画布。 */
   --canvas: #e6e6eb;
   --pane-bg: #ffffff;
-  /* 同深色档：实色 → 半透，否则 backdrop-filter 无从生效 */
-  --glass-chrome-a: rgba(245, 245, 247, 0.94);
-  --glass-chrome-b: rgba(240, 240, 243, 0.92);
+  /* 同深色档：实色 → 半透，否则 backdrop-filter 无从生效。
+     2026-11-15：.94/.92 → lenso 原值 .72/.56。这条是「朦胧透光」的**全部**
+     来源 —— 浅色档压在柔光上，.94 等于把左侧冷光整个挡住（合成后 252 白），
+     .72 才透得出那层淡蓝。上限由 verify-glass-contrast 的 chrome 见透率守。 */
+  --glass-chrome-a: rgba(255, 255, 255, 0.72);
+  --glass-chrome-b: rgba(255, 255, 255, 0.56);
   /* 浅色档没有 danger 那个包袱（--danger #b8342a 在亮面上有 4.9:1 余量），
      所以面板可以真的做成玻璃：.96 → .80，见透率 2.4% → 12%。 */
   --glass-panel-a: rgba(255, 255, 255, 0.80);
@@ -152,8 +164,13 @@
   --glass-raise-b: rgba(255, 255, 255, 0.90);
   --glass-hairline: rgba(0, 0, 0, 0.10);
   --glass-hairline-strong: rgba(0, 0, 0, 0.16);
+  --glass-seam: rgba(0, 0, 0, 0.05);
+  --glass-top-sheen: rgba(255, 255, 255, 0.55);
   --glass-sheen: rgba(255, 255, 255, 0.70);
   --glass-blur: 25px;
+  /* 设计稿浅色档是 saturate(180%)：玻璃把背后的柔光「提纯」一档，
+     透出来才是有色光而不是灰白雾。深色档 160% 照旧。 */
+  --glass-saturate: 180%;
   --glass-shadow: 0 10px 30px rgba(0, 0, 0, 0.20);
   --glass-shadow-pill: 0 2px 8px rgba(0, 0, 0, 0.10);
   --scrim: rgba(0, 0, 0, 0.40);
@@ -213,8 +230,11 @@
   z-index: 20;
   flex-shrink: 0;
   gap: 12px;
-  /* 半像素内描边 = 玻璃边缘；比 1px 实线更像材质而不是边框 */
-  box-shadow: inset 0 -1px 0 var(--glass-hairline-strong);
+  /* 玻璃片的边：上沿一道被光打亮的高光，下沿一条暗缝。
+     原来只有下沿一条 1px 的 hairline-strong（浅色 .16），比设计稿的
+     rgba(0,0,0,.05) 重三倍，压在低 alpha 的玻璃上就成了一条硬边 ——
+     而「朦胧」靠的正是边界不要抢眼。 */
+  box-shadow: inset 0 1px 0 var(--glass-top-sheen), inset 0 -1px 0 var(--glass-seam);
   backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
   -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
 }
@@ -224,16 +244,6 @@
    `is-mac` is set from main.tsx at startup. */
 html.is-mac .toolbar {
   padding-left: 70px;
-}
-
-.toolbar::after {
-  content: '';
-  position: absolute;
-  bottom: -1px;
-  left: 0;
-  right: 0;
-  height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.06), transparent);
 }
 
 .toolbar-side {
