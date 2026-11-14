@@ -224,18 +224,47 @@ function resolveBackdrops(tokens, name, depth = 0) {
       rgb: over(scrim, b.rgb),
     }));
   }
+  /* 画布自 2026-11-14（B 方案）起不再是**一个**颜色，而是「三团柔光 +
+     一条线性底」的渐变。所以这里返回**六个采样点**，逐个当底算 ——
+     取平均色或只看两端都会漏：柔光峰值处的亮度可以比底色高一个量级
+     （深色档 #2a1026 的亮度是纯黑的 40 倍），浅色文字正好压在那儿。
+     柔光记为「柔光色 × 画布起始色」，因为三团 radial 分居三角、互不重叠，
+     峰值处另一团的外沿已衰减到 0；这是保守近似，不是省事。 */
   if (name === "canvas") {
-    const c = parseColor(tokens.get("--canvas"));
-    if (!c) return [];
-    return [{ label: "画布", rgb: c.a >= 1 ? c.rgb : over(c, WHITE) }];
+    const base = parseColor(tokens.get("--canvas"));
+    if (!base) return [];
+    const baseRgb = base.a >= 1 ? base.rgb : over(base, WHITE);
+    const out = [];
+    for (const [tk, label] of [
+      ["--canvas", "画布底 · 起"],
+      ["--canvas-2", "画布底 · 中"],
+      ["--canvas-3", "画布底 · 止"],
+    ]) {
+      const c = parseColor(tokens.get(tk));
+      /* --canvas-2/-3 是可选细化；只有 --canvas 缺失才算失败 */
+      if (!c) continue;
+      out.push({ label, rgb: c.a >= 1 ? c.rgb : over(c, baseRgb) });
+    }
+    for (const [tk, label] of [
+      ["--wash-1", "柔光 · 左上"],
+      ["--wash-2", "柔光 · 右上"],
+      ["--wash-3", "柔光 · 底"],
+    ]) {
+      const c = parseColor(tokens.get(tk));
+      if (!c) return []; // 柔光令牌缺一个，画布就退回纯色 —— 判据必须当故障报出来
+      out.push({ label, rgb: over(c, baseRgb) });
+    }
+    return out;
   }
   if (name === "chrome") {
-    const under = resolveBackdrops(tokens, "canvas", depth + 1)[0];
-    if (!under) return [];
+    const unders = resolveBackdrops(tokens, "canvas", depth + 1);
+    if (!unders.length) return [];
     const out = [];
-    for (const tk of ["--glass-chrome-a", "--glass-chrome-b"]) {
-      const c = parseColor(tokens.get(tk));
-      if (c) out.push({ label: "工具条玻璃", rgb: over(c, under.rgb) });
+    for (const under of unders) {
+      for (const tk of ["--glass-chrome-a", "--glass-chrome-b"]) {
+        const c = parseColor(tokens.get(tk));
+        if (c) out.push({ label: `工具条玻璃压${under.label}`, rgb: over(c, under.rgb) });
+      }
     }
     return out;
   }
@@ -367,7 +396,7 @@ let failures = 0;
 const lines = [];
 
 lines.push("=== 玻璃材质对比度判据 ===");
-lines.push("（遮罩 + 玻璃 + 文字 逐层合成；底取纯白/纯黑两个极端）");
+lines.push("（遮罩 + 玻璃 + 文字 逐层合成；内容底取纯白/纯黑，画布底取六个采样点）");
 
 for (const theme of ["dark", "light"]) {
   const { failures: f, rows } = checkTheme(theme, themes[theme]);
@@ -424,6 +453,23 @@ if (process.argv.includes("--selftest")) {
   );
   if (weak.n === 0) failures++;
   if (thick.n === 0) failures++;
+
+  /* 正反对照 ④：柔光底本身 —— 2026-11-14 画布从纯色变成渐变，判据也必须
+     对「这层渐变能坏到什么程度」有反应。把三团柔光换成该档最坏的颜色
+     （深色档换纯白 = 白玻璃白字；浅色档换纯黑 = 黑字压黑底），必须红。 */
+  const washProbe = { dark: "#ffffff", light: "#000000" };
+  let washN = 0;
+  for (const theme of ["dark", "light"]) {
+    const m = new Map(themes[theme]);
+    for (const tk of ["--wash-1", "--wash-2", "--wash-3"]) m.set(tk, washProbe[theme]);
+    washN += checkTheme(theme, m).failures.length;
+  }
+  lines.push(
+    `\n正反对照 ④：把三团柔光换成该档最坏色（深色→纯白 / 浅色→纯黑）→ ` +
+      `${washN} 项告警` +
+      (washN > 0 ? " ✅（柔光层参与了合成）" : " ❌（判据失效：柔光根本没进算式）")
+  );
+  if (washN === 0) failures++;
 
   /* 正反对照 ③：抽屉文字扫描器自身 —— 造一条违规必须扫得到，
      再造一条「装饰条用 background」必须扫不到（误报会让判据被绕过）。 */

@@ -1,6 +1,6 @@
 {
   "name": "rocktier-markdown",
-  "version": "1.0.24",
+  "version": "1.0.25",
   "description": "Fast, elegant Markdown reader and editor — Rocktier family",
   "private": true,
   "type": "module",
