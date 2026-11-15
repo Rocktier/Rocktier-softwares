@@ -144,7 +144,20 @@ html, body {
 }
 ::selection { background: var(--selection); }
 
-#app { display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+#app {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  overflow: hidden;
+  /* 品牌柔光底（D-158 §2）：窗口不透明，玻璃要透出颜色就得把渐变画进应用自己；
+     三团 radial 在前 = 在上，线性底垫底。令牌在 styles/glass.css（L0 副本）。 */
+  background-color: var(--canvas);
+  background-image:
+    radial-gradient(120% 90% at 12% 0%, var(--wash-1) 0%, transparent 55%),
+    radial-gradient(100% 80% at 92% 8%, var(--wash-2) 0%, transparent 52%),
+    radial-gradient(120% 100% at 60% 110%, var(--wash-3) 0%, transparent 58%),
+    linear-gradient(160deg, var(--canvas) 0%, var(--canvas-2) 50%, var(--canvas-3) 100%);
+}
 
 button, select, input { font-family: inherit; color: inherit; }
 button { cursor: default; }
@@ -164,8 +177,11 @@ button:focus-visible, select:focus-visible, input:focus-visible,
   gap: 8px;
   height: var(--titlebar-h);
   padding: 0 12px 0 14px;
-  background: var(--bg-secondary);
-  border-bottom: 1px solid var(--border);
+  /* chrome 玻璃（D-158 §1）：实色 → 半透，backdrop-filter 才有内容可透 */
+  background: linear-gradient(180deg, var(--glass-chrome-a) 0%, var(--glass-chrome-b) 100%);
+  box-shadow: inset 0 1px 0 var(--glass-top-sheen), inset 0 -1px 0 var(--glass-seam);
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
   flex: none;
   /* 拖拽不走 CSS：`-webkit-app-region` 是 Electron 的，Tauri 的 WKWebView 不认。
      Tauri 只认 DOM 属性 `data-tauri-drag-region`（在 index.html 的 <header> 上）。
@@ -500,8 +516,11 @@ button:focus-visible, select:focus-visible, input:focus-visible,
 .inspector {
   width: var(--inspector-w);
   flex: none;
-  border-left: 1px solid var(--border);
-  background: var(--bg-inset);
+  /* panel 玻璃（D-158 §1）：右栏浮在柔光底上，内侧发丝边代替实线边框 */
+  background: linear-gradient(180deg, var(--glass-panel-a) 0%, var(--glass-panel-b) 100%);
+  box-shadow: inset 0 0 0 0.5px var(--glass-hairline), inset 1px 0 0 0 var(--glass-hairline);
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
   padding: 16px 14px;
   display: flex;
   flex-direction: column;
@@ -612,8 +631,11 @@ button:focus-visible, select:focus-visible, input:focus-visible,
   gap: 12px;
   height: var(--statusbar-h);
   padding: 0 16px;
-  border-top: 1px solid var(--border);
-  background: var(--bg-secondary);
+  /* chrome 玻璃（D-158 §1，同家族状态条）：顶缘 seam 代替实线边框 */
+  background: linear-gradient(180deg, var(--glass-chrome-a) 0%, var(--glass-chrome-b) 100%);
+  box-shadow: inset 0 0 0 0.5px var(--glass-hairline), inset 0 1px 0 var(--glass-seam);
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
   flex: none;
 }
 .bb-status {
@@ -788,10 +810,12 @@ button:focus-visible, select:focus-visible, input:focus-visible,
   z-index: 1000;
   min-width: 208px;
   padding: 4px;
-  background: var(--bg-elevated);
-  border: 1px solid var(--border-hover);
+  /* float 玻璃（D-158 §1 pill 档）：浮层菜单用 float 令牌 + 20px 模糊 */
+  background: linear-gradient(180deg, var(--glass-float-a) 0%, var(--glass-float-b) 100%);
   border-radius: var(--radius-md);
-  box-shadow: 0 10px 28px var(--shadow);
+  box-shadow: inset 0 0 0 0.5px var(--glass-hairline), var(--glass-shadow-pill);
+  backdrop-filter: blur(20px) saturate(var(--glass-saturate));
+  -webkit-backdrop-filter: blur(20px) saturate(var(--glass-saturate));
   display: flex;
   flex-direction: column;
   gap: 1px;
