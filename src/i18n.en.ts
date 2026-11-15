@@ -49,7 +49,6 @@ export const en = {
     "toolbar.exportHtml": "Export standalone HTML",
     "toolbar.info": "Document info",
     "toolbar.theme": "Toggle theme",
-    "theme.mode.auto": "Follow system",
     "theme.mode.light": "Light",
     "theme.mode.dark": "Dark",
     "toolbar.unsaved": "Unsaved changes",

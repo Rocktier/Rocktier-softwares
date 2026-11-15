@@ -14,7 +14,7 @@ interface Props {
   displayName: string;
   /** 当前文档路径：标题栏第二行显示所在目录（设计稿 lenso 的 doc-title） */
   filePath?: string | null;
-  themeMode: "auto" | "light" | "dark";
+  themeMode: "light" | "dark";
   onToggleTheme: () => void;
   onFindReplace: () => void;
   onExportPdf: () => void;
@@ -142,7 +142,9 @@ export const Toolbar = memo(function Toolbar({
           </button>
         )}
         {/* 家族唯一主题按钮：.icon-btn（28×28 + 40px 命中区）。
-            三态 auto → light → dark，data-mode 驱动角标，title/aria-label 说明当前档。 */}
+            两态 light ⇄ dark（2026-11-15 用户令：取消「跟随系统」），
+            图标只做太阳 / 月亮：深色显太阳（点它回浅色），浅色显月亮；
+            data-mode 驱动角标，title/aria-label 说明当前档。 */}
         <button
           className="icon-btn"
           data-mode={themeMode}
@@ -150,12 +152,7 @@ export const Toolbar = memo(function Toolbar({
           title={`${t("toolbar.theme")} \u00b7 ${t(`theme.mode.${themeMode}`)}`}
           aria-label={`${t("toolbar.theme")}: ${t(`theme.mode.${themeMode}`)}`}
         >
-          {themeMode === "auto" ? (
-            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <rect x="2.5" y="4" width="19" height="13" rx="2" />
-              <path d="M8 20.5h8M12 17v3.5" />
-            </svg>
-          ) : themeMode === "dark" ? (
+          {themeMode === "dark" ? (
             <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
               <circle cx="12" cy="12" r="4" />
               <path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" />

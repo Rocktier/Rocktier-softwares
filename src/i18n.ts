@@ -75,7 +75,6 @@ const STRINGS = {
     "toolbar.exportHtml": "导出单文件 HTML",
     "toolbar.info": "文档信息",
     "toolbar.theme": "切换日夜模式",
-    "theme.mode.auto": "跟随系统",
     "theme.mode.light": "浅色",
     "theme.mode.dark": "深色",
     "toolbar.unsaved": "有未保存的更改",
