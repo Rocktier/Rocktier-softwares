@@ -254,10 +254,8 @@ button:focus-visible, select:focus-visible, input:focus-visible,
 .tb-btn:hover { background: var(--accent-muted); color: var(--text-primary); }
 .tb-btn[aria-pressed="true"] { color: var(--accent); }
 .tb-btn svg { display: block; }
-/* 两态图标互斥（2026-11-15 取消「跟随系统」）：light 月牙，dark 太阳 */
-.tb-btn .sun, .tb-btn .moon { display: none; }
-.tb-btn[data-mode="light"] .moon { display: block; }
-.tb-btn[data-mode="dark"] .sun { display: block; }
+/* 2026-11-15 二次简化：主题按钮固定一枚太阳，颜色随主题（currentColor） */
+.tb-btn .sun { display: block; }
 
 /* ───────── 工作区 ───────── */
 .workspace {
