@@ -1,5 +1,5 @@
 import { memo } from "react";
-import { LOCALES, t, useUiLang, getUiLang, setUiLang, type UiLang } from "../i18n";
+import { t, useUiLang, getUiLang, setUiLang } from "../i18n";
 import type { LicenseInfo } from "../services/license";
 
 interface Props {
@@ -80,20 +80,25 @@ export const StatusBar = memo(function StatusBar({
         </button>
       )}
       <span className="sep" />
-      {/* 家族语言 2026-10-13 收敛为 en/zh 两门（旧注释「标准 8 门」作废）。
-          保留原生 select：选项少也维持跨平台一致行为，键盘与读屏器支持
-          免费获得；未来加回多语言时不用改控件。选项显示 endonym（语言自称）。 */}
-      <select
-        className="status-lang"
-        value={getUiLang()}
-        onChange={(e) => setUiLang(e.target.value as UiLang)}
-        aria-label="Language"
-        title="Language"
-      >
-        {LOCALES.map((l) => (
-          <option key={l.code} value={l.code}>{l.endonym}</option>
-        ))}
-      </select>
+      {/* 家族语言 2026-10-13 收敛为 en/zh 两门。2026-11-15 用户令：语言切换
+          一律收成 A+地球图标按钮，点击在两门间对切（与主题按钮同款交互），
+          不再占文字位。外层 span 沿用 .status-lang 的右推布局职责。 */}
+      <span className="status-lang">
+        <button
+          className="icon-btn"
+          onClick={() => setUiLang(getUiLang() === "en" ? "zh" : "en")}
+          aria-label="Language"
+          title="Language"
+        >
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M4 16 9 5l5 11" />
+            <path d="M6 12h6" />
+            <circle cx="16.5" cy="16.5" r="4.5" />
+            <ellipse cx="16.5" cy="16.5" rx="2" ry="4.5" />
+            <path d="M12.2 16.5h8.6" />
+          </svg>
+        </button>
+      </span>
     </footer>
   );
 });
