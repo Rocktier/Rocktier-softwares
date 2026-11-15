@@ -624,7 +624,9 @@ html.is-mac .toolbar {
   align-items: center;
   gap: 8px;
   padding: 8px 12px;
-  border-radius: var(--radius-sm);
+  /* 选定框（Lenso 设计稿 .outline-item）：8px 圆角的安静方框，选中再加 500 字重，
+     不用品牌色与指示条。12px 的旧圆角在短行上偏「药丸」，设计稿定为 8px。 */
+  border-radius: 8px;
   font-size: 13px;
   color: var(--text-secondary);
   cursor: pointer;
@@ -768,7 +770,7 @@ html.is-mac .toolbar {
   text-align: left;
   font-size: 12.5px;
   padding: 5px 8px;
-  border-radius: var(--radius-sm);
+  border-radius: 8px; /* 选定框同款 8px（Lenso 设计稿），见 .sidebar-item 注 */
   color: var(--text-secondary);
   cursor: pointer;
   white-space: nowrap;
