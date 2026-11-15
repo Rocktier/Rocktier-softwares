@@ -9,7 +9,6 @@ const dict = {
   en: {
     "subtitle": "Images to WebP · processed locally",
     "themeBtn": "Theme",
-    "theme-mode-auto": "Follow system",
     "theme-mode-light": "Light",
     "theme-mode-dark": "Dark",
     "dropzone-text": "Drop images here",
@@ -157,7 +156,6 @@ const dict = {
   zh: {
     "subtitle": "图片转 WebP · 本地处理",
     "themeBtn": "主题",
-    "theme-mode-auto": "跟随系统",
     "theme-mode-light": "浅色",
     "theme-mode-dark": "深色",
     "dropzone-text": "拖拽图片到此处",

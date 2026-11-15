@@ -254,8 +254,8 @@ button:focus-visible, select:focus-visible, input:focus-visible,
 .tb-btn:hover { background: var(--accent-muted); color: var(--text-primary); }
 .tb-btn[aria-pressed="true"] { color: var(--accent); }
 .tb-btn svg { display: block; }
-.tb-btn .sun, .tb-btn .moon, .tb-btn .monitor { display: none; }
-.tb-btn[data-mode="auto"] .monitor { display: block; }
+/* 两态图标互斥（2026-11-15 取消「跟随系统」）：light 月牙，dark 太阳 */
+.tb-btn .sun, .tb-btn .moon { display: none; }
 .tb-btn[data-mode="light"] .moon { display: block; }
 .tb-btn[data-mode="dark"] .sun { display: block; }
 

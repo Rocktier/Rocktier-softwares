@@ -1224,11 +1224,9 @@ async function setupListeners() {
   });
 }
 
-// ── 主题：auto → light → dark 三态循环（家族 §6.5 唯一状态机）────────
-// 存储键沿用既有的 "rocktier.theme"：无值 = auto（跟随系统），light/dark 显式。
-// 改键会让老用户的主题偏好丢失，所以这里只扩值域、不换键。
+// ── 主题：light ⇄ dark 两态切换（2026-11-15 用户令：全家族取消「跟随系统」）──
+// 存储键沿用既有的 "rocktier.theme"：改键会让老用户的主题偏好丢失，不换键。
 const THEME_KEY = "rocktier.theme";
-const THEME_CYCLE = ["auto", "light", "dark"];
 if (themeToggle) {
   const lightMq = window.matchMedia("(prefers-color-scheme: light)");
 
@@ -1236,14 +1234,17 @@ if (themeToggle) {
     return lightMq.matches ? "light" : "dark";
   }
 
-  /** auto 落成实际生效值 —— data-theme 只接受 light/dark。 */
-  function resolveTheme(mode) {
-    return mode === "auto" ? systemTheme() : mode;
-  }
-
   function readMode() {
     const saved = localStorage.getItem(THEME_KEY);
-    return saved === "light" || saved === "dark" ? saved : "auto";
+    if (saved === "light" || saved === "dark") return saved;
+    if (saved === "auto") {
+      // 旧「跟随系统」用户：按读取当时的系统值一次性落定并持久化，此后不跟随。
+      const resolved = systemTheme();
+      try { localStorage.setItem(THEME_KEY, resolved); } catch (e) {}
+      return resolved;
+    }
+    // 从没选过：深色（家族基线；2026-11-15 起不再跟随系统）
+    return "dark";
   }
 
   function syncButton(mode) {
@@ -1254,19 +1255,16 @@ if (themeToggle) {
   }
 
   function applyTheme(mode) {
-    document.documentElement.setAttribute("data-theme", resolveTheme(mode));
+    document.documentElement.setAttribute("data-theme", mode);
     syncButton(mode);
   }
 
   applyTheme(readMode());
 
-  // auto 态下系统外观变了要跟着变；light/dark 是用户明确选择，不动。
-  lightMq.addEventListener("change", () => {
-    if (readMode() === "auto") applyTheme("auto");
-  });
+  // 「跟随系统」已取消：不再监听系统外观变化，light/dark 都是明确选择。
 
   themeToggle.addEventListener("click", () => {
-    const next = THEME_CYCLE[(THEME_CYCLE.indexOf(readMode()) + 1) % THEME_CYCLE.length];
+    const next = readMode() === "dark" ? "light" : "dark";
     try {
       localStorage.setItem(THEME_KEY, next);
     } catch (e) {
