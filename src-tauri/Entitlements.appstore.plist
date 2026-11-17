@@ -35,6 +35,15 @@
     <true/>
 
     <!--
+      打印。Export PDF 走的是原生打印面板（src-tauri/src/lib.rs 的 print_doc →
+      webview.print()），沙盒下没有这一项时打印操作被系统静默拒绝：面板不弹、
+      前端也收不到错误，审核员看到的就是「按钮点了没反应」（1.0.23 被拒原文：
+      Export PDF button was unresponsive）。直发轨不沙盒，所以直发包不受影响。
+    -->
+    <key>com.apple.security.print</key>
+    <true/>
+
+    <!--
       出站网络。直发版会访问 rocktier.com / api.github.com（授权校验与版本查询）；
       商店版把「检查更新」与「授权」两个入口从 Help 菜单移除，按设计不再有触发点
       （运行时抓包实测仍待补，见 findings D-131）。沙箱内不开此项时任何 socket
