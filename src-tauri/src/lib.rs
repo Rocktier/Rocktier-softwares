@@ -1030,7 +1030,7 @@ mod tests {
         std::fs::write(&target, "old").unwrap();
 
         let r = write_with_fallback(&target, "new", |_, _| {
-            Err(std::io::Error::new(std::io::ErrorKind::Other, "disk full"))
+            Err(std::io::Error::other("disk full"))
         });
 
         assert!(r.is_err(), "非权限错误不该被吞掉");
