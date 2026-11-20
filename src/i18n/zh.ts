@@ -73,6 +73,7 @@ export const zh: Strings = {
       savedAs: '已另存为新文件',
       newDoc: '新文档',
       saveFailed: '保存失败：无法写入文件',
+      saveFailedDetail: '保存失败：{reason}',
       unsupportedType: '不支持的文件类型',
       cannotReadFile: '无法读取文件',
       cannotResolvePath: '无法解析相对路径',
@@ -84,6 +85,7 @@ export const zh: Strings = {
       tabLimit: '最多同时打开 {n} 个标签。',
       htmlExported: '已导出单文件 HTML',
       htmlFailed: '导出 HTML 失败',
+      htmlFailedDetail: '导出 HTML 失败：{reason}',
     },
     confirm: {
       discard: '当前文档有未保存的更改，确定要丢弃吗？',

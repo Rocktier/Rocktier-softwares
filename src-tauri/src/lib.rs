@@ -362,27 +362,22 @@ fn save_recovery(app: tauri::AppHandle, path: String, content: String) -> Result
     }
 }
 
-/// Writes a document to disk atomically: temp file in the same directory, then
-/// rename.
+/// 原子写：同目录临时文件 + rename。
 ///
 /// The fs plugin's `writeTextFile` truncates the target in place, so a crash, a
 /// full disk or a permission error halfway through destroys the user's original
 /// document — the one file an editor must never damage. Recovery drafts already
 /// used this pattern (see `save_recovery`); actual user documents did not.
-#[tauri::command]
-#[cfg(desktop)]
-fn save_document(path: String, content: String) -> Result<(), String> {
-    // 保存是本应用最核心的写操作：受授权闸门保护（FAMILY-LICENSE.md §2）。
-    ensure_write_allowed()?;
-    let target = std::path::PathBuf::from(&path);
-    let dir = target
-        .parent()
-        .ok_or_else(|| "invalid path".to_string())?
-        .to_path_buf();
+fn write_atomic(target: &std::path::Path, content: &str) -> std::io::Result<()> {
+    let dir = target.parent().ok_or_else(|| {
+        std::io::Error::new(std::io::ErrorKind::InvalidInput, "invalid path")
+    })?;
     let name = target
         .file_name()
         .and_then(|n| n.to_str())
-        .ok_or_else(|| "invalid file name".to_string())?;
+        .ok_or_else(|| {
+            std::io::Error::new(std::io::ErrorKind::InvalidInput, "invalid file name")
+        })?;
     // Dotted temp name so a leftover never looks like the document itself, and
     // so a crash mid-write leaves the original untouched. The PID alone is not
     // enough: it is constant for the life of the process, so two saves racing
@@ -396,24 +391,59 @@ fn save_document(path: String, content: String) -> Result<(), String> {
     ));
     {
         use std::io::Write as _;
-        let mut f = std::fs::File::create(&tmp).map_err(|e| e.to_string())?;
-        f.write_all(content.as_bytes()).map_err(|e| e.to_string())?;
-        // rename() only publishes the name; without this the bytes may still be
-        // in the page cache, and a power loss leaves a zero-length document.
-        f.sync_all().map_err(|e| e.to_string())?;
+        let mut f = std::fs::File::create(&tmp)?;
+        // rename() only publishes the name; without the sync the bytes may still
+        // be in the page cache, and a power loss leaves a zero-length document.
+        if let Err(e) = f.write_all(content.as_bytes()).and_then(|_| f.sync_all()) {
+            let _ = std::fs::remove_file(&tmp);
+            return Err(e);
+        }
     }
-    if let Err(e) = std::fs::rename(&tmp, &target) {
+    if let Err(e) = std::fs::rename(&tmp, target) {
         let _ = std::fs::remove_file(&tmp);
-        return Err(e.to_string());
+        return Err(e);
     }
     // Persist the rename itself, so the directory entry survives a crash too.
     #[cfg(unix)]
     {
-        if let Ok(d) = std::fs::File::open(&dir) {
+        if let Ok(d) = std::fs::File::open(dir) {
             let _ = d.sync_all();
         }
     }
     Ok(())
+}
+
+/// 先试原子写；被内核拒了再退回直接写。
+///
+/// 为什么需要这条退路：Mac App Store 版跑在 App Sandbox 里，保存面板给的是
+/// **用户选中的那个文件**的读写授权，不是整个目录。于是「在目标文件旁边新建
+/// 一个 .tmp 再 rename」会被拒（EPERM），而直接写目标文件是允许的 ——
+/// 1.0.26 就是这样被拒的（Guideline 2.1(a)：`Save failed: unable to write file`）。
+/// 退路丢掉的是原子性，换来的是「能保存」；对编辑器来说后者是底线。
+fn write_with_fallback<F>(target: &std::path::Path, content: &str, atomic: F) -> std::io::Result<()>
+where
+    F: FnOnce(&std::path::Path, &str) -> std::io::Result<()>,
+{
+    match atomic(target, content) {
+        Ok(()) => Ok(()),
+        Err(e) if e.kind() == std::io::ErrorKind::PermissionDenied => {
+            std::fs::write(target, content)
+        }
+        Err(e) => Err(e),
+    }
+}
+
+#[tauri::command]
+#[cfg(desktop)]
+fn save_document(path: String, content: String) -> Result<(), String> {
+    // 保存是本应用最核心的写操作：受授权闸门保护（FAMILY-LICENSE.md §2）。
+    ensure_write_allowed()?;
+    let target = std::path::PathBuf::from(&path);
+    // 错误带上目标路径与 errno：前端原来把任何失败都显示成一句「无法写入文件」，
+    // 审核员与用户都拿不到线索，我们也没法从截图里判断是权限、是只读盘还是别
+    // 的什么。
+    write_with_fallback(&target, &content, write_atomic)
+        .map_err(|e| format!("{}: {}", target.display(), e))
 }
 
 /// Makes each concurrent save write to its own temp file. See `save_document`.
@@ -960,6 +990,73 @@ pub fn run() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn scratch(prefix: &str) -> std::path::PathBuf {
+        let dir = std::env::temp_dir().join(format!(
+            "{}-{}-{}",
+            prefix,
+            std::process::id(),
+            TMP_SEQ.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    /* 沙盒下「同目录建 .tmp」被拒时，保存必须还能落地 —— 这是 1.0.26 被
+       Apple 拒掉的那条路（2.1(a)：Save failed: unable to write file）。 */
+    #[test]
+    fn a_denied_temp_file_falls_back_to_writing_the_target() {
+        let dir = scratch("md-save-fallback");
+        let target = dir.join("doc.md");
+        std::fs::write(&target, "old").unwrap();
+
+        let r = write_with_fallback(&target, "new", |_, _| {
+            Err(std::io::Error::new(
+                std::io::ErrorKind::PermissionDenied,
+                "sandbox denied .tmp",
+            ))
+        });
+
+        assert!(r.is_ok(), "{r:?}");
+        assert_eq!(std::fs::read_to_string(&target).unwrap(), "new");
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /* 不是权限问题就不该退回直接写：磁盘满、路径不存在时盲写会把原文件毁掉。 */
+    #[test]
+    fn other_errors_are_reported_and_the_original_is_untouched() {
+        let dir = scratch("md-save-abort");
+        let target = dir.join("doc.md");
+        std::fs::write(&target, "old").unwrap();
+
+        let r = write_with_fallback(&target, "new", |_, _| {
+            Err(std::io::Error::new(std::io::ErrorKind::Other, "disk full"))
+        });
+
+        assert!(r.is_err(), "非权限错误不该被吞掉");
+        assert_eq!(std::fs::read_to_string(&target).unwrap(), "old");
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /* 原子写在可写目录里必须真的换掉内容，且不留临时文件。 */
+    #[test]
+    fn atomic_write_replaces_the_file_without_leaving_temp_files() {
+        let dir = scratch("md-save-atomic");
+        let target = dir.join("doc.md");
+        std::fs::write(&target, "old").unwrap();
+
+        write_atomic(&target, "new").unwrap();
+
+        assert_eq!(std::fs::read_to_string(&target).unwrap(), "new");
+        let leftovers: Vec<_> = std::fs::read_dir(&dir)
+            .unwrap()
+            .flatten()
+            .map(|e| e.file_name().to_string_lossy().to_string())
+            .filter(|n| n.ends_with(".tmp"))
+            .collect();
+        assert!(leftovers.is_empty(), "残留临时文件：{leftovers:?}");
+        std::fs::remove_dir_all(&dir).ok();
+    }
 
     #[test]
     fn short_hash_is_stable_and_distinguishes_paths() {

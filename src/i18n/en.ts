@@ -72,6 +72,7 @@ export const en = {
       savedAs: 'Saved as new file',
       newDoc: 'New document',
       saveFailed: 'Save failed: unable to write file',
+      saveFailedDetail: 'Save failed: {reason}',
       unsupportedType: 'Unsupported file type',
       cannotReadFile: 'Unable to read file',
       cannotResolvePath: 'Cannot resolve relative path',
@@ -83,6 +84,7 @@ export const en = {
       tabLimit: 'At most {n} tabs can be open at once.',
       htmlExported: 'Standalone HTML exported',
       htmlFailed: 'HTML export failed',
+      htmlFailedDetail: 'HTML export failed: {reason}',
     },
     confirm: {
       discard: 'This document has unsaved changes. Discard them?',

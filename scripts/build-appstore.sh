@@ -120,6 +120,13 @@ cmd_pack() {
       fs.writeFileSync(process.env.MAS_TMP_CONF, JSON.stringify(conf, null, 2) + "\n");
     '
 
+    # ROCKTIER_CHANNEL 是 option_env! 的编译期常量：cargo 只按源码内容判断要不要
+    # 重编，环境变量变了它不知道。target 里若留着上一次 direct 渠道的产物，本次
+    # 「商店包」会原样复用它 —— 包能传能审，但里面带着自研付费墙（MSIX 工作流
+    # 吃过同一个亏，见 store-msix.yml 第 6 行）。touch 一下强制重编本 crate，
+    # 依赖的编译缓存照旧，只多几十秒。
+    touch src-tauri/src/lib.rs
+
     echo ""
     echo "📦 Tauri build（universal，只产 .app）..."
     npm run tauri -- build \

@@ -84,12 +84,18 @@ function check(root) {
   const lib = read(root, "src-tauri/src/lib.rs");
   const help = lib.match(/let help_menu = if[\s\S]*?\n    \};/);
   const elsePart = help ? help[0].split(/else\s*\{/)[1] : "";
+  /* 与已过审的 Pic2WebP / OCR 同形：商店版**整个 Help 菜单都不出现**。
+     早先的变体是「store 版保留官网与反馈」，但准则 §18.6-6 / §19-4 要求商店构建
+     不创建 website 等站外入口，保留官网与准则字面冲突，两款已过审产品也都不保留。 */
   add(
     "help-menu",
-    !!help && /channel\(\) == "direct"/.test(help[0]) && !!elsePart &&
-      !/\bupdate_i\b|\blicense_i\b/.test(elsePart) &&
-      /\bsite_i\b/.test(elsePart) && /\bmail_i\b/.test(elsePart),
-    "Help 菜单分渠道：store 版去掉检查更新与授权，保留官网与反馈",
+    !!help &&
+      /channel\(\) == "direct"/.test(help[0]) &&
+      !!elsePart &&
+      /^\s*None\s*$/m.test(elsePart) &&
+      /\bupdate_i\b/.test(help[0]) &&
+      /\blicense_i\b/.test(help[0]),
+    "Help 菜单分渠道：store 版整个不出现，direct 版四项齐全（与 Pic2WebP / OCR 同形）",
   );
 
   const lic = read(root, "src-tauri/src/license.rs");
@@ -123,7 +129,12 @@ const CASES = [
   { id: "channel-env", file: "scripts/build-appstore.sh", from: "export ROCKTIER_CHANNEL=store", to: "export ROCKTIER_CHANNEL=direct" },
   { id: "appstore-conf", file: "src-tauri/tauri.appstore.conf.json", from: '"hardenedRuntime": false', to: '"hardenedRuntime": true' },
   { id: "sandbox", file: "src-tauri/Entitlements.appstore.plist", from: "com.apple.security.app-sandbox", to: "com.apple.security.cs.allow-jit" },
-  { id: "help-menu", file: "src-tauri/src/lib.rs", from: "&[&site_i, &mail_i])?", to: "&[&update_i, &site_i, &mail_i])?" },
+  {
+    id: "help-menu",
+    file: "src-tauri/src/lib.rs",
+    from: '        Some(Submenu::with_items(app, m.help, true, &[&update_i, &license_i, &site_i, &mail_i])?)\n    } else {\n        None\n    };',
+    to: '        Some(Submenu::with_items(app, m.help, true, &[&update_i, &license_i, &site_i, &mail_i])?)\n    } else {\n        Some(Submenu::with_items(app, m.help, true, &[&site_i, &mail_i])?)\n    };',
+  },
   { id: "enforced", file: "src-tauri/src/license.rs", from: 'ENFORCE && channel() == "direct"', to: "ENFORCE" },
   { id: "license-chip", file: "src/components/StatusBar.tsx", from: 'license.channel === "direct"', to: "true" },
   { id: "export-compliance", file: "src-tauri/Info.plist", from: "ITSAppUsesNonExemptEncryption", to: "ITSAppUsesExemptEncryption" },

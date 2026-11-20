@@ -33,6 +33,20 @@ import { exists, readTextFile, stat } from "@tauri-apps/plugin-fs";
 /** toast 语气。error 必须同时改变配色、存活时长与 aria role（家族铁律 7）。 */
 type ToastTone = "info" | "success" | "error";
 
+/**
+ * 把后端 `Err(String)` 变成一句人话，用于 toast。
+ *
+ * 原来所有写盘失败都显示同一句「保存失败：无法写入文件」，把 errno 与路径一起
+ * 吞掉了 —— 1.0.26 被 Apple 拒（2.1(a)）时，截图里只有这句话，谁都没法判断是
+ * 沙盒权限、只读盘还是路径不对。现在原样带出来，太长才截断。
+ */
+function errorReason(e: unknown): string {
+  const raw = e instanceof Error ? e.message : typeof e === "string" ? e : String(e ?? "");
+  const s = raw.trim();
+  if (!s) return "";
+  return s.length > 180 ? `${s.slice(0, 180)}…` : s;
+}
+
 /** 一份文档各自的保存基线，按标签 id 存放（多标签下不再是全局单例）。 */
 interface TabMeta {
   eol: Eol;
@@ -570,7 +584,14 @@ export default function App() {
     } catch (e) {
       // 事件链已弹对话框（license-expired）；这里兜错误串，防事件丢失时只剩裸失败。
       if (isLicenseExpiredError(e)) openLicense();
-      else showToast(t("toast.saveFailed"), "error");
+      else {
+        // 带上后端给的原因（含路径与 errno），不再用一句通用文案盖掉真相。
+        const reason = errorReason(e);
+        showToast(
+          reason ? t("toast.saveFailedDetail", { reason }) : t("toast.saveFailed"),
+          "error",
+        );
+      }
     }
   }, [showToast, rememberPath, clearRecovery, UNTITLED_KEY, openLicense]);
 
@@ -591,7 +612,14 @@ export default function App() {
       }
     } catch (e) {
       if (isLicenseExpiredError(e)) openLicense();
-      else showToast(t("toast.saveFailed"), "error");
+      else {
+        // 带上后端给的原因（含路径与 errno），不再用一句通用文案盖掉真相。
+        const reason = errorReason(e);
+        showToast(
+          reason ? t("toast.saveFailedDetail", { reason }) : t("toast.saveFailed"),
+          "error",
+        );
+      }
     }
   }, [showToast, rememberPath, clearRecovery, UNTITLED_KEY, openLicense]);
 
@@ -686,7 +714,14 @@ export default function App() {
       if (saved) showToast(t("toast.htmlExported"), "success");
     } catch (e) {
       if (isLicenseExpiredError(e)) openLicense();
-      else showToast(t("toast.htmlFailed"), "error");
+      else {
+        // 导出落盘与保存同一条路径，沙盒拒绝时同样需要看见真实原因。
+        const reason = errorReason(e);
+        showToast(
+          reason ? t("toast.htmlFailedDetail", { reason }) : t("toast.htmlFailed"),
+          "error",
+        );
+      }
     }
   }, [lang, showToast, openLicense]);
 
