@@ -605,21 +605,32 @@ fn build_app_menu(app: &tauri::AppHandle, lang: &str) -> tauri::Result<()> {
     // 检查更新：只 emit "check-updates"，联网由前端 services/updates.ts 做 ——
     // 应用启动时不检查，只有用户点这里或右下角的版本号才发那一次请求。
     let update_i = MenuItem::with_id(app, "check-updates", m.check_updates, true, None::<&str>)?;
-    /* 商店版（ROCKTIER_CHANNEL=store）不给出「检查更新」与「授权」：更新由 App Store
-       负责，收款与授权由 Apple 负责，自研付费墙在 license::enforced() 里也已关掉。
-       这两项是直发轨仅有的两个联网触发点（D-133），留着就等于商店版仍可能由用户
-       点出一次请求，还会带出与 3.1.1 冲突的激活对话框。
-       官网与反馈保留：Help 菜单是应用内唯一的反馈入口，官网 /feedback 页正指向它。 */
+    /* 商店渠道不出 Help 菜单，与 Pic2WebP / OCR 同形（两仓已过商店审核）：
+       「检查更新」是应用外更新入口（Apple 2.4.5(vii) / 微软 10.8.2、10.8.4），
+       「官方网站」会把用户引向应用外购买（Apple 3.1.1），「授权」是自研付费墙入口
+       （enforced() 在 store 渠道已恒 false，入口一并撤掉）。准则 §18.6 第 6 条与
+       §19 第 4 条要求这几项都不出现 —— 只把 enforced() 置 false 不够。
+
+       2026-11-20 收紧：此前 MD 是唯一在商店版保留「官方网站 + 反馈」的仓，理由是
+       Help 菜单是应用内唯一反馈入口。这与准则字面冲突，也和已过审的 Pic2WebP / OCR
+       不同形；商店版的支持入口改由 listing 的 Support URL 承担。
+       直发轨保持原样。运行时未抓包验证，只做静态可达性判定（D-131）。 */
     let help_menu = if crate::license::channel() == "direct" {
-        Submenu::with_items(app, m.help, true, &[&update_i, &license_i, &site_i, &mail_i])?
+        Some(Submenu::with_items(app, m.help, true, &[&update_i, &license_i, &site_i, &mail_i])?)
     } else {
-        Submenu::with_items(app, m.help, true, &[&site_i, &mail_i])?
+        None
     };
 
-    let menu = Menu::with_items(
-        app,
-        &[&app_menu, &file_menu, &edit_menu, &view_menu, &window_menu, &help_menu],
-    )?;
+    let menu = match help_menu.as_ref() {
+        Some(help) => Menu::with_items(
+            app,
+            &[&app_menu, &file_menu, &edit_menu, &view_menu, &window_menu, help],
+        )?,
+        None => Menu::with_items(
+            app,
+            &[&app_menu, &file_menu, &edit_menu, &view_menu, &window_menu],
+        )?,
+    };
     app.set_menu(menu)?;
     Ok(())
 }
