@@ -1,0 +1,452 @@
+//! The commands the UI talks to.
+//!
+//! Recognition and output are separate steps, because they are separate
+//! questions: "what does this page say" is answered once, and "what shall I
+//! do with the words" can then be answered three times over - a searchable
+//! PDF, a TXT file, or the clipboard - without paying for recognition again.
+//! So converting a document fills the state with a finished job, and each
+//! output command works from that job.
+//!
+//! Two inputs are accepted. A PDF keeps its own identity and gains a text
+//! layer, page by page, skipping pages that already have text. An image has no
+//! identity to keep, so it becomes a one-page searchable PDF with the picture
+//! as its page - the same idea as scanning a sheet.
+
+use crate::pdf;
+use ocr_engine::Pipeline;
+use serde::Serialize;
+use std::path::Path;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex};
+use tauri::{AppHandle, Emitter, State};
+
+/// A document that has been read: what each page says, and where it came from.
+#[derive(Clone)]
+pub struct Job {
+    pub input: String,
+    pub is_pdf: bool,
+    pub dpi: f64,
+    /// Recognised blocks per page, empty for pages that already carried text.
+    pub blocks: Vec<serde_json::Value>,
+    /// Text per page: the document's own words where it had them, the
+    /// recognised lines where it did not.
+    pub page_text: Vec<String>,
+    /// Per-line geometry per page, empty for pages that already had text.
+    /// Kept besides the JSON because the .docx writer groups lines into
+    /// paragraphs by position, and reading coordinates back out of JSON
+    /// would be a needless round trip.
+    pub line_boxes: Vec<Vec<crate::docx::LineBox>>,
+    /// Page size in twips (1/1440 inch) taken from the source PDF, so the
+    /// exported document keeps the original page shape. None for images.
+    pub page_twips: Option<(u32, u32)>,
+}
+
+pub struct AppState {
+    pub cancel: Arc<AtomicBool>,
+    pub pipeline: Arc<Mutex<Option<Pipeline>>>,
+    /// The last finished conversion, which every output is drawn from.
+    pub last: Arc<Mutex<Option<Job>>>,
+}
+
+impl Default for AppState {
+    fn default() -> Self {
+        Self {
+            cancel: Arc::new(AtomicBool::new(false)),
+            pipeline: Arc::new(Mutex::new(None)),
+            last: Arc::new(Mutex::new(None)),
+        }
+    }
+}
+
+#[derive(Clone, Serialize)]
+struct Progress {
+    page: usize,
+    total: usize,
+    phase: String,
+}
+
+#[derive(Serialize)]
+pub struct Summary {
+    pages_total: usize,
+    pages_ocr: usize,
+    pages_skipped: usize,
+    lines: usize,
+    /// "pdf" or "image" - the frontend says what it was given.
+    kind: String,
+    /// Every page already carried a text layer: there was nothing to do.
+    already_searchable: bool,
+}
+
+#[derive(Serialize)]
+pub struct TextResult {
+    text: String,
+    pages: usize,
+    lines: usize,
+    chars: usize,
+}
+
+fn with_pipeline<F, T>(
+    pipeline: &Arc<Mutex<Option<Pipeline>>>,
+    app: &AppHandle,
+    f: F,
+) -> Result<T, String>
+where
+    F: FnOnce(&mut Pipeline) -> Result<T, String>,
+{
+    let dir = pdf::model_dir(app).map_err(|e| e.to_string())?;
+    let m = |n: &str| dir.join(n);
+    let mut guard = pipeline.lock().map_err(|e| e.to_string())?;
+    if guard.is_none() {
+        *guard = Some(
+            Pipeline::load(
+                &m("ch_PP-OCRv4_det_infer.onnx"),
+                &m("ch_ppocr_mobile_v2.0_cls_infer.onnx"),
+                &m("ch_PP-OCRv4_rec_infer.onnx"),
+            )
+            .map_err(|e| e.to_string())?,
+        );
+    }
+    f(guard.as_mut().unwrap())
+}
+
+/// Blocks for the writer, in its own JSON dialect.
+fn blocks_json(lines: &[ocr_engine::OcrLine]) -> serde_json::Value {
+    serde_json::json!(lines
+        .iter()
+        .map(|l| {
+            serde_json::json!({
+                "box": l.box4.iter().map(|p| [p.0, p.1]).collect::<Vec<_>>(),
+                "text": l.text,
+                "score": l.score,
+                "words": l.words.iter().map(|(t, q)| {
+                    serde_json::json!({
+                        "text": t,
+                        "box": q.iter().map(|p| [p.0, p.1]).collect::<Vec<_>>(),
+                    })
+                }).collect::<Vec<_>>(),
+            })
+        })
+        .collect::<Vec<_>>())
+}
+
+fn page_separator(n: usize) -> String {
+    format!("\n\n--- Page {n} ---\n\n")
+}
+
+/// Pixel-count ceiling for a single image input.  A 100 MP scan would be fully
+/// decoded into RAM by `image::open` and then fed to the recogniser, which
+/// ends in an out-of-memory abort rather than an error the user can act on.
+/// 40 MP ≈ 8160×4900 — above any sane phone photo or A4 scan at 600 dpi.
+const MAX_IMAGE_PIXELS: u64 = 40_000_000;
+
+/// Read only an image's dimensions (header, no pixel buffer) and reject it
+/// before `image::open` commits to a full decode.  Returns `(w, h)` for callers
+/// that want to report them.
+fn check_image_size(path: &str) -> Result<(u32, u32), String> {
+    let file = std::fs::File::open(path).map_err(|e| format!("无法打开图片：{e}"))?;
+    let (w, h) = image::ImageReader::new(std::io::BufReader::new(file))
+        .with_guessed_format()
+        .map_err(|e| format!("无法识别图片格式：{e}"))?
+        .into_dimensions()
+        .map_err(|e| format!("无法读取图片尺寸：{e}"))?;
+    let px = u64::from(w) * u64::from(h);
+    if px > MAX_IMAGE_PIXELS {
+        return Err(format!(
+            "图片过大：{w}×{h}（{px} 像素），超过 40MP 上限，请缩小后再试 / image too large ({w}×{h}); max 40MP"
+        ));
+    }
+    Ok((w, h))
+}
+
+/// Read a document and remember what it said. Produces nothing by itself -
+/// the three output commands do that, from what this one leaves behind.
+#[tauri::command(async)]
+pub async fn ocr_process(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    input: String,
+    dpi: Option<f64>,
+) -> Result<Summary, String> {
+    let dpi = dpi.unwrap_or(200.0);
+    state.cancel.store(false, Ordering::SeqCst);
+    let cancel = state.cancel.clone();
+    let pipeline = state.pipeline.clone();
+    let last = state.last.clone();
+
+    let app_for_pdf = app.clone();
+    tauri::async_runtime::spawn_blocking(move || -> Result<Summary, String> {
+        let is_pdf = input.to_lowercase().ends_with(".pdf");
+        let mut blocks: Vec<serde_json::Value> = Vec::new();
+        let mut page_text: Vec<String> = Vec::new();
+        let mut line_boxes: Vec<Vec<crate::docx::LineBox>> = Vec::new();
+        let mut page_twips: Option<(u32, u32)> = None;
+        let (mut ocr_pages, mut skipped, mut line_count) = (0usize, 0usize, 0usize);
+        let total: usize;
+
+        if is_pdf {
+            let pdfium = pdf::init_pdfium(&app_for_pdf).map_err(|e| e.to_string())?;
+            let doc = pdfium
+                .load_pdf_from_file(Path::new(&input), None)
+                .map_err(|e| e.to_string())?;
+            total = doc.pages().len() as usize;
+            let _ = app.emit("ocr-progress", Progress { page: 0, total, phase: "preparing".into() });
+            for i in 0..total {
+                if cancel.load(Ordering::SeqCst) {
+                    return Err("cancelled".into());
+                }
+                let page = doc.pages().get(i as i32).map_err(|e| e.to_string())?;
+                if page_twips.is_none() {
+                    // Points → twips (1 pt = 20 twips). Only page 0 is needed:
+                    // a document with mixed page sizes is rare enough that the
+                    // honest answer is "the first page's shape".
+                    page_twips = Some((
+                        (page.width().value * 20.0).round() as u32,
+                        (page.height().value * 20.0).round() as u32,
+                    ));
+                }
+                let text_chars = pdf::page_text_len(&page);
+                let phase = if text_chars >= 10 {
+                    // Already readable: keep the document's own words rather
+                    // than asking the recogniser to guess at them again.
+                    skipped += 1;
+                    let own = page.text().map_err(|e| e.to_string())?.all();
+                    blocks.push(serde_json::json!([]));
+                    line_boxes.push(Vec::new());
+                    page_text.push(own);
+                    format!("skipped ({text_chars} chars)")
+                } else {
+                    let _ = app.emit("ocr-progress", Progress { page: i, total, phase: "render".into() });
+                    let img = pdf::render_page(&page, dpi).map_err(|e| e.to_string())?;
+                    let _ = app.emit("ocr-progress", Progress { page: i, total, phase: "recognise".into() });
+                    let lines = with_pipeline(&pipeline, &app_for_pdf, |pipe| {
+                        pipe.run(&img).map_err(|e| e.to_string())
+                    })?;
+                    line_count += lines.len();
+                    ocr_pages += 1;
+                    page_text.push(lines.iter().map(|l| l.text.as_str()).collect::<Vec<_>>().join("\n"));
+                    line_boxes.push(
+                        lines
+                            .iter()
+                            .map(|l| crate::docx::LineBox::from_quad(&l.text, &l.box4))
+                            .collect(),
+                    );
+                    blocks.push(blocks_json(&lines));
+                    "recognised".to_string()
+                };
+                // Report page i+1 as done only after its work has finished.
+                let _ = app.emit(
+                    "ocr-progress",
+                    Progress { page: i + 1, total, phase },
+                );
+            }
+        } else {
+            total = 1;
+            let _ = app.emit("ocr-progress", Progress { page: 0, total, phase: "preparing".into() });
+            check_image_size(&input)?;
+            let img = image::open(&input).map_err(|e| format!("无法打开图片：{e}"))?;
+            let lines = with_pipeline(&pipeline, &app_for_pdf, |pipe| {
+                pipe.run(&img).map_err(|e| e.to_string())
+            })?;
+            line_count += lines.len();
+            ocr_pages += 1;
+            page_text.push(lines.iter().map(|l| l.text.as_str()).collect::<Vec<_>>().join("\n"));
+            line_boxes.push(
+                lines
+                    .iter()
+                    .map(|l| crate::docx::LineBox::from_quad(&l.text, &l.box4))
+                    .collect(),
+            );
+            blocks.push(blocks_json(&lines));
+            let _ = app.emit("ocr-progress", Progress { page: 1, total, phase: "recognised".into() });
+        }
+
+        let _ = app.emit("ocr-progress", Progress { page: total, total, phase: "done".into() });
+        *last.lock().map_err(|e| e.to_string())? = Some(Job {
+            input: input.clone(),
+            is_pdf,
+            dpi,
+            blocks,
+            page_text,
+            line_boxes,
+            page_twips,
+        });
+
+        Ok(Summary {
+            pages_total: total,
+            pages_ocr: ocr_pages,
+            pages_skipped: skipped,
+            lines: line_count,
+            kind: if is_pdf { "pdf".to_string() } else { "image".to_string() },
+            already_searchable: ocr_pages == 0 && skipped > 0,
+        })
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+/// Write the converted document as a searchable PDF.
+#[tauri::command(async)]
+pub async fn ocr_export_pdf(
+    state: State<'_, AppState>,
+    output: String,
+) -> Result<serde_json::Value, String> {
+    // 导出会产出新文件：受授权闸门保护（FAMILY-LICENSE.md §2 的 OCR 行）。
+    // 放在取 job 之前：过期用户不该再走导出流程。
+    crate::ensure_write_allowed()?;
+    let job = state
+        .last
+        .lock()
+        .map_err(|e| e.to_string())?
+        .clone()
+        .ok_or_else(|| "还没有转换完成的文档。".to_string())?;
+
+    tauri::async_runtime::spawn_blocking(move || -> Result<serde_json::Value, String> {
+        // TempDir is removed when it drops, so the full-text JSON and the
+        // transcoded page image never linger in the system temp directory.
+        let dir = tempfile::TempDir::new().map_err(|e| e.to_string())?;
+        let tmp = dir.path().join("pages.json");
+        // A PDF takes one entry per page; the single-image path takes the flat
+        // block array, which is the same shape that mode was written for.
+        let payload = if job.is_pdf {
+            serde_json::to_vec(&job.blocks)
+        } else {
+            serde_json::to_vec(job.blocks.first().unwrap_or(&serde_json::json!([])))
+        }
+        .map_err(|e| e.to_string())?;
+        std::fs::write(&tmp, payload).map_err(|e| e.to_string())?;
+
+        if job.is_pdf {
+            write_searchable::layer_on_existing(&job.input, tmp.to_str().unwrap(), &output, job.dpi, true)
+                .map_err(|e| e.to_string())?;
+        } else {
+            // The export path re-opens the image itself, so it carries the same
+            // guard independently of the recognise-time check.
+            check_image_size(&job.input)?;
+            let img = image::open(&job.input).map_err(|e| e.to_string())?;
+            let (w, h) = (img.width() as i64, img.height() as i64);
+            // The page is embedded as JPEG, so any other format is transcoded
+            // first - a PNG's bytes declared as DCTDecode is a broken picture.
+            let page = if job.input.to_lowercase().ends_with(".jpg")
+                || job.input.to_lowercase().ends_with(".jpeg")
+            {
+                job.input.clone()
+            } else {
+                let dst = dir.path().join("page.jpg");
+                img.write_to(
+                    &mut std::fs::File::create(&dst).map_err(|e| e.to_string())?,
+                    image::ImageFormat::Jpeg,
+                )
+                .map_err(|e| e.to_string())?;
+                dst.to_string_lossy().to_string()
+            };
+            write_searchable::write_from_image(&page, tmp.to_str().unwrap(), &output, w, h, job.dpi)
+                .map_err(|e| e.to_string())?;
+        }
+
+        Ok(serde_json::json!({ "output": output, "pages": job.page_text.len() }))
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+/// 导出 Word：把识别结果排成 .docx。
+///
+/// 与 PDF/TXT 同源：都从 `Job` 出，识别不重跑。分页按原件的页序，段内换行
+/// 合并过（见 docx.rs 顶部的判据），段与段之间不留空行 —— 空行在 Word 里
+/// 是「段后距」，交给样式，不靠多打一个回车。
+#[tauri::command(async)]
+pub async fn ocr_export_docx(
+    state: State<'_, AppState>,
+    output: String,
+) -> Result<serde_json::Value, String> {
+    // 导出会产出新文件：受授权闸门保护（FAMILY-LICENSE.md §2 的 OCR 行）。
+    crate::ensure_write_allowed()?;
+    let job = state
+        .last
+        .lock()
+        .map_err(|e| e.to_string())?
+        .clone()
+        .ok_or_else(|| "还没有转换完成的文档。".to_string())?;
+
+    tauri::async_runtime::spawn_blocking(move || -> Result<serde_json::Value, String> {
+        let mut pages: Vec<Vec<crate::docx::Para>> = Vec::with_capacity(job.page_text.len());
+        for (i, text) in job.page_text.iter().enumerate() {
+            let paragraphs = match job.line_boxes.get(i) {
+                Some(boxes) if !boxes.is_empty() => crate::docx::paragraphs_from_lines(boxes),
+                // 本来就带文字层的页，或者几何没留的不可能分支：退回按空行分段
+                _ => crate::docx::paragraphs_from_text(text),
+            };
+            pages.push(paragraphs);
+        }
+        let stats = crate::docx::write(&pages, job.page_twips, &output)
+            .map_err(|e| format!("写出 Word 失败：{e}"))?;
+        Ok(serde_json::json!({
+            "output": output,
+            "pages": stats.pages,
+            "paragraphs": stats.paragraphs,
+        }))
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+/// The converted document's text, written to a TXT file when a path is given.
+#[tauri::command(async)]
+pub async fn ocr_export_txt(
+    state: State<'_, AppState>,
+    output: Option<String>,
+) -> Result<TextResult, String> {
+    // 写文件的导出受授权闸门保护（FAMILY-LICENSE.md §2 的 OCR 行）。output 为 None
+    // 时不落盘 —— 前端的"复制文本"就走的这条，只取文本进剪贴板，属只读，不拦。
+    if output.is_some() {
+        crate::ensure_write_allowed()?;
+    }
+    let job = state
+        .last
+        .lock()
+        .map_err(|e| e.to_string())?
+        .clone()
+        .ok_or_else(|| "还没有转换完成的文档。".to_string())?;
+
+    tauri::async_runtime::spawn_blocking(move || -> Result<TextResult, String> {
+        let mut text = String::new();
+        let mut lines = 0usize;
+        for (i, page) in job.page_text.iter().enumerate() {
+            lines += page.lines().count().max(1);
+            if job.is_pdf {
+                text.push_str(&page_separator(i + 1));
+            }
+            text.push_str(page.trim());
+        }
+        if let Some(path) = output {
+            std::fs::write(&path, text.as_bytes()).map_err(|e| e.to_string())?;
+        }
+        Ok(TextResult {
+            chars: text.chars().count(),
+            text,
+            pages: job.page_text.len(),
+            lines,
+        })
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+/// Ask the running job to stop at the next page boundary.
+/// 本机指纹，供前端在**激活时**上报给服务端做设备计数。
+///
+/// 为什么单独开一个命令而不是让前端自己算：指纹要读注册表 / ioreg，
+/// 只有 Rust 侧做得到；且**试用与激活必须用同一个指纹** ——
+/// 用两套标识会出现「A 说没试过、B 说试过」这种自相矛盾。
+///
+/// 取不到时返回空串：服务端据此不计数也不拦激活（见
+/// `rocktier.com/api/devices.js` 的模块说明）。
+#[tauri::command]
+pub fn report_machine_fingerprint() -> String {
+    crate::trial::machine_fingerprint()
+}
+
+#[tauri::command]
+pub fn ocr_cancel(state: State<'_, AppState>) {
+    state.cancel.store(true, Ordering::SeqCst);
+}

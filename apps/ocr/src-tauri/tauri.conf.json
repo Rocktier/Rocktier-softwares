@@ -1,0 +1,91 @@
+{
+  "build": {
+    "frontendDist": "../ui"
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "resources": [
+      "resources/models",
+      "resources/pdfium-runtime"
+    ],
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/icon.ico",
+      "icons/icon.png",
+      "icons/icon.icns"
+    ],
+    "fileAssociations": [
+      {
+        "ext": [
+          "png"
+        ],
+        "name": "Rocktier Image",
+        "description": "Image to recognize",
+        "role": "Editor",
+        "mimeType": "image/png"
+      },
+      {
+        "ext": [
+          "jpg",
+          "jpeg"
+        ],
+        "name": "Rocktier Image",
+        "description": "Image to recognize",
+        "role": "Editor",
+        "mimeType": "image/jpeg"
+      },
+      {
+        "ext": [
+          "pdf"
+        ],
+        "name": "Rocktier Scanned PDF",
+        "description": "Scanned PDF to recognize",
+        "role": "Editor",
+        "mimeType": "application/pdf"
+      }
+    ],
+    "windows": {
+      "allowDowngrades": true,
+      "digestAlgorithm": "sha256",
+      "webviewInstallMode": {
+        "type": "downloadBootstrapper",
+        "silent": true
+      },
+      "nsis": {
+        "installMode": "currentUser",
+        "languages": [
+          "English"
+        ],
+        "displayLanguageSelector": false
+      },
+      "wix": {
+        "language": "en-US",
+        "upgradeCode": "5991DC71-3E89-5F97-BEE7-D7292D2E4109"
+      }
+    }
+  },
+  "productName": "Rocktier OCR",
+  "version": "1.0.0",
+  "identifier": "Rocktier.RocktierOCR",
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "Rocktier OCR",
+        "width": 980,
+        "height": 700,
+        "minWidth": 720,
+        "minHeight": 520,
+        "center": true,
+        "resizable": true
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: asset: http://asset.localhost; connect-src 'self' ipc: http://ipc.localhost https://rocktier.com https://api.github.com"
+    },
+    "withGlobalTauri": true
+  },
+  "mainBinaryName": "RocktierOCR"
+}

@@ -1,0 +1,602 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <link rel="stylesheet" href="./styles/tokens.css" />
+    <link rel="stylesheet" href="./styles/glass.css" />
+
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="icon" type="image/png" sizes="256x256" href="./favicon.png" />
+  <link rel="icon" type="image/x-icon" href="./favicon.ico" />
+  <title>Rocktier OCR</title>
+  <script>
+    // 主题必须在内联样式解析前定好：异步设置会先按默认深色画一帧再跳变。
+    // 2026-11-15 起两态 light ⇄ dark（取消「跟随系统」），手动选择记本机。
+    (function () {
+      try {
+        // 2026-10-04 键改名后与运行时对齐：主题已改读 "rocktier.theme"，
+        // 这里原先还在读旧的主题键 —— 后果是老用户会看到「先按旧键画首帧、
+        // React 挂载后跳成另一种」。旧键保留为回落。
+        var saved = localStorage.getItem("rocktier.theme") || localStorage.getItem("rocktier-ocr-theme");
+        var t = saved === "light" || saved === "dark" ? saved : null;
+        if (!t) {
+          // 旧存 auto 的按当时系统值一次性落定；从没选过的默认深色。落定后持久化。
+          t = window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
+          try { localStorage.setItem("rocktier-ocr-theme", t); } catch (e2) {}
+        }
+        document.documentElement.setAttribute("data-theme", t);
+      } catch (e) {
+        // 隐私模式：localStorage 抛异常时按深色渲染，功能不受影响
+        document.documentElement.setAttribute("data-theme", "dark");
+      }
+    })();
+  </script>
+  <style>
+/* Geist 家族品牌字体（2026-09-28 定案，audit 7B-5；SIL OFL 自托管可变字体） */
+@font-face {
+  font-family: "Geist";
+  src: url("./fonts/Geist-Variable.woff2") format("woff2");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Geist Mono";
+  src: url("./fonts/GeistMono-Variable.woff2") format("woff2");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+
+    /* 家族 token（与 Rocktier PDF 的 tokens.css 同一套） */
+    :root {
+      --bg-primary: #000000;
+      --bg-secondary: #0a0a0a;
+      --bg-elevated: #121212;
+      --bg-card: rgba(255, 255, 255, 0.03);
+      --bg-card-hover: rgba(255, 255, 255, 0.06);
+      --text-primary: rgba(255, 255, 255, 0.95);
+      --text-secondary: rgba(255, 255, 255, 0.72);
+      --text-tertiary: rgba(255, 255, 255, 0.58);
+      --accent: #ffffff;
+      --on-accent: #000000;
+      --red: #ff4a3d;
+      /* --success 深色档不再重定义：走母版（2026-10-06 终裁去绿 = #ffffff）。
+         原先这里是 .95 —— 纯 alpha 微差，不影响可读性，但会让令牌回退扫描器
+         继续把本仓列为 --success 回退。 */
+      /* 家族四档圆角（对齐 MD/PDF tokens.css） */
+      --radius-sm: 12px;
+      --radius-md: 20px;
+      --radius-lg: 28px;
+      --radius-pill: 999px;
+      --accent-hover: rgba(255, 255, 255, 0.88);
+    }
+    /* 浅色主题：值与 MD tokens.css 的浅色档逐项一致（家族基线） */
+    [data-theme="light"] {
+  --bg-secondary: #f5f5f5;
+  --accent-hover: rgba(0, 0, 0, 0.88);
+  --text-primary: rgba(0, 0, 0, 0.92);
+  --text-secondary: rgba(0, 0, 0, 0.64);
+  --text-tertiary: rgba(0, 0, 0, 0.60);
+  --text-muted: rgba(0, 0, 0, 0.58);
+  --danger: #b8342a;
+  --warning: #c0392b;
+
+      --bg-primary: #ffffff;
+      --bg-elevated: #ffffff;
+      --bg-card: rgba(0, 0, 0, 0.03);
+      --bg-card-hover: rgba(0, 0, 0, 0.06);
+      --border: rgba(0, 0, 0, 0.08);
+      --border-hover: rgba(0, 0, 0, 0.16);
+      --accent: #000000;
+      --on-accent: #ffffff;
+      --red: #e64537;
+      --radius-sm: 12px;
+      --radius-md: 20px;
+      --radius-lg: 28px;
+      --radius-pill: 999px;
+    }
+    * { box-sizing: border-box; margin: 0; }
+    body {
+      font-family: "Geist", -apple-system, BlinkMacSystemFont, "SF Pro Display", "PingFang SC",
+        "Helvetica Neue", Arial, sans-serif;
+      /* 品牌柔光底（D-158 §2）：窗口不透明，玻璃要透出颜色就得把渐变画进应用自己；
+         三团 radial 在前 = 在上，线性底垫底。令牌在 styles/glass.css（L0 副本）。 */
+      background-color: var(--canvas);
+      background-image:
+        radial-gradient(120% 90% at 12% 0%, var(--wash-1) 0%, transparent 55%),
+        radial-gradient(100% 80% at 92% 8%, var(--wash-2) 0%, transparent 52%),
+        radial-gradient(120% 100% at 60% 110%, var(--wash-3) 0%, transparent 58%),
+        linear-gradient(160deg, var(--canvas) 0%, var(--canvas-2) 50%, var(--canvas-3) 100%);
+      color: var(--text-primary);
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      user-select: none;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* ── 顶栏：产品名 + 一句自述 + 全局动作 ──────────────────────────────
+       自述是「打开 3 秒知道这软件干什么」的第一落点，紧贴产品名，
+       不与右侧按钮抢视线（2026-10-30 UI 口径 §三.1）。 */
+    .topbar {
+      display: flex; align-items: center; gap: 12px;
+      padding: 12px 20px;
+      /* chrome 玻璃（D-158 §1）：实色 → 半透，backdrop-filter 才有内容可透 */
+      background: linear-gradient(180deg, var(--glass-chrome-a) 0%, var(--glass-chrome-b) 100%);
+      box-shadow: inset 0 1px 0 var(--glass-top-sheen), inset 0 -1px 0 var(--glass-seam);
+      backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+      -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+      flex: none;
+    }
+    .brand { display: flex; align-items: center; gap: 9px; min-width: 0; }
+    /* 品牌图标与主题按钮（.icon-btn 28×28）同一视觉尺寸，顶栏两端不一大一小。 */
+    .brand-mark { width: 28px; height: 28px; border-radius: 8px; flex: none; }
+    .brand h1 { font-size: 14px; font-weight: 600; letter-spacing: -.01em; white-space: nowrap; }
+    .brand-sub {
+      font-size: 12px; color: var(--text-tertiary); white-space: nowrap;
+      padding-left: 9px; border-left: 1px solid var(--border);
+    }
+    .spacer { flex: 1; }
+
+    /* ── 主区：拖放区常驻 + 唯一主操作 + 结果摘要 ──────────────────────── */
+    main {
+      flex: 1; min-height: 0; overflow: auto;
+      display: flex; flex-direction: column; align-items: center; gap: 16px;
+      padding: 32px 22px 24px;
+    }
+    .stage { width: 100%; max-width: 680px; display: flex; flex-direction: column; gap: 16px; }
+
+    #drop {
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      gap: 12px; padding: 34px 26px; text-align: center;
+      border: 1px dashed var(--border-hover);
+      border-radius: var(--radius-md);
+      background: var(--bg-card);
+      cursor: pointer;
+      transition: background .15s, border-color .15s;
+    }
+    #drop:hover { background: var(--bg-card-hover); border-color: var(--border-strong); }
+    #drop.over { border-style: solid; border-color: var(--accent); background: var(--bg-card-hover); }
+    #drop:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    .drop-icon { color: var(--text-tertiary); }
+    .drop-icon svg { width: 26px; height: 26px; fill: none; stroke: currentColor; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+    #drop .big { font-size: 16.5px; font-weight: 600; letter-spacing: -.01em; }
+    #drop .sub { font-size: 12.5px; color: var(--text-secondary); line-height: 1.7; max-width: 52ch; }
+    #drop .formats {
+      font-family: var(--font-mono, ui-monospace, monospace);
+      font-size: 10.5px; letter-spacing: .04em; color: var(--text-tertiary);
+    }
+    #drop .file {
+      display: flex; flex-direction: column; align-items: center; gap: 3px;
+      max-width: 100%; padding-top: 12px; border-top: 1px solid var(--border);
+      width: 100%;
+    }
+    #drop .file[hidden] { display: none; }
+    .file-name { font-size: 12.5px; font-weight: 550; color: var(--text-primary); word-break: break-all; }
+    .file-path {
+      font-family: var(--font-mono, ui-monospace, monospace);
+      font-size: 10.5px; color: var(--text-tertiary); word-break: break-all;
+    }
+
+    .primary-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+    #go {
+      height: 42px; padding: 0 24px; font-size: 14px; font-weight: 600;
+      border-radius: var(--radius-sm);
+    }
+    .primary-hint { font-size: 12px; color: var(--text-tertiary); line-height: 1.5; }
+
+    /* 结果摘要：只呈现后端真实返回的计数，不编造页面 / 文字 / 耗时 */
+    .result {
+      display: flex; flex-direction: column; gap: 14px;
+      padding: 16px 18px;
+      border: 1px solid var(--border); border-radius: var(--radius-md);
+      background: var(--bg-card);
+    }
+    .result[hidden] { display: none; }
+    .result-head { display: flex; align-items: baseline; gap: 10px; min-width: 0; }
+    .result-head h2 { font-size: 13px; font-weight: 600; letter-spacing: -.01em; flex: none; }
+    .result-file {
+      margin-left: auto; min-width: 0;
+      font-family: var(--font-mono, ui-monospace, monospace); font-size: 11px; color: var(--text-tertiary);
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .result-note { font-size: 12.5px; color: var(--text-secondary); line-height: 1.7; }
+    .result-note b { color: var(--text-primary); font-weight: 600; }
+    .stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+    .stat {
+      padding: 8px 10px; border: 1px solid var(--border);
+      border-radius: var(--radius-sm); background: var(--bg-inset, var(--bg-card));
+      min-width: 0;
+    }
+    .stat dt { font-size: 11px; color: var(--text-tertiary); white-space: nowrap; }
+    .stat dd { margin: 2px 0 0; font-size: 18px; font-weight: 600; font-variant-numeric: tabular-nums; }
+    .result-out { display: flex; align-items: baseline; gap: 10px; font-size: 12px; min-width: 0; }
+    .out-label { color: var(--text-tertiary); flex: none; }
+    .out-path {
+      font-family: var(--font-mono, ui-monospace, monospace); font-size: 11px;
+      color: var(--text-secondary); word-break: break-all; min-width: 0;
+    }
+    .out-path[data-state="empty"] { color: var(--text-tertiary); }
+    .result-actions {
+      display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+      padding-top: 12px; border-top: 1px solid var(--border);
+    }
+    .actions-label { font-size: 11.5px; color: var(--text-tertiary); margin-right: 2px; }
+
+    /* 详情（折叠）：保留原有运行日志，出错时可展开看原文；不再是主界面的一部分 */
+    .log-wrap { width: 100%; max-width: 680px; font-size: 11.5px; color: var(--text-tertiary); }
+    .log-wrap[hidden] { display: none; }
+    .log-wrap summary { cursor: pointer; width: fit-content; }
+    #log {
+      margin-top: 8px; max-height: 160px; overflow: auto;
+      padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm);
+      background: var(--bg-elevated); color: var(--text-secondary);
+      font-family: var(--font-mono, ui-monospace, monospace); font-size: 11px;
+      white-space: pre-wrap;
+    }
+
+    /* ── 状态栏：进行中（红点 + 文字）/ 结果 / 失败原因 ────────────────── */
+    .statusbar {
+      flex: none; display: flex; align-items: center; gap: 10px;
+      min-height: var(--statusbar-h); padding: 0 20px;
+      /* chrome 玻璃（D-158 §1，同家族状态条）：顶缘 seam 代替实线边框 */
+      background: linear-gradient(180deg, var(--glass-chrome-a) 0%, var(--glass-chrome-b) 100%);
+      box-shadow: inset 0 0 0 0.5px var(--glass-hairline), inset 0 1px 0 var(--glass-seam);
+      backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+      -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+      font-size: 12px; color: var(--text-secondary);
+    }
+    .status-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .progress {
+      width: 110px; height: 3px; flex: none; overflow: hidden;
+      border-radius: var(--radius-pill); background: var(--border);
+    }
+    .progress[hidden] { display: none; }
+    .progress i { display: block; height: 100%; width: 0%; background: var(--text-primary); transition: width .2s; }
+    .status-note { font-size: 11px; color: var(--text-tertiary); white-space: nowrap; }
+    #cancel {
+      min-height: 26px; padding: 3px 10px; font-size: 11.5px; font-weight: 500;
+      border-color: transparent; background: transparent; color: var(--text-secondary);
+    }
+    #cancel:hover:not(:disabled) { background: var(--bg-card-hover); border-color: var(--border); color: var(--text-primary); }
+
+    button {
+      font: inherit; font-size: 13px; font-weight: 500;
+      padding: 8px 16px; border-radius: var(--radius-sm); cursor: pointer;
+      border: 1px solid var(--border); background: var(--bg-card); color: var(--text-primary);
+      transition: background .15s, border-color .15s;
+    }
+    button:hover:not(:disabled) { background: var(--bg-card-hover); border-color: var(--border-hover); }
+    button.primary { background: var(--accent); color: var(--on-accent); border-color: var(--accent); font-weight: 600; }
+    button.primary:hover:not(:disabled) { background: var(--accent-hover); }
+    button:disabled { opacity: .4; cursor: default; }
+
+    /* 顶栏「换一份文件」：唯一性的全局入口，比次级按钮略重，但不抢主按钮 */
+    #pick {
+      display: inline-flex; align-items: center; gap: 7px;
+      height: 32px; padding: 0 12px; font-size: 12.5px;
+    }
+    #pick svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+
+    /* 语言：家族统一 pill，仅换语言，不动其他设置 */
+    #rocktier\.lang {
+      height: 28px; padding: 0 11px; font-size: 11.5px; font-weight: 500;
+      border-radius: var(--radius-pill); color: var(--text-secondary);
+      background: transparent; border-color: transparent;
+    }
+    #rocktier\.lang:hover:not(:disabled) { background: var(--bg-card-hover); color: var(--text-primary); }
+
+    /* 键盘焦点可见性（a11y）：仅键盘触发 :focus-visible，鼠标点击不留描边 */
+    :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    :focus:not(:focus-visible) { outline: none; }
+
+    @media (max-width: 620px) {
+      .brand-sub { display: none; }
+      .status-note { display: none; }
+      .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      main { padding: 22px 16px 18px; }
+      .topbar, .statusbar { padding-left: 14px; padding-right: 14px; }
+    }
+
+    /* ───────── 许可胶囊 + 激活对话框（家族 L6，逻辑在 license.js） ─────────
+       胶囊样式已收编为母版 tokens.css 的 .badge-license（2026-10-25 审计 D-78），
+       这里不再保留本地定义。 */
+
+    .license-overlay {
+      position: fixed; inset: 0; z-index: 1100;
+      display: flex; align-items: center; justify-content: center;
+      /* 遮罩 scrim（D-158 §1 模态档）：压暗 + 25px 模糊，托住玻璃对话框 */
+      background: rgba(0,0,0,0.55); backdrop-filter: blur(25px); -webkit-backdrop-filter: blur(25px);
+    }
+    .license-overlay[hidden] { display: none; }
+    .license-dialog {
+      width: min(400px, calc(100vw - 48px));
+      max-height: min(520px, calc(100vh - 48px));
+      overflow-y: auto;
+      /* panel 玻璃（D-158 §1 模态档） */
+      background: linear-gradient(180deg, var(--glass-panel-a) 0%, var(--glass-panel-b) 100%);
+      border-radius: var(--radius-md);
+      box-shadow: inset 0 0 0 0.5px var(--glass-hairline), 0 12px 40px rgba(0, 0, 0, 0.38);
+      backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+      -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+      display: flex; flex-direction: column;
+    }
+    .license-header { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px 0; }
+    .license-header h3 { font-size: 14px; font-weight: 600; letter-spacing: -0.01em; }
+    .license-close {
+      border: none; background: none; color: var(--text-tertiary); cursor: pointer;
+      font-size: 18px; line-height: 1; padding: 2px 8px; border-radius: 8px;
+    }
+    .license-close:hover { color: var(--text-primary); background: var(--bg-card-hover); }
+    .license-body { padding: 10px 16px 4px; display: flex; flex-direction: column; gap: 8px; }
+    .license-body p { font-size: 12px; color: var(--text-primary); line-height: 1.6; }
+    .license-body small { font-size: 11px; color: var(--text-tertiary); line-height: 1.55; display: block; }
+    .license-body .license-error { color: var(--red-ink); }
+    .license-field { display: flex; flex-direction: column; gap: 5px; }
+    .license-field label { font-size: 11px; color: var(--text-secondary); font-weight: 500; }
+    .license-field input {
+      border: 1px solid var(--border-hover); border-radius: var(--radius-sm);
+      padding: 8px 10px; font-size: 12px; background: var(--bg-card);
+      color: var(--text-primary); font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    }
+    .license-field input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+    .license-footer { display: flex; align-items: center; gap: 8px; padding: 12px 16px 14px; flex-wrap: wrap; }
+    /* 复用全局 button / button.primary（激活钮），只在对话框里收紧尺寸；
+       margin-inline-start: auto 使激活钮在 RTL 布局下也靠右（家族惯例） */
+    .license-footer button { padding: 6px 14px; font-size: 12px; border-radius: var(--radius-sm); min-height: 30px; }
+    .license-footer button.primary { margin-inline-start: auto; font-weight: 600; }
+
+/* 2026-11-15 二次简化：主题按钮固定一枚太阳，颜色随主题（currentColor） */
+.icon-btn .sun { display: block; }
+
+    /* 家族统一 reduced-motion 方案（0.01ms 而非 0：保留 transitionend/animationend 事件，
+       ui-ux-pro-max a11y 基线；audit 7B-3 CRITICAL 项） */
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+      }
+    }
+
+
+  /* ── 检查更新对话框（入口：帮助菜单「检查更新…」）────────────────────
+     点击才联网：启动时、工作中、后台都不检查，见 updates.js 头注。
+     右下角常驻悬浮入口已移除 —— fixed 定位没有 right 时会停在静态位置，
+     盖住底部内容（Compressor v0.1.10 实测），故全部收进菜单 + 本对话框。
+     结构照 .license-overlay 系列，z-index 对齐。 */
+    .update-overlay {
+      position: fixed; inset: 0; z-index: 1100;
+      display: flex; align-items: center; justify-content: center;
+      background: rgba(0,0,0,0.7); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+    }
+    .update-overlay[hidden] { display: none; }
+    .update-dialog {
+      width: min(400px, calc(100vw - 48px));
+      max-height: min(520px, calc(100vh - 48px));
+      overflow-y: auto;
+      background: var(--bg-secondary); border: 1px solid var(--border-hover);
+      border-radius: var(--radius-md); box-shadow: 0 18px 50px rgba(0,0,0,0.55);
+      display: flex; flex-direction: column;
+    }
+    .update-header { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px 0; }
+    .update-header h3 { font-size: 14px; font-weight: 600; letter-spacing: -0.01em; }
+    .update-close {
+      border: none; background: none; color: var(--text-tertiary); cursor: pointer;
+      font-size: 18px; line-height: 1; padding: 2px 8px; border-radius: 8px;
+    }
+    .update-close:hover { color: var(--text-primary); background: var(--bg-card-hover); }
+    .update-body { padding: 10px 16px 4px; display: flex; flex-direction: column; gap: 8px; }
+    .update-body p { font-size: 12px; color: var(--text-primary); line-height: 1.6; }
+    .update-body small { font-size: 11px; color: var(--text-tertiary); line-height: 1.55; display: block; }
+    .update-footer { display: flex; align-items: center; gap: 8px; padding: 12px 16px 14px; flex-wrap: wrap; }
+    .update-footer-spacer { flex: 1; }
+    .update-footer button {
+      min-height: 30px; padding: 6px 14px; font-size: 12px;
+      border: 1px solid var(--border-hover); border-radius: var(--radius-sm);
+      background: var(--bg-card); color: var(--text-primary); cursor: pointer;
+    }
+    .update-footer button:hover { border-color: var(--accent); }
+    /* 「获取 v…」主按钮：有新版时唯一需要用户点的动作，用 accent 让它显眼。 */
+    .update-footer button.update-get-btn {
+      background: var(--accent); border-color: transparent; color: var(--bg); font-weight: 600;
+    }
+  </style>
+</head>
+<!-- ══════════════════════════════════════════════════════════════
+     ↓↓↓ 界面本体（body）↓↓
+     本段是 UI 的全部结构：顶栏、拖放区、唯一主操作、结果摘要、状态栏，
+     以及四个脚本入口（i18n.js / license.js / app.js / updates.js）。
+
+     ⚠️ 2026-10-21（v0.2.9, commit a28330c）事故记录：
+     那次提交本意只是把「检查更新」入口收进菜单，却顺手把整个 body
+     连同四个脚本入口一起删掉了 —— 结果应用能开窗、但页面全白。
+     OCR 的前端不走打包（frontendDist 直接指向 ui/），所以这次误删
+     是**直接生效**的：v0.2.9 与 v0.2.10 两个 macOS / Windows 包都是空壳。
+
+     同一模板的改动在 pic2webp 也复制了一份（f5297b5, v1.9.14），
+     同样把 body 删空。两处都已从事故前的版本完整恢复。
+
+     本段已于 2026-10-25 从 v0.2.8 完整恢复。改动本段前务必确认：
+       ① body 的开闭标签成对存在
+       ② 四个脚本入口（lang/license/app/updates.js）仍在
+     家族闸门已加 frontend-entry-integrity 规则把关这两条。
+     ══════════════════════════════════════════════════════════════
+-->
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <img class="brand-mark" src="./favicon.png" alt="" />
+      <h1 data-i18n="title">Rocktier OCR</h1>
+      <span class="brand-sub" data-i18n="tagline">Scans into text</span>
+    </div>
+    <span class="spacer"></span>
+    <!-- 许可徽标：试用/未激活时由 license.js 显示；位置随顶栏，逻辑不动 -->
+    <button class="badge-license" id="license-pill" hidden></button>
+    <button id="pick" type="button" title="Choose file">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V9z"/><path d="M13 3v6h6"/><path d="M12 12v5M9.5 14.5 12 17l2.5-2.5"/></svg>
+      <span id="pick-label">Choose file</span>
+    </button>
+    <button id="rocktier.lang" class="icon-btn" title="中文 / EN" aria-label="中文 / EN">
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><ellipse cx="12" cy="12" rx="3.8" ry="9"/><path d="M3 12h18"/></svg>
+    </button>
+    <!-- 家族唯一主题按钮：.icon-btn（28×28 + 40×40 命中区），两态 light⇄dark，
+         图标只做太阳 / 月亮（2026-11-15 用户令：取消「跟随系统」）。
+         此前用 ☾ / ☀ 字符冒充图标：字形覆盖取决于系统字体，且各字形基线不一致。 -->
+    <button id="rocktier.theme" class="icon-btn" data-mode="dark" title="Theme" aria-label="Theme">
+      <svg class="sun" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+    </button>
+  </header>
+
+  <main>
+    <div class="stage">
+      <!-- 拖放区常驻：空态、已选文件、识别完成后都留在原位，是「放进来就认」的固定入口 -->
+      <div id="drop" role="button" tabindex="0">
+        <span class="drop-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24"><path d="M12 3v11"/><path d="m8 10 4 4 4-4"/><path d="M4 16v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/></svg>
+        </span>
+        <span class="big" data-i18n="dropBig">Drop a PDF or an image</span>
+        <span class="sub">
+          <span data-i18n="dropSub1">Scans and image-only PDFs get a searchable text layer</span><br>
+          <span data-i18n="dropSub2">Images become a one-page searchable PDF; pages that already have text are skipped</span>
+        </span>
+        <span class="formats" data-i18n="formats">PDF · PNG · JPG</span>
+        <span class="file" id="file" hidden>
+          <span class="file-name" id="file-name"></span>
+          <span class="file-path" id="path"></span>
+        </span>
+      </div>
+
+      <!-- 唯一主操作：位置固定，其余动作都在结果区或状态栏 -->
+      <div class="primary-row">
+        <button id="go" class="primary" data-i18n="start" disabled>Recognise text</button>
+        <span class="primary-hint" data-i18n="goHint">Pages that already carry text are skipped, never overwritten</span>
+      </div>
+
+      <!-- 结果摘要：页数 / 识别页 / 跳过页 / 行数都来自 ocr_process 返回值 -->
+      <section id="result" class="result" hidden aria-labelledby="result-title">
+        <div class="result-head">
+          <h2 id="result-title" data-i18n="resultTitle">Result</h2>
+          <span class="result-file" id="result-file"></span>
+        </div>
+        <p class="result-note" id="done"></p>
+        <dl class="stats">
+          <div class="stat"><dt data-i18n="statPages">Pages</dt><dd id="stat-total">0</dd></div>
+          <div class="stat"><dt data-i18n="statOcr">Recognised</dt><dd id="stat-ocr">0</dd></div>
+          <div class="stat"><dt data-i18n="statSkipped">Skipped</dt><dd id="stat-skip">0</dd></div>
+          <div class="stat"><dt data-i18n="statLines">Lines</dt><dd id="stat-lines">0</dd></div>
+        </dl>
+        <div class="result-out">
+          <span class="out-label" data-i18n="outputLabel">Output</span>
+          <span class="out-path" id="out-path" data-state="empty"></span>
+        </div>
+        <div class="result-actions">
+          <span class="actions-label" data-i18n="exportLabel">Export</span>
+          <button id="pdf" data-i18n="exportPdf" disabled>Export PDF</button>
+          <button id="docx" data-i18n="exportDocx" disabled>Export Word</button>
+          <button id="txt" data-i18n="exportTxt" disabled>Export TXT</button>
+          <button id="copy" data-i18n="copyText" disabled>Copy text</button>
+        </div>
+      </section>
+    </div>
+
+    <!-- 运行日志：折叠保留（出错时可展开看原文），不属于主视线 -->
+    <details class="log-wrap" id="log-wrap" hidden>
+      <summary data-i18n="details">Details</summary>
+      <pre id="log" role="log" aria-live="polite"></pre>
+    </details>
+  </main>
+
+  <footer class="statusbar">
+    <!-- 红点只在识别进行中出现，且必须伴同进度文字（家族 §一.2） -->
+    <span class="dot-live" id="live" hidden aria-hidden="true"></span>
+    <span class="status-text" id="status" role="status" aria-live="polite"></span>
+    <span class="progress" id="bar-wrap" hidden aria-hidden="true"><i id="bar"></i></span>
+    <span class="spacer"></span>
+    <span class="status-note" data-i18n="offlineNote">Offline · your file stays on this device</span>
+    <button id="cancel" data-i18n="cancel" disabled>Cancel</button>
+  </footer>
+
+  <script src="i18n.js"></script>
+  <script src="license.js"></script>
+  <script src="app.js"></script>
+  <script src="updates.js"></script>
+  <script>
+    // 主题：light ⇄ dark 两态切换（2026-11-15 用户令：全家族取消「跟随系统」）。
+    // 2026-11-19 起统一到 rocktier.theme（与 PDF 仓同键）；旧键仅作读取回落。
+    (function () {
+      var KEY = "rocktier.theme";
+      var KEY_LEGACY = "rocktier-ocr-theme";
+      var btn = document.getElementById("rocktier.theme");
+      if (!btn) return;
+
+      var lightMq = window.matchMedia("(prefers-color-scheme: light)");
+
+      function systemTheme() {
+        return lightMq.matches ? "light" : "dark";
+      }
+
+      function readMode() {
+        var saved = null;
+        try { saved = localStorage.getItem(KEY) || localStorage.getItem(KEY_LEGACY); } catch (e) {}
+        if (saved === "light" || saved === "dark") return saved;
+        if (saved === "auto") {
+          // 旧「跟随系统」用户：按读取当时的系统值一次性落定并持久化，此后不跟随。
+          var resolved = systemTheme();
+          try { localStorage.setItem(KEY, resolved); } catch (e2) {}
+          return resolved;
+        }
+        // 从没选过：深色（家族基线；2026-11-15 起不再跟随系统）
+        return "dark";
+      }
+
+      function strings() {
+        // lang.js 顶层 let current 暴露当前语言（zh / en），script 作用域内可直接引用
+        var lang = "en";
+        try { if (typeof current === "string") lang = current; } catch (e) {}
+        return (typeof STRINGS !== "undefined" && (STRINGS[lang] || STRINGS.en)) || {};
+      }
+
+      function sync(mode) {
+        btn.setAttribute("data-mode", mode);
+        var s = strings();
+        var label =
+          mode === "light" ? (s.themeModeLight || "Light")
+          : (s.themeModeDark || "Dark");
+        var text = (s.themeLabel || "Theme") + " \u00b7 " + label;
+        btn.title = text;
+        btn.setAttribute("aria-label", (s.themeLabel || "Theme") + ": " + label);
+      }
+
+      function apply(mode) {
+        document.documentElement.setAttribute("data-theme", mode);
+        sync(mode);
+      }
+
+      apply(readMode());
+
+      // 「跟随系统」已取消：不再监听系统外观变化，light/dark 都是明确选择。
+
+      btn.addEventListener("click", function () {
+        var next = readMode() === "dark" ? "light" : "dark";
+        try {
+          localStorage.setItem(KEY, next);
+        } catch (e) {
+          // 隐私模式：仅本次会话生效
+        }
+        apply(next);
+      });
+
+      // 语言切换后刷新标题：applyLang 是挂 window 的函数声明，包一层即可同步
+      var origApplyLang = window.applyLang;
+      window.applyLang = function () {
+        if (typeof origApplyLang === "function") origApplyLang();
+        sync(readMode());
+      };
+    })();
+  </script>
+</body>
+</html>
