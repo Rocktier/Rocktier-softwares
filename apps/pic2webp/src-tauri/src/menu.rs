@@ -1,0 +1,150 @@
+//! 家族标准应用菜单（见《Rocktier家族软件通用准则》菜单一章）。
+//! 自定义项点击经 `on_menu_event` 转成 `menu-action` 事件发给前端。
+
+use tauri::menu::{AboutMetadata, Menu, MenuItem, PredefinedMenuItem, Submenu};
+
+pub const WEBSITE: &str = "https://rocktier.com/pic2webp.html";
+
+
+macro_rules! tr8 {
+    ($en:expr, $zh:expr, $ja:expr, $ko:expr, $de:expr, $es:expr, $pt:expr, $ar:expr) => {
+        &[
+            ("en", $en), ("zh", $zh), ("ja", $ja), ("ko", $ko),
+            ("de", $de), ("es", $es), ("pt", $pt), ("ar", $ar),
+        ]
+    };
+}
+
+fn pick(lang: &str, items: &[(&'static str, &'static str)]) -> &'static str {
+    let base = lang.split('-').next().unwrap_or(lang).split('_').next().unwrap_or(lang);
+    items
+        .iter()
+        .find(|(c, _)| *c == base)
+        .map(|(_, v)| *v)
+        .unwrap_or(items[0].1)
+}
+
+pub fn build(app: &tauri::AppHandle, lang: &str) -> tauri::Result<()> {
+    let l = |items: &[(&'static str, &'static str)]| pick(lang, items);
+
+    let open_i = MenuItem::with_id(
+        app,
+        "open",
+        l(tr8!("Open Images…", "打开图片…", "画像を開く…", "이미지 열기…", "Bilder öffnen…", "Abrir imágenes…", "Abrir imagens…", "فتح الصور…")),
+        true,
+        Some("CmdOrCtrl+O"),
+    )?;
+    let clear_i = MenuItem::with_id(app, "clear", l(tr8!("Clear List", "清空列表", "リストをクリア", "목록 지우기", "Liste leeren", "Vaciar lista", "Limpar lista", "مسح القائمة")), true, None::<&str>)?;
+    let theme_i = MenuItem::with_id(
+        app,
+        "theme",
+        l(tr8!("Toggle Theme", "切换深浅主题", "テーマ切替", "테마 전환", "Design wechseln", "Cambiar tema", "Alternar tema", "تبديل السمة")),
+        true,
+        None::<&str>,
+    )?;
+    // 检查更新：只 emit "check-updates"，联网由前端 updates.js 做。
+    let update_i = MenuItem::with_id(app, "check-updates", l(tr8!("Check for updates", "检查更新", "アップデートを確認", "업데이트 확인", "Nach Updates suchen", "Buscar actualizaciones", "Verificar atualizações", "التحقق من التحديثات")), true, None::<&str>)?;
+    let site_i = MenuItem::with_id(app, "website", l(tr8!("Website", "官方网站", "公式サイト", "공식 사이트", "Webseite", "Sitio web", "Site oficial", "الموقع الرسمي")), true, None::<&str>)?;
+
+    let app_menu = Submenu::with_items(
+        app,
+        "Rocktier Pic2WebP",
+        true,
+        &[
+            // 第三个参数不能是 None：Windows 后端只有匹配
+            // `PredefinedMenuItemType::About(Some(metadata))` 才调 show_about_dialog，
+            // None 落入 `_ => {}` —— 菜单项在，点击**完全无反应**。
+            // macOS 走 NSAboutPanel（忽略 metadata），此坑只在 Windows 暴露。
+            &PredefinedMenuItem::about(
+                app,
+                Some(l(tr8!("About Rocktier Pic2WebP", "关于 Rocktier Pic2WebP", "Rocktier Pic2WebP について", "Rocktier Pic2WebP 정보", "Über Rocktier Pic2WebP", "Acerca de Rocktier Pic2WebP", "Sobre o Rocktier Pic2WebP", "حول Rocktier Pic2WebP"))),
+                Some(AboutMetadata {
+                    version: Some(env!("CARGO_PKG_VERSION").to_string()),
+                    copyright: Some("Copyright 2026 Rocktier".to_string()),
+                    ..Default::default()
+                }),
+            )?,
+            &PredefinedMenuItem::separator(app)?,
+            // Windows 上 muda 的 hide_others 落进 `_ => {}` 点了无反应、hide 是
+            // SW_HIDE 窗口消失召不回（findings D-42）——仅 macOS 显示这两项。
+            #[cfg(target_os = "macos")]
+            &PredefinedMenuItem::hide(app, None)?,
+            #[cfg(target_os = "macos")]
+            &PredefinedMenuItem::hide_others(app, None)?,
+            &PredefinedMenuItem::separator(app)?,
+            &PredefinedMenuItem::quit(app, None)?,
+        ],
+    )?;
+
+    let file_menu = Submenu::with_items(
+        app,
+        l(tr8!("File", "文件", "ファイル", "파일", "Datei", "Archivo", "Arquivo", "ملف")),
+        true,
+        &[
+            &open_i,
+            &clear_i,
+            &PredefinedMenuItem::separator(app)?,
+            &PredefinedMenuItem::close_window(app, None)?,
+        ],
+    )?;
+
+    let edit_menu = Submenu::with_items(
+        app,
+        l(tr8!("Edit", "编辑", "編集", "편집", "Bearbeiten", "Editar", "Editar", "تحرير")),
+        true,
+        &[
+            &PredefinedMenuItem::undo(app, None)?,
+            &PredefinedMenuItem::redo(app, None)?,
+            &PredefinedMenuItem::separator(app)?,
+            &PredefinedMenuItem::cut(app, None)?,
+            &PredefinedMenuItem::copy(app, None)?,
+            &PredefinedMenuItem::paste(app, None)?,
+            &PredefinedMenuItem::select_all(app, None)?,
+        ],
+    )?;
+
+    let view_menu = Submenu::with_items(app, l(tr8!("View", "显示", "表示", "보기", "Ansicht", "Ver", "Ver", "عرض")), true, &[&theme_i])?;
+
+    let window_menu = Submenu::with_items(
+        app,
+        l(tr8!("Window", "窗口", "ウィンドウ", "창", "Fenster", "Ventana", "Janela", "نافذة")),
+        true,
+        &[
+            &PredefinedMenuItem::minimize(app, None)?,
+            &PredefinedMenuItem::separator(app)?,
+            // macOS 原生全屏有效；Windows 上 muda 的 fullscreen 落进 `_ => {}` 点了
+            // 无反应，改用自定义 win-fullscreen 项，由 on_menu_event 调 set_fullscreen。
+            #[cfg(target_os = "macos")]
+            &PredefinedMenuItem::fullscreen(app, None)?,
+            #[cfg(target_os = "windows")]
+            &MenuItem::with_id(app, "win-fullscreen", "Toggle Full Screen", true, None::<&str>)?,
+        ],
+    )?;
+
+    // 商店渠道不出 Help 菜单：其中「检查更新」是应用外更新入口（Apple 2.4.5(vii)），
+    // 「官方网站」会把用户引向应用外购买（Apple 3.1.1 / 微软 10.8.2、10.8.4）。
+    // 直链渠道保持不变。
+    let help_menu = if crate::license::channel() == "direct" {
+        Some(Submenu::with_items(
+            app,
+            l(tr8!("Help", "帮助", "ヘルプ", "도움말", "Hilfe", "Ayuda", "Ajuda", "مساعدة")),
+            true,
+            &[&update_i, &site_i],
+        )?)
+    } else {
+        None
+    };
+
+    let menu = match help_menu.as_ref() {
+        Some(help) => Menu::with_items(
+            app,
+            &[&app_menu, &file_menu, &edit_menu, &view_menu, &window_menu, help],
+        )?,
+        None => Menu::with_items(
+            app,
+            &[&app_menu, &file_menu, &edit_menu, &view_menu, &window_menu],
+        )?,
+    };
+    app.set_menu(menu)?;
+    Ok(())
+}

@@ -1,0 +1,112 @@
+{
+  "$schema": "https://raw.githubusercontent.com/nicovrc/tauri-settings-schema/refs/heads/v2/schema.json",
+  "productName": "Rocktier Pic2WebP",
+  "mainBinaryName": "RocktierPic2WebP",
+  "version": "1.10.2",
+  "identifier": "Rocktier.RocktierPic2WebP",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "devUrl": "http://localhost:1420",
+    "beforeBuildCommand": "npm run build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "Rocktier Pic2WebP",
+        "width": 860,
+        "height": 620,
+        "minWidth": 640,
+        "minHeight": 440,
+        "resizable": true,
+        "center": true,
+        "titleBarStyle": "Overlay",
+        "hiddenTitle": true
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self' asset:; script-src 'self' asset:; style-src 'self' asset: 'unsafe-inline'; img-src 'self' asset: data:; connect-src 'self' ipc: http://ipc.localhost https://rocktier.com https://api.github.com"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": [
+      "dmg",
+      "msi",
+      "nsis"
+    ],
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "fileAssociations": [
+      {
+        "ext": ["jpg", "jpeg"],
+        "name": "Rocktier Image",
+        "description": "Image to convert",
+        "role": "Editor",
+        "mimeType": "image/jpeg"
+      },
+      {
+        "ext": ["png"],
+        "name": "Rocktier Image",
+        "description": "Image to convert",
+        "role": "Editor",
+        "mimeType": "image/png"
+      },
+      {
+        "ext": ["webp"],
+        "name": "Rocktier Image",
+        "description": "Image to convert",
+        "role": "Editor",
+        "mimeType": "image/webp"
+      },
+      {
+        "ext": ["gif"],
+        "name": "Rocktier Image",
+        "description": "Image to convert",
+        "role": "Editor",
+        "mimeType": "image/gif"
+      },
+      {
+        "ext": ["bmp"],
+        "name": "Rocktier Image",
+        "description": "Image to convert",
+        "role": "Editor",
+        "mimeType": "image/bmp"
+      },
+      {
+        "ext": ["tiff"],
+        "name": "Rocktier Image",
+        "description": "Image to convert",
+        "role": "Editor",
+        "mimeType": "image/tiff"
+      }
+    ],
+    "resources": [
+      "../public/*"
+    ],
+    "windows": {
+      "allowDowngrades": true,
+      "digestAlgorithm": "sha256",
+      "webviewInstallMode": {
+        "type": "downloadBootstrapper",
+        "silent": true
+      },
+      "nsis": {
+        "installMode": "currentUser",
+        "languages": [
+          "English"
+        ],
+        "displayLanguageSelector": false
+      },
+      "wix": {
+        "language": "en-US",
+        "upgradeCode": "E2EBA4BE-6F20-5075-84E1-761DE1425F68"
+      }
+    }
+  }
+}
