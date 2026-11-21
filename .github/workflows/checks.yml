@@ -1,0 +1,301 @@
+name: Checks
+
+# 分应用检查：push / PR 时按改动路径只跑受影响应用的「Tests & Lints」。
+# 配方逐字取自各旧仓的 ci.yml（2026-11-19 迁移），仅把工作目录改到 apps/<slug>。
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  changes:
+    name: Detect changed apps
+    runs-on: ubuntu-latest
+    outputs:
+      pdf: ${{ steps.f.outputs.pdf }}
+      markdown: ${{ steps.f.outputs.markdown }}
+      ocr: ${{ steps.f.outputs.ocr }}
+      write: ${{ steps.f.outputs.write }}
+      pic2webp: ${{ steps.f.outputs.pic2webp }}
+      cad-viewer: ${{ steps.f.outputs.cad-viewer }}
+      compressor: ${{ steps.f.outputs.compressor }}
+      journal: ${{ steps.f.outputs.journal }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: f
+        with:
+          filters: |
+            pdf:
+              - 'apps/pdf/**'
+            markdown:
+              - 'apps/markdown/**'
+            ocr:
+              - 'apps/ocr/**'
+            write:
+              - 'apps/write/**'
+            pic2webp:
+              - 'apps/pic2webp/**'
+            cad-viewer:
+              - 'apps/cad-viewer/**'
+            compressor:
+              - 'apps/compressor/**'
+            journal:
+              - 'apps/journal/**'
+
+  pdf:
+    name: Tests & Lints (PDF)
+    needs: changes
+    if: needs.changes.outputs.pdf == 'true'
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+      - uses: dtolnay/rust-toolchain@1.98.0
+        with:
+          components: clippy
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: apps/pdf/sign-engine/go.mod
+          cache-dependency-path: apps/pdf/sign-engine/go.sum
+      - name: Install qpdf + frontend deps
+        run: |
+          brew install qpdf
+          cd apps/pdf && npm ci
+      - name: Provision qpdf sidecar
+        run: bash apps/pdf/scripts/provision-qpdf-macos.sh
+      - name: Go vet & tests
+        working-directory: apps/pdf/sign-engine
+        run: |
+          go vet ./...
+          go test ./...
+      - name: Provision sign-engine sidecar
+        run: bash apps/pdf/scripts/provision-sign-engine-macos.sh
+      - name: Fetch Pdfium
+        run: node apps/pdf/scripts/fetch-pdfium.mjs --all
+      - name: Frontend typecheck
+        working-directory: apps/pdf
+        run: npx tsc --noEmit
+      - name: Rust tests
+        working-directory: apps/pdf/src-tauri
+        run: cargo test --all-targets
+      - name: Rust lints
+        working-directory: apps/pdf/src-tauri
+        run: cargo clippy --all-targets -- -D warnings
+
+  markdown:
+    name: Tests & Lints (Markdown)
+    needs: changes
+    if: needs.changes.outputs.markdown == 'true'
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: 'npm'
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - name: Ensure clippy component
+        run: rustup component add clippy
+      - name: Install dependencies
+        run: npm ci
+      - name: Type check + unit tests
+        working-directory: apps/markdown
+        run: |
+          npm run build
+          npm test
+      - name: Glass contrast (lenso material)
+        working-directory: apps/markdown
+        run: npm run verify:glass
+      - name: fs permission audit
+        working-directory: apps/markdown
+        run: npm run verify:fs
+      - name: Tab limit toast discipline
+        working-directory: apps/markdown
+        run: npm run verify:tabs
+      - name: MAS channel wiring (store build)
+        working-directory: apps/markdown
+        run: node scripts/verify-mas-channel.mjs
+      - name: Rust tests + clippy
+        working-directory: apps/markdown/src-tauri
+        run: |
+          cargo test --manifest-path src-tauri/Cargo.toml
+          cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
+
+  ocr:
+    name: Tests & Lints (OCR)
+    needs: changes
+    if: needs.changes.outputs.ocr == 'true'
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: MAS entitlements gate
+        working-directory: apps/ocr
+        run: node scripts/verify-mas-entitlements.mjs
+      - name: Frontend syntax check
+        working-directory: apps/ocr
+        run: |
+          for f in ui/*.js; do
+            node --check "$f"
+          done
+      - name: Rust tests
+        working-directory: apps/ocr/src-tauri
+        run: cargo test --all-targets
+      - name: Rust lints
+        working-directory: apps/ocr/src-tauri
+        run: cargo clippy --all-targets -- -D warnings
+
+  write:
+    name: Tests & Lints (Write)
+    needs: changes
+    if: needs.changes.outputs.write == 'true'
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: 'npm'
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - name: Ensure clippy component
+        run: rustup component add clippy
+      - name: Install dependencies
+        run: npm ci
+      - name: Type check + unit tests
+        working-directory: apps/write
+        run: |
+          npm run build
+          npm test
+      - name: fs permission audit
+        working-directory: apps/write
+        run: npm run verify:fs
+      - name: Rust tests + clippy
+        working-directory: apps/write/src-tauri
+        run: |
+          cargo test --manifest-path src-tauri/Cargo.toml
+          cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
+
+  pic2webp:
+    name: Tests & Lints (Pic2WebP)
+    needs: changes
+    if: needs.changes.outputs.pic2webp == 'true'
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: 'npm'
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - name: Ensure clippy component
+        run: rustup component add clippy
+      - name: Install dependencies
+        run: npm ci
+      - name: Type check + build
+        working-directory: apps/pic2webp
+        run: npm run build
+      - name: Frontend tests
+        working-directory: apps/pic2webp
+        run: npm test
+      - name: Rust tests + clippy
+        working-directory: apps/pic2webp/src-tauri
+        run: |
+          cargo test --manifest-path src-tauri/Cargo.toml
+          cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
+
+  cad-viewer:
+    name: Tests & Lints (CAD Viewer)
+    needs: changes
+    if: needs.changes.outputs.cad-viewer == 'true'
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - name: Ensure clippy component
+        run: rustup component add clippy
+      - name: Install dependencies
+        run: npm ci
+      - name: Sync legal resources
+        working-directory: apps/cad-viewer
+        run: npm run sync:legal
+      - name: Type check + build
+        working-directory: apps/cad-viewer
+        run: npm run build
+      - name: Rust tests + clippy
+        working-directory: apps/cad-viewer/src-tauri
+        run: |
+          cargo test --manifest-path src-tauri/Cargo.toml
+          cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
+
+  compressor:
+    name: Tests & Lints (Compressor)
+    needs: changes
+    if: needs.changes.outputs.compressor == 'true'
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: 'stable'
+      - uses: actions/setup-node@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install dependencies
+        run: npm ci
+      - name: Type check & build
+        working-directory: apps/compressor
+        run: npm run build
+      - name: Go engine tests
+        working-directory: apps/compressor/compress-engine
+        run: |
+          go vet ./...
+          go test ./...
+      - name: Build compress-engine binaries
+        working-directory: apps/compressor/compress-engine
+        run: |
+          CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -o ../src-tauri/compress-engine-windows.exe .
+          CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -o ../src-tauri/compress-engine-darwin-arm64 .
+      - name: Rust clippy
+        working-directory: apps/compressor/src-tauri
+        run: cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
+
+  journal:
+    name: Tests & Lints (Journal)
+    needs: changes
+    if: needs.changes.outputs.journal == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install Tauri system deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev librsvg2-dev libayatana-appindicator3-dev
+      - name: Install frontend deps
+        working-directory: apps/journal
+        run: npm install --no-audit --no-fund
+      - name: Frontend typecheck
+        working-directory: apps/journal
+        run: npx tsc --noEmit
+      - name: Frontend build
+        working-directory: apps/journal
+        run: npm run build
+      - name: Rust tests
+        working-directory: apps/journal/src-tauri
+        run: cargo test --all-targets
+      - name: Rust lints
+        working-directory: apps/journal/src-tauri
+        run: cargo clippy --all-targets -- -D warnings
