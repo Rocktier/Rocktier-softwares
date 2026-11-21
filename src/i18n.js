@@ -9,6 +9,7 @@ const dict = {
   en: {
     "subtitle": "Images to WebP · processed locally",
     "themeBtn": "Theme",
+    "langBtn": "Language",
     "theme-mode-light": "Light",
     "theme-mode-dark": "Dark",
     "dropzone-text": "Drop images here",
@@ -156,6 +157,7 @@ const dict = {
   zh: {
     "subtitle": "图片转 WebP · 本地处理",
     "themeBtn": "主题",
+    "langBtn": "语言",
     "theme-mode-light": "浅色",
     "theme-mode-dark": "深色",
     "dropzone-text": "拖拽图片到此处",
@@ -343,10 +345,13 @@ export function getLanguages() {
 }
 
 export function initLang() {
-  // ⚠️ 不再读 localStorage 里的 `rocktier.lang`：切换控件删掉之后，
-  // 半年前存下的 zh 会变成用户再也改不回来的孤儿偏好。旧键不主动删
-  // （用户数据不动），只是从此不参与语言决策。
-  currentLang = detectSystemLang();
+  // 2026-11-19 起与 PDF 仓同构：固定英文默认（不嗅探系统语言），
+  // 用户手动切换后持久化到 rocktier.pic2webp.lang；
+  // 旧键 rocktier.lang 仅作读取回落（半年前的旧偏好不丢）。
+  try {
+    const saved = localStorage.getItem("rocktier.pic2webp.lang") || localStorage.getItem("rocktier.lang");
+    if (saved === "en" || saved === "zh") currentLang = saved;
+  } catch (e) { /* storage unavailable */ }
   applyLang();
 }
 
@@ -358,6 +363,7 @@ export function setLang(code) {
   const codes = LANGUAGES.map((l) => l.code);
   if (codes.includes(code)) {
     currentLang = code;
+    try { localStorage.setItem("rocktier.pic2webp.lang", code); } catch (e) { /* ignore */ }
     applyLang();
   }
 }
@@ -393,7 +399,9 @@ export function applyLang() {
     el.placeholder = t(el.getAttribute("data-i18n-placeholder"));
   });
   document.querySelectorAll("[data-i18n-aria]").forEach((el) => {
-    el.setAttribute("aria-label", t(el.getAttribute("data-i18n-aria")));
+    const label = t(el.getAttribute("data-i18n-aria"));
+    el.setAttribute("aria-label", label);
+    el.title = label;
   });
   window.dispatchEvent(new CustomEvent("lang-changed", { detail: currentLang }));
 }
