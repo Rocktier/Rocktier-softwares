@@ -1,0 +1,494 @@
+# Rocktier Write — CI build & release
+# macOS dmg for Apple Silicon and Intel; Windows MSI (WiX) for direct download;
+# Windows MSIX via @choochmeque/tauri-windows-bundle.
+#
+# 触发条件为什么同时监听 main（2026-11-13 定案，见 rocktier-docs 通用准则 §14.3）：
+#   仓库是 public → 托管 runner 不计费，分支构建白拿一份「打包链路没烂」的信号。
+#   ci.yml 只跑 cargo test/clippy/前端测试，**不打包**；dmg / WiX / MSIX 依赖
+#   bundler 与工具链版本、不依赖业务代码，正是「长期不跑、某天炸在发版日」的高危区。
+#   ⚠️ 若本仓改回 private：立刻删掉下面的 `branches: [main]`。私有仓 macOS 倍率 10×，
+#   一次全平台构建就能吃掉几天配额，还会挤掉真正的发版。
+#   ⚠️ 分支构建不许产出可下载资产：tauri-action 的 tagName 必须保持
+#   `github.ref_type == 'tag' && 'v__VERSION__' || ''` 这个形状，否则 main 会覆盖线上资产。
+
+name: Build & Release
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  # ── macOS (Apple Silicon + Intel) ──────────────────────────────────────
+  # 构建期签名：APPLE_SIGNING_IDENTITY="-" 让 tauri-action 先打 ad-hoc 签名
+  # （arm64 必须有签名才能加载）。发行签名在构建后的
+  # "Sign the app bundle, notarize it, and repack the DMG" 那步做：
+  # 配了 APPLE_CERT_P12 就换 Developer ID + 硬化运行时并公证，没配就保持 ad-hoc。
+  write-build-macos:
+    name: macOS (${{ matrix.arch }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-latest
+            arch: aarch64
+            target: aarch64-apple-darwin
+            filearch: arm64
+          - runner: macos-15-intel
+            arch: x64
+            target: x86_64-apple-darwin
+            filearch: x86_64
+    runs-on: ${{ matrix.runner }}
+    env:
+      # 构建期先 ad-hoc 签名（arm64 必须有签名才能加载）；真正的发行签名
+      # 在构建后的签名步骤完成，有证书就覆盖成 Developer ID 并公证。
+      APPLE_SIGNING_IDENTITY: "-"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: "**/package-lock.json"
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: "apps/write/src-tauri -> target"
+          key: ${{ matrix.arch }}
+
+      - run: npm ci
+
+      # bundle_dmg.sh 是 **flaky** 的：v1.4.10 的 x64 腿首次构建挂在
+      # `failed to run bundle_dmg.sh`，同一提交什么都不改、直接重跑 job 即过
+      # （aarch64 腿同时首次就过）。Tauri 的 dmg 打包内部用 AppleScript 编排
+      # Finder 图标布局，拿不到 GUI session 时 AppleEvent 会超时（-1712）——
+      # 偶发而非必现，所以解法是**重试**，不是换配方。
+      #
+      # 重试用 continue-on-error + failure() 补救步骤实现，而不是把
+      # tauri-action 换成手写 npm run tauri build：后者会丢掉 tauri-action
+      # 顺带做的 updater 签名与 app.tar.gz 资产。第一次失败不终止 job，
+      # 第二次再失败才算真失败。
+      - name: Build (Tauri macOS ${{ matrix.arch }})
+        id: tauri_build
+        continue-on-error: true
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ""
+          # Inherit ad-hoc signing env from job level
+        with:
+          tagName: ${{ github.ref_type == 'tag' && 'v__VERSION__' || '' }}
+          releaseName: "Rocktier Write v__VERSION__"
+          releaseBody: "Rocktier Write release."
+          releaseDraft: true
+          prerelease: false
+          args: "--target ${{ matrix.target }}"
+
+      # bundle_dmg.sh 失败时可能留下已挂载的读写镜像（rw.*.dmg），
+      # 不 detach 掉会让重试撞在同一个残留上。
+      #
+      # 注意：`grep -i rocktier` 无匹配时返回 1，在 pipefail 下会把整个
+      # step 判成失败，于是 Retry build 永远被 skip（2026-11-04 run 41772676495）。
+      # 「没有残留挂载」是正常路径，必须走成功分支。
+      - name: Record first build failure
+        if: steps.tauri_build.outcome == 'failure'
+        run: |
+          echo "::warning::tauri-action 首次构建失败（bundle_dmg.sh），清理残留挂载后重试一次；本次 warning 不代表 job 结果"
+          echo "first attempt outcome=${{ steps.tauri_build.outcome }}"
+
+      - name: Clean stale DMG mounts before retry
+        if: steps.tauri_build.outcome == 'failure'
+        run: |
+          set -uo pipefail
+          mounts=$(hdiutil info 2>/dev/null | awk '/\/Volumes\// {print $NF}' | grep -i rocktier || true)
+          if [ -n "$mounts" ]; then
+            printf '%s\n' "$mounts" | while read -r m; do
+              echo "detaching $m"; hdiutil detach "$m" -force || true
+            done
+          else
+            echo "no stale Rocktier mounts"
+          fi
+          rm -rf "apps/write/src-tauri/target/${{ matrix.target }}/release/bundle/dmg"
+          echo "cleaned"
+
+      - name: Retry build (bundle_dmg.sh flake)
+        if: steps.tauri_build.outcome == 'failure'
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ""
+        with:
+          tagName: ${{ github.ref_type == 'tag' && 'v__VERSION__' || '' }}
+          releaseName: "Rocktier Write v__VERSION__"
+          releaseBody: "Rocktier Write release."
+          releaseDraft: true
+          prerelease: false
+          args: "--target ${{ matrix.target }}"
+
+      # 发行签名。tauri-action 只做了 ad-hoc（见 job 级 APPLE_SIGNING_IDENTITY），
+      # 从浏览器下载的副本仍会被 Gatekeeper 拦（用户报「已阻止恶意软件」即此）。
+      # 配了 APPLE_CERT_P12 就换 Developer ID + 硬化运行时，重打 DMG 并公证；
+      # 没配就退回 ad-hoc 并在 CI 打 notice —— 产物与改动前一致，不假装已签名。
+      #
+      # 重打 DMG 是必须的：tauri-action 在上一步已经生成了 dmg，里面装的是
+      # ad-hoc 的 .app。重签后把 bundle/dmg 下的文件原地替换，后面
+      # "Stage macOS artifacts" 找到的就是签名后的那份，attach 时同名覆盖。
+      - name: Sign the app bundle, notarize it, and repack the DMG
+        env:
+          APPLE_CERT_P12: ${{ secrets.APPLE_CERT_P12 }}
+          APPLE_CERT_PASSWORD: ${{ secrets.APPLE_CERT_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+        run: |
+          set -euo pipefail
+          app=$(find "apps/write/src-tauri/target/${{ matrix.target }}/release/bundle/macos" \
+            -maxdepth 1 -name '*.app' -print -quit)
+          [ -n "$app" ] || { echo "::error::.app not found"; exit 1; }
+          dmg=$(find "apps/write/src-tauri/target/${{ matrix.target }}/release/bundle/dmg" \
+            -name '*.dmg' -print -quit)
+          [ -n "$dmg" ] || { echo "::error::.dmg not found"; exit 1; }
+
+          sign_app=(-s -)
+          if [ -n "${APPLE_CERT_P12:-}" ]; then
+            keychain="$RUNNER_TEMP/rocktier-signing.keychain-db"
+            echo "$APPLE_CERT_P12" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+            security create-keychain -p "" "$keychain"
+            # 6 小时不锁：同一步里还要等 notarytool，15 分钟不活动锁会卡住后面的
+            # codesign（DMG 二次签名）。
+            security set-keychain-settings -lut 21600 "$keychain"
+            security unlock-keychain -p "" "$keychain"
+            security import "$RUNNER_TEMP/cert.p12" -k "$keychain" \
+              -P "$APPLE_CERT_PASSWORD" -T /usr/bin/codesign
+            security set-key-partition-list -S apple-tool:,apple: -k "" "$keychain" >/dev/null
+            security list-keychains -d user -s "$keychain" $(security list-keychains -d user | tr -d '"')
+            identity=$(security find-identity -v -p codesigning "$keychain" \
+              | awk '/Developer ID Application/ {print $2; exit}')
+            if [ -z "$identity" ]; then
+              echo "::error::APPLE_CERT_P12 is set but contains no Developer ID Application identity."
+              exit 1
+            fi
+            echo "signing as $identity"
+            sign_app=(-s "$identity" --options runtime --timestamp --entitlements apps/write/src-tauri/Entitlements.plist)
+          else
+            echo "::notice::No Developer ID certificate configured - ad-hoc signing. Downloaded copies will still be flagged by Gatekeeper."
+          fi
+
+          codesign "${sign_app[@]}" -fv --deep "$app"
+          codesign --verify --deep --strict "$app"
+          codesign -dvvv "$app" 2>&1 | grep 'Signature=' || true
+
+          work=$(mktemp -d)
+          hdiutil convert "$dmg" -format UDRW -o "$work/rw.dmg" -quiet
+          mnt="$work/m"
+          mkdir -p "$mnt"
+          hdiutil attach "$work/rw.dmg" -readwrite -nobrowse -mountpoint "$mnt" -quiet
+          rm -rf "$mnt/$(basename "$app")"
+          cp -R "$app" "$mnt/"
+          hdiutil detach "$mnt" -quiet
+          hdiutil convert "$work/rw.dmg" -format UDZO -o "$work/signed.dmg" -quiet
+          mv "$work/signed.dmg" "$dmg"
+          rm -rf "$work"
+
+          if [ -n "${APPLE_CERT_P12:-}" ]; then
+            codesign -s "$identity" --timestamp -fv "$dmg"
+            xcrun notarytool submit "$dmg" \
+              --apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" \
+              --password "$APPLE_APP_PASSWORD" --wait
+            xcrun stapler staple "$dmg"
+            xcrun stapler validate "$dmg"
+            echo "HAS_CERT=true" >> "$GITHUB_ENV"
+
+            # 硬断言：本地 dmg / .app 必须是 Developer ID 且带 secure timestamp。
+            # 用 case 而不是 `| grep -q`：pipefail 下 grep 提前退出会让 codesign
+            # 收 SIGPIPE(141)，把「断言通过」误判成失败。
+            dmg_info=$(codesign -dv --verbose=4 "$dmg" 2>&1 || true)
+            app_info=$(codesign -dv --verbose=4 "$app" 2>&1 || true)
+            case "$dmg_info" in *"Authority=Developer ID Application"*) ;; *)
+              echo "::error::DMG signature is missing Developer ID authority"; exit 1 ;; esac
+            case "$dmg_info" in *"Timestamp="*) ;; *)
+              echo "::error::DMG signature has no secure timestamp"; exit 1 ;; esac
+            case "$app_info" in *"Authority=Developer ID Application"*) ;; *)
+              echo "::error::.app signature is missing Developer ID authority"; exit 1 ;; esac
+            case "$app_info" in *"Timestamp="*) ;; *)
+              echo "::error::.app signature has no secure timestamp"; exit 1 ;; esac
+
+            # Gatekeeper 兜底：dmg 是用户实际打开的载体，必须 accepted。
+            spctl -a -t open --context context:primary-signature -vv "$dmg" \
+              || { echo "::error::Gatekeeper rejected the notarized DMG"; exit 1; }
+            # .app 没有独立票据，spctl 走在线查询；这里只作 warning，避免离线误红。
+            spctl -a -vv "$app" \
+              || echo "::warning::spctl did not accept the .app (no embedded ticket by design - verify online)"
+          else
+            codesign -s - -fv "$dmg"
+            echo "HAS_CERT=false" >> "$GITHUB_ENV"
+            echo "::notice::ad-hoc build: signature assertions and spctl skipped (by design)."
+          fi
+          codesign -dvvv "$dmg" 2>&1 | grep 'Signature=' || true
+
+      - name: Verify bundle
+        run: |
+          set -euo pipefail
+          APP=$(find "apps/write/src-tauri/target/${{ matrix.target }}/release/bundle/macos" -name "*.app" -print -quit)
+          [ -z "$APP" ] && { echo "::error::.app not found"; exit 1; }
+          # 不用 `| grep -q`：pipefail 下 grep 提前退出会让上游 tee/file 吃 SIGPIPE(141)
+          arch_out=$(file "$APP/Contents/MacOS/"*)
+          echo "$arch_out"
+          case "$arch_out" in
+            *'${{ matrix.filearch }}'*) ;;
+            *) echo "::error::arch mismatch, expected ${{ matrix.filearch }}"; exit 1 ;;
+          esac
+          echo "Signing status:"
+          codesign -dvvv "$APP" 2>&1 | grep -E 'Signature=|Authority=|TeamIdentifier=' || true
+          DMG=$(find "apps/write/src-tauri/target/${{ matrix.target }}/release/bundle/dmg" -name "*.dmg" -print -quit)
+          # Tauri 在 targets:"all" 下确实会产出 .dmg（这一步一直能找到它），
+          # 但此前**从不把它上传** —— 而 REQUIRED_ASSETS 却要求 `\.dmg$`。
+          # 于是资产校验永远不通过，tag 发版卡在最后一步（2026-10-04 首次撞上：
+          # v1.2.0 的两端包都构建成功、已附加，publish 步骤失败）。
+          # 该 dmg 已由上面的签名步骤原地重打，内含签过名的 .app。
+          if [ -z "$DMG" ]; then
+            echo "::error::.dmg not found — tauri.conf.json 的 bundle.targets 应为 all 或含 dmg"
+            exit 1
+          fi
+
+      # 把 .dmg 与 .app 都**拷到工作目录**再 attach。
+      #
+      # 为什么不用 `files: apps/write/src-tauri/.../bundle/dmg/*.dmg` 直接传：
+      # `softprops/action-gh-release` 的 files 里 glob 匹配不到文件时**只发 warning
+      # 不失败**，步骤照样是绿的 —— 于是「上传成功」的表象下资产根本没进去，
+      # 直到最后 REQUIRED_ASSETS 校验才暴露。实测踩过：v1.2.0 第一次改成传 dmg 时，
+      # `Attach macOS artifacts` 显示 success，校验却仍缺 .dmg。
+      #
+      # 拷到工作目录后，上面的 `ls` 能在上传前就确认文件真的在，
+      # 缺了就当场报错 —— 失败发生在离原因最近的那一步。
+      - name: Stage macOS artifacts
+        # 只在 tag push 上跑。
+        # ⚠️ 早先漏了这个条件：分支 push 也会走这一步，于是**每次普通推送都红**
+        #（实测 e00dae3 的 build-macos 就是这样失败的）。而它存在的意义仅为
+        # tag 发版时把产物搬到工作目录供 attach 用 —— 分支 push 不需要。
+        # 必须与下面的 Attach 保持同样的条件，否则就是「一边传一边不传」。
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          set -e
+          APP=$(find "apps/write/src-tauri/target/${{ matrix.target }}/release/bundle/macos" -name "*.app" -print -quit)
+          [ -z "$APP" ] && { echo "::error::.app not found"; exit 1; }
+          ditto -c -k --keepParent "$APP" "Rocktier.Write_${{ matrix.arch }}.app.zip"
+
+          DMG=$(find "apps/write/src-tauri/target/${{ matrix.target }}/release/bundle/dmg" -name "*.dmg" -print -quit)
+          if [ -z "$DMG" ]; then
+            echo "::error::.dmg not found — 检查 tauri.conf.json 的 bundle.targets（应为 all 或含 dmg）"
+            exit 1
+          fi
+          # Tauri 的 dmg 命名实测为 <productName>_<version>_<arch>.dmg，
+          # 而 productName 是「Rocktier Write」——**带空格**，不是 Rocktier.Write。
+          # 本地实跑 `tauri build --bundles dmg` 确认：
+          #   bundle/dmg/Rocktier Write_1.2.0_aarch64.dmg
+          # 所以文件名一律用 `basename` 现取，绝不写死 ——
+          # 写死会让 attach 的 glob 匹配不到，而 softprops/action-gh-release
+          # 对「没匹配到」只发 warning 不报错，步骤照样绿，直到资产校验才暴露。
+          NAME=$(basename "$DMG")
+          cp "$DMG" "./$NAME"
+          xattr -cr "./$NAME" || true
+          echo "DMG_NAME=$NAME" >> "$GITHUB_ENV"
+
+          echo "Staged:"
+          ls -la "Rocktier.Write_${{ matrix.arch }}.app.zip" "./$NAME"
+
+      # 同时上传 .dmg 与 .app.zip：
+      #   · .dmg —— macOS 的原生分发形态，REQUIRED_ASSETS 要求的那个
+      #   · .app.zip —— 保留。证书缺席时 .dmg 仍是 ad-hoc，Gatekeeper 会拦，
+      #     右键「打开」可绕过；.app.zip 给不愿挂载镜像的用户一个直接解压就能
+      #     用的选择。两者并存不增加维护成本（同一个构建产物）。
+      # Q8（本仓早先定案：暂不做代码签名）本轮按用户要求推翻 —— 证书配齐后
+      # 上面那步会走 Developer ID + 公证。
+      - name: Attach macOS artifacts to release (tag push)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          draft: true
+          # softprops v2 默认 overwrite_files: true —— 这里会覆盖 tauri-action
+          # 同一 job 早先传上去的未重签 dmg（GitHub 把空格规整成点，名字一致）。
+          files: |
+            Rocktier.Write_${{ matrix.arch }}.app.zip
+            ${{ env.DMG_NAME }}
+          generate_release_notes: false
+
+      # 发布面校验：Attach 之后回读 Release，确认同名资产字节数与本地已签名 dmg 一致。
+      # 本地断言只能证明「签上了」，这一步才能证明「发布出去的就是签的那份」——
+      # tauri-action 在重签之前就把 ad-hoc dmg 传进了 draft release，
+      # 只靠 softprops 同名覆盖的假设，出问题时不留任何痕迹。
+      - name: Assert published DMG matches the signed one (tag push)
+        if: startsWith(github.ref, 'refs/tags/v') && env.HAS_CERT == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          size=$(stat -f%z "$DMG_NAME")
+          found=""
+          for n in "$DMG_NAME" "${DMG_NAME// /.}"; do
+            got=$(gh release view "${{ github.ref_name }}" --json assets \
+              --jq ".assets[] | select(.name == \"$n\") | .size" || true)
+            if [ -n "$got" ]; then found="$got"; break; fi
+          done
+          [ -n "$found" ] || { echo "::error::$DMG_NAME not found in release ${{ github.ref_name }}"; exit 1; }
+          [ "$found" = "$size" ] || { echo "::error::published dmg size $found != signed size $size"; exit 1; }
+          echo "::notice::published $DMG_NAME size=$found matches the signed copy"
+
+  # ── Windows (MSI via WiX) ──────────────────────────────────────────────
+  write-build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: "**/package-lock.json"
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: "apps/write/src-tauri -> target"
+
+      - run: npm ci
+
+      - name: Build (Tauri Windows MSI)
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ""
+        with:
+          tagName: ${{ github.ref_type == 'tag' && 'v__VERSION__' || '' }}
+          releaseName: "Rocktier Write v__VERSION__"
+          releaseBody: "Rocktier Write release."
+          releaseDraft: true
+          prerelease: false
+          args: ""
+
+      # ── MSIX (Microsoft Store) ──────────────────────────────────────────
+      # tauri-windows-bundle 内部会跑 npm run tauri build -- --target
+      # x86_64-pc-windows-msvc --no-bundle（MSI/NSIS 跳过），再用 msixbundle-cli
+      # 打包。Identity（Name/Publisher）取 apps/write/src-tauri/gen/windows/bundle.config.json，
+      # 必须与 Partner Center 预留身份一致；Store 侧重新签名，无需 pfx。
+      # md 文件关联自动从 tauri.conf.json 的 bundle.fileAssociations 折叠进来。
+      - name: Build MSIX (Microsoft Store)
+        # MSIX 直装走 direct 付费墙（微软商店渠道已弃用，2026-10-05 终裁 C3）。
+        # 若未来恢复商店渠道：本步需加 env ROCKTIER_CHANNEL: store（10.8.2/10.8.4）。
+        run: npm run tauri:windows:build
+
+      # 去掉 MSI 文件名里的 _en-US（Tauri v2 会按 bundle.windows.wix.language 追加）。
+      # 应用本身带语言切换器，文件名宣称单一语言会误导 —— 看起来像存在
+      # 「英文版」和其他本地化安装包，而实际只有一个多语言安装包。
+      # 只改文件名，不动 bundle 配置：WiX 的 language 字段是 MSI 构建必需的
+      # 工具链语言码，改它会让构建失败。
+      - name: Strip _en-US from MSI filename
+        shell: bash
+        run: |
+          shopt -s nullglob
+          found=0
+          for f in apps/write/src-tauri/target/release/bundle/msi/*_en-US.msi \
+                   apps/write/src-tauri/target/x86_64-pc-windows-msvc/release/bundle/msi/*_en-US.msi; do
+            nf="${f%_en-US.msi}.msi"
+            mv "$f" "$nf"
+            echo "  $(basename "$f") -> $(basename "$nf")"
+            found=1
+          done
+          if [ "$found" -eq 0 ]; then
+            echo "::error::no *_en-US.msi found - Tauri naming changed, this step needs updating"
+            ls -1 apps/write/src-tauri/target/release/bundle/msi/ 2>/dev/null || true
+            exit 1
+          fi
+
+      - name: Upload MSIX artifact (branch)
+        if: github.ref == 'refs/heads/main'
+        uses: actions/upload-artifact@v4
+        with:
+          name: Rocktier-Write-windows-msix
+          path: apps/write/src-tauri/target/msix/*.msix*
+          if-no-files-found: error
+
+      - name: Attach MSIX to release (tag push)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          draft: true
+          files: apps/write/src-tauri/target/msix/*.msix*
+          generate_release_notes: false
+
+  # 发布闸门：两平台都传完之后，先校验资产清单齐全，再把草稿发布为 latest。
+  # 不齐就保留草稿并让 job 失败 —— 用户永远不会拿到残缺包。
+  write-publish:
+    name: Verify & Publish Release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [write-build-macos, write-build-windows]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      REQUIRED_ASSETS: '_aarch64\.dmg$ _x64\.dmg$ _aarch64\.app\.zip$ _x64\.app\.zip$ \.msi$ \.exe$ \.msix$ \.msixbundle$'
+    steps:
+      - name: Verify assets then publish
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+          # 必须显式指定仓库：这个 job **没有 actions/checkout**（它不需要源码，
+          # 只需要读 Release 状态）。没有 checkout 就没有 git remote，gh 无从推断
+          # 仓库，会直接报「不是 Git 仓库」并退出非 0。
+          #
+          # ⚠️ 原来的 `2>/dev/null || true` 把这个错误吞了，于是 `assets` 永远是空串，
+          # 轮询 30 次全打印「waiting for uploads (0 so far)」，最后报六个 missing ——
+          # 报错信息完全指错方向，看起来像「GitHub 资产没上传上去」，
+          # 实际上传早在前两个 job 里完成了。
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          echo "Verifying release $TAG"
+          # Uploads are done (needs: build jobs); GitHub's asset API can lag
+          # minutes before a freshly-uploaded file appears in `gh release view`.
+          # Poll up to ~10 min with an initial settle delay before giving up.
+          sleep 20
+          for i in $(seq 1 30); do
+            # 保留 || true 仅为让轮询能继续重试（资产 API 确实会lag），
+            # 但把 stderr 打出来 —— 之前把它一并丢掉，导致真实的配置错误
+            # 被伪装成「资产还没上传」，排查方向完全跑偏。
+            assets=$(gh release view "$TAG" --json assets --jq '.assets[].name' || true)
+            echo "  poll #$i: $(printf '%s\n' "$assets" | grep -c . || true) asset(s) visible"
+            ok=1
+            for pat in $REQUIRED_ASSETS; do
+              printf '%s\n' "$assets" | grep -Eq "$pat" || ok=0
+            done
+            [ "$ok" -eq 1 ] && break
+            echo "  waiting for uploads ($(printf '%s\n' "$assets" | grep -c . || true) so far)..."
+            sleep 20
+          done
+          missing=0
+          for pat in $REQUIRED_ASSETS; do
+            if ! printf '%s\n' "$assets" | grep -Eq "$pat"; then
+              echo "::error::release $TAG missing asset matching $pat"
+              missing=1
+            fi
+          done
+          if [ "$missing" -ne 0 ]; then
+            echo "::error::release $TAG is missing required assets — left as DRAFT for manual review"
+            exit 1
+          fi
+          echo "All required assets present; publishing $TAG"
+          gh release edit "$TAG" --draft=false --latest

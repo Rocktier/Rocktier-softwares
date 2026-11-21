@@ -1,0 +1,360 @@
+name: Release
+
+# 打 tag 即发布：构建 macOS 安装包并挂到对应的 GitHub Release。
+#
+# 两个架构一起出（矩阵）。签名与公证是**条件性**的：仓库配了
+# APPLE_CERT_P12 等密钥就签 + 公证，没配就 ad-hoc 出包 —— 家族 PDF 产品
+# 的 scar 在这里沿用：tauri 打 dmg 用的是**还没签**的 bundle，签完必须把
+# app 塞回镜像重压缩，否则下载者看到 "damaged"（v1.0.10 的教训）。
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+jobs:
+  ocr-build:
+    name: Build macOS (Apple Silicon)
+    # macOS，不是 ubuntu：Tauri 的 crate 在 Linux 上要 gtk/webkit 等系统库。
+    runs-on: macos-latest
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: aarch64-apple-darwin
+            label: Apple Silicon
+        # Intel mac 不做，这是查证过的上游现实而不是偷懒：
+        # ① ort 的预编译表（dist.tsv）里 macOS 只有 arm64；
+        # ② 微软官方 ONNX Runtime 从 v1.28.0 起只发 osx-arm64，Intel mac 没有产物；
+        # ③ 家族 PDF 产品同样只出 Apple Silicon。给一个 6 年老平台自己编译
+        #    ORT 源码或引入 tract 后端，都不值。Windows x64 才是跨平台的主战场，
+        #    那边 ort 有 x86_64-pc-windows-msvc 的预编译库。
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: apps/ocr/src-tauri
+
+      # 没有前端要构建：tauri.conf.json 只把 frontendDist 指向静态的 ui/。
+      # 装 npm 包只为拿到 tauri 这个命令本身。
+      - name: Install Tauri CLI
+        run: npm install
+
+      - name: Build
+        run: npm run tauri -- build --target ${{ matrix.target }}
+
+      - name: Sign and seal
+        env:
+          APPLE_CERT_P12: ${{ secrets.APPLE_CERT_P12 }}
+          APPLE_CERT_PASSWORD: ${{ secrets.APPLE_CERT_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+        run: |
+          set -euo pipefail
+          bundle="apps/ocr/src-tauri/target/${{ matrix.target }}/release/bundle"
+          app=$(find "$bundle/macos" -maxdepth 1 -name '*.app' | head -1)
+          dmg=$(find "$bundle/dmg" -name '*.dmg' | head -1)
+          test -n "$app" && test -n "$dmg" || { echo "::error::build output missing"; exit 1; }
+
+          sign_app=(-s -)
+          if [ -n "${APPLE_CERT_P12:-}" ]; then
+            # 一次性钥匙串；set-key-partition-list 让 codesign 不弹窗就能用私钥。
+            keychain="$RUNNER_TEMP/rocktier-signing.keychain-db"
+            echo "$APPLE_CERT_P12" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+            security create-keychain -p "" "$keychain"
+            security set-keychain-settings -lut 900 "$keychain"
+            security unlock-keychain -p "" "$keychain"
+            security import "$RUNNER_TEMP/cert.p12" -k "$keychain" \
+              -P "$APPLE_CERT_PASSWORD" -T /usr/bin/codesign
+            security set-key-partition-list -S apple-tool:,apple: -k "" "$keychain" >/dev/null
+            security list-keychains -d user -s "$keychain" $(security list-keychains -d user | tr -d '"')
+
+            identity=$(security find-identity -v -p codesigning "$keychain" \
+              | awk '/Developer ID Application/ {print $2; exit}')
+            if [ -z "$identity" ]; then
+              echo "::error::APPLE_CERT_P12 is set but has no Developer ID Application identity."
+              exit 1
+            fi
+            echo "signing as $identity"
+            # hardened runtime 是公证的前提；entitlements 里那条
+            # disable-library-validation 是随包 pdfium 能加载的前提。
+            sign_app=(-s "$identity" --options runtime --entitlements apps/ocr/src-tauri/Entitlements.plist)
+          else
+            echo "::notice::No Developer ID certificate configured - ad-hoc signing. Downloaded copies will be flagged by Gatekeeper."
+          fi
+
+          codesign "${sign_app[@]}" -fv --deep "$app"
+
+          # DMG 里的 app 是 tauri 从未签 bundle 封进去的 —— 换掉、重压缩，
+          # 再把镜像本身也签一遍。
+          work=$(mktemp -d)
+          hdiutil convert "$dmg" -format UDRW -o "$work/rw.dmg" -quiet
+          mnt="$work/m"
+          mkdir -p "$mnt"
+          hdiutil attach "$work/rw.dmg" -readwrite -nobrowse -mountpoint "$mnt" -quiet
+          rm -rf "$mnt/$(basename "$app")"
+          cp -R "$app" "$mnt/"
+          hdiutil detach "$mnt" -quiet
+          hdiutil convert "$work/rw.dmg" -format UDZO -o "$work/signed.dmg" -quiet
+          mv "$work/signed.dmg" "$dmg"
+          rm -rf "$work"
+
+          if [ -n "${APPLE_CERT_P12:-}" ]; then
+            # 公证镜像（覆盖里面那个 app），然后 staple，让票据跟文件走、离线可验。
+            codesign -s "$identity" -fv "$dmg"
+            xcrun notarytool submit "$dmg" \
+              --apple-id "$APPLE_ID" \
+              --team-id "$APPLE_TEAM_ID" \
+              --password "$APPLE_APP_PASSWORD" \
+              --wait
+            xcrun stapler staple "$dmg"
+            xcrun stapler validate "$dmg"
+          else
+            codesign -s - -fv "$dmg"
+          fi
+          codesign -dvvv "$dmg" 2>&1 | grep 'Signature=' || true
+
+      - name: Collect installers
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts
+          bundle="apps/ocr/src-tauri/target/${{ matrix.target }}/release/bundle"
+          dmg=$(find "$bundle/dmg" -name '*.dmg' | head -1)
+          app=$(find "$bundle/macos" -maxdepth 1 -name '*.app' | head -1)
+          cp "$dmg" artifacts/
+          ditto -c -k --keepParent "$app" "artifacts/$(basename "$app").zip"
+          ls -la artifacts
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ocr-macos-${{ matrix.target }}
+          path: artifacts/*
+
+
+  ocr-build-windows:
+    name: Build Windows installer
+    # Windows 的构建只在这台 runner（或用户家里的 Windows 电脑）上发生，
+    # 绝不在 Mac 上 —— 这是用户定下的纪律。
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: apps/ocr/src-tauri
+
+      - name: Install CLI tooling
+        run: npm install
+
+      # 只取 Windows 那份 pdfium（脚本按平台落盘，名字与加载器一致）。
+      - name: Fetch Pdfium (windows-x64)
+        run: node apps/ocr/scripts/fetch-pdfium.mjs windows-x64
+
+      - name: Init store bundle
+        # 从仓库根跑：工具自己找 apps/ocr/src-tauri（家族 PDF 亦然），-p 传子目录反而找不到项目根
+        run: npx tauri-windows-bundle init --scale
+
+      # Identity Name 是 Partner Center 2026-09-25 为 OCR 分配的真值
+      # Rocktier.RocktierOCR，与 tauri.conf.json 的 identifier 一致。脚本会断言
+      # 两者相符，占位名直接 fail，不会静默出包。
+      - name: Configure store identity
+        run: node apps/ocr/scripts/configure-store-identity.mjs
+
+      # 本 job 的 MSIX 是**直链渠道**包（带自研试用墙），只用于直装测试，
+      # 不是商店提交件。C3「微软商店渠道已弃用」已于 2026-11-05 作废；
+      # 商店包改由 .github/workflows/store-msix.yml 手动触发，在独立 runner
+      # 上以 job 级 ROCKTIER_CHANNEL=store 构建 —— 物理隔离是必需的：
+      # 本 job 里 msix 与 msi/nsis 共用同一 target 目录，若在此处直接加
+      # store 环境变量，直链包可能复用同一份编译产物被串成无付费墙版本。
+      - name: Build msix (direct channel, not for Store)
+        run: npx tauri-windows-bundle build --runner npm --verbose
+
+      # 顺手出一个 msi：未签名也能双击安装，是 Windows 上做功能测试
+      # 最省事的载体（msix 未签名侧载要先装证书，太麻烦）。编译产物
+      # 与上一步同目录，这一步只做增量编译加打包。
+      - name: Build msi
+        run: npm run tauri -- build --bundles msi,nsis
+
+      # 去掉 MSI 文件名里的 _en-US（Tauri v2 会按 bundle.windows.wix.language 追加）。
+      # 应用本身带语言切换器，文件名宣称单一语言会误导 —— 看起来像存在
+      # 「英文版」和其他本地化安装包，而实际只有一个多语言安装包。
+      # 只改文件名，不动 bundle 配置：WiX 的 language 字段是 MSI 构建必需的
+      # 工具链语言码，改它会让构建失败。
+      - name: Strip _en-US from MSI filename
+        shell: bash
+        run: |
+          shopt -s nullglob
+          found=0
+          for f in apps/ocr/src-tauri/target/release/bundle/msi/*_en-US.msi \
+                   apps/ocr/src-tauri/target/x86_64-pc-windows-msvc/release/bundle/msi/*_en-US.msi; do
+            nf="${f%_en-US.msi}.msi"
+            mv "$f" "$nf"
+            echo "  $(basename "$f") -> $(basename "$nf")"
+            found=1
+          done
+          if [ "$found" -eq 0 ]; then
+            echo "::error::no *_en-US.msi found - Tauri naming changed, this step needs updating"
+            ls -1 apps/ocr/src-tauri/target/release/bundle/msi/ 2>/dev/null || true
+            exit 1
+          fi
+
+      - name: Collect installers
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts
+          # 下面两条 msi/nsis 的 find **刻意不加 `2>/dev/null || true`**。
+          #
+          # 之前两条都带这个尾巴，于是 find 若因目录名不对 / 权限 / 工具缺失
+          # 而失败，也会被静默吞掉 —— job 照样报绿，Release 里就是少了那个包。
+          #
+          # 实测踩过：v0.2.1 的 `setup.exe` 就这样消失的。构建日志里
+          # `Running makensis` 明明成功，说明产物存在、**是收集这一步静默失败**；
+          # 而后面的资产闸门只报「缺 .exe」，完全看不出是哪一步坏的。
+          #
+          # 现在让它响：find 失败 → `set -e` 直接红，指向的位置就是这里。
+          # 上面的 msix 用严格 maxdepth、不吞错误，是正确示范。
+          # msix 产在 target/msix/（Build msix 步骤），必须在这里收进 artifacts/
+          # —— 上轮修复误以为 msix 步骤自带收集，删掉了这行，结果 exe 进来了
+          # msix 反而消失（2026-10-06 实录：收集点唯一，删一行少一类产物）。
+          find apps/ocr/src-tauri/target/msix -maxdepth 1 \( -name '*.msix' -o -name '*.msixbundle' \) -exec cp {} artifacts/ \;
+          find apps/ocr/src-tauri/target/release/bundle/msi -name '*.msi' -exec cp {} artifacts/ \;
+          # NSIS 安装器：家族统一策略 —— 直链下载走 .exe（currentUser 安装、
+          # 默认建桌面快捷方式），MSI 保留作企业批量部署的次要入口。
+          find apps/ocr/src-tauri/target/release/bundle/nsis -name '*.exe' -exec cp {} artifacts/ \;
+          ls -la artifacts
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ocr-windows-x64
+          path: artifacts/*
+
+
+  ocr-publish:
+    name: Publish release
+    # 只在 tag 上发布 —— workflow_dispatch 的 GITHUB_REF_NAME 是分支名，
+    # 曾经照它建出过一个叫 main 的 Release。
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [ocr-build, ocr-build-windows]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+# 这个 job **必须 checkout**，否则下面的 gh 命令无法工作。
+      # 没有 actions/checkout 就没有 git remote，而 gh 靠 git remote 推断
+      # 当前仓库 —— 于是每条 gh 命令报
+      #   `failed to run git: fatal: not a git repository`
+      # 并以非 0 退出。
+      #
+      # 本 job 只需要读/改 Release 状态、不需要源码，但**为了让 gh 认出
+      # 仓库，仍必须 checkout**（build job 都有，只有这里漏了）。
+      #
+      # 实测踩过：MD v1.0.8 / CAD v0.2.6 / Journal v0.2.8 三仓发版全红，
+      # 报错是「六个包全缺」，而资产其实早已上传完毕 —— 真因是这里缺
+      # checkout，此前被校验段里的 `2>/dev/null || true` 掩盖着；
+      # 去掉那个 `2>/dev/null` 之后它才浮出来。
+      #
+      # 另一条思路是给每条 gh 命令加 `--repo ${{ github.repository }}`。
+      # 选 checkout 是因为它一次解决全部 gh 子命令（view/edit/upload），
+      # 而 `--repo` 漏写一处就又坏。
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Publish to the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REQUIRED_ASSETS: '\.dmg$ \.app\.zip$ \.msi$ \.exe$ \.msix$ \.msixbundle$'
+        run: |
+          set -euo pipefail
+          # `-name '*.exe'` 是 v0.2.1 缺失 `.exe` 的真正根因：
+          # NSIS 安装器**确实被构建并收集进artifacts**（日志里 5 个文件、
+          # 含一个 28MB 带可执行位的产物），但这条 find 的过滤列表里
+          # **没有 `*.exe`**，于是它在这一步被排除，从未上传到 Release。
+          # 而下游资产闸门只报「缺 .exe」，完全看不出是上传前的过滤问题。
+          find artifacts -type f \( -name '*.dmg' -o -name '*.zip' -o -name '*.msix' -o -name '*.msixbundle' -o -name '*.msi' -o -name '*.exe' \) -print0 > installers.nul
+          count=$(tr -cd '\0' < installers.nul | wc -c)
+          echo "Found $count installer(s)"
+          if [ "$count" -eq 0 ]; then
+            echo "::error::nothing to publish - refusing to create an empty release" >&2
+            exit 1
+          fi
+          if ! gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --draft \
+              --title "$GITHUB_REF_NAME" --generate-notes
+          fi
+          # 上传失败不能被吞掉：每次都失败时退出码必须不是 0，
+          # 否则 job 报绿而 Release 里空无一物。
+          uploaded=0
+          for i in $(seq 1 5); do
+            if xargs -0 -r gh release upload "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --clobber < installers.nul; then
+              uploaded=1
+              break
+            fi
+            echo "upload attempt $i failed, retrying"
+            sleep 5
+          done
+          if [ "$uploaded" -ne 1 ]; then
+            echo "::error::uploading to $GITHUB_REF_NAME failed after 5 attempts" >&2
+            exit 1
+          fi
+          echo "attached $count file(s)"
+          # 发布闸门：校验资产齐全才发布为 latest；不齐保留草稿并失败。
+          #
+          # 必须**轮询**：GitHub 资产 API 在刚上传后可能延迟数分钟才可见。
+          # 本仓原先只查一次就下结论 —— 资产其实全传完了也会报「缺失」，
+          # 这与 v0.2.1 报 `.exe` 缺失直接相关（该包构建成功，只是没赶上）。
+          #
+          # 保留 `|| true` 仅为让轮询能继续重试（资产 API 确实会 lag），
+          # 但**必须把 stderr 打出来** —— 之前 `2>/dev/null` 把它一并丢掉，
+          # 于是 gh 的真实错误（权限 / 仓库名 / Rate limit）被伪装成
+          # 「资产还没上传」，报错信息完全指错方向。
+          # 轮询参数（20 + 30×20s ≈ 10 分钟）对齐家族其余各仓。
+          sleep 20
+          missing=1
+          for i in $(seq 1 30); do
+            assets=$(gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name' || true)
+            echo "  poll #$i: $(printf '%s\n' "$assets" | grep -c . || true) asset(s) visible"
+            missing=0
+            for pat in $REQUIRED_ASSETS; do
+              printf '%s\n' "$assets" | grep -Eq "$pat" || missing=1
+            done
+            [ "$missing" -eq 0 ] && break
+            echo "  waiting for uploads ($i/30)..."
+            sleep 20
+          done
+          if [ "$missing" -ne 0 ]; then
+            assets=$(gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name' || true)
+            for pat in $REQUIRED_ASSETS; do
+              printf '%s\n' "$assets" | grep -Eq "$pat" \
+                || echo "::error::release $GITHUB_REF_NAME missing asset matching $pat"
+            done
+            echo "::error::release $GITHUB_REF_NAME is missing required assets — left as DRAFT for manual review"
+            exit 1
+          fi
+          echo "All required assets present; publishing $GITHUB_REF_NAME"
+          gh release edit "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --draft=false --latest
