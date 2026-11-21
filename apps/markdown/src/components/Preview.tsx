@@ -1,0 +1,144 @@
+import { memo, useEffect, useRef, type RefObject } from "react";
+import { invoke, convertFileSrc } from "@tauri-apps/api/core";
+import { t, useUiLang } from "../i18n";
+import { slugify } from "../services/markdown";
+import { resolvePath, baseDirOf } from "../services/path";
+
+interface Props {
+  html: string;
+  filePath?: string;
+  previewRef?: RefObject<HTMLDivElement>;
+  onScroll?: () => void;
+  onToggleTask?: (lineNumber: number, checked: boolean) => void;
+  taskLines?: number[];
+  onOpenDocument?: (path: string) => void;
+  /** 只有分屏才有「源码」可同步；仅预览模式下说同滚动是假话。 */
+  scrollSync?: boolean;
+}
+
+// micromark does not emit heading ids, so apply them post-render using the
+// same slugify as extractHeadings — this makes in-document anchor links work.
+function applyHeadingIds(root: HTMLElement) {
+  const used = new Set<string>();
+  root
+    .querySelectorAll(".md-viewer h1, .md-viewer h2, .md-viewer h3, .md-viewer h4, .md-viewer h5, .md-viewer h6")
+    .forEach((h) => {
+      let id = slugify(h.textContent || "");
+      if (!id) id = "section";
+      let unique = id;
+      let n = 1;
+      while (used.has(unique)) unique = `${id}-${n++}`;
+      used.add(unique);
+      h.id = unique;
+    });
+}
+
+// Relative image sources ("![x](./assets/a.png)") point at the document's own
+// directory. Inside the webview they must become serveable asset:// URLs —
+// convertFileSrc is the only sanctioned way (direct file:// is blocked).
+function rewriteImageSources(root: HTMLElement, filePath?: string) {
+  if (!filePath) return;
+  const base = baseDirOf(filePath);
+  if (!base) return;
+  const imgs = root.querySelectorAll<HTMLImageElement>(".md-viewer img[src]");
+  imgs.forEach((img) => {
+    const src = img.getAttribute("src") || "";
+    if (!src) return;
+    // 已可直接加载的协议与内联数据不碰
+    if (/^(https?:|data:|blob:|asset:|file:|mailto:)/i.test(src)) return;
+    // URL 查询/锚点（尺寸调整 ?w=400）与数据路径分开处理，只取路径部分解析
+    const match = /^([^?#]*)([?#].*)?$/.exec(src);
+    if (!match) return;
+    let decoded = match[1];
+    try { decoded = decodeURIComponent(decoded); } catch { /* not encoded; keep as is */ }
+    img.setAttribute("src", convertFileSrc(resolvePath(base, decoded)) + (match[2] ?? ""));
+  });
+}
+
+export const Preview = memo(function Preview({ html, filePath, previewRef, onScroll, onToggleTask, taskLines, onOpenDocument, scrollSync }: Props) {
+  const internalRef = useRef<HTMLDivElement>(null);
+  const ref = previewRef || internalRef;
+  useUiLang(); // 语言切换时重渲染（面板头文案）
+
+  useEffect(() => {
+    const root = ref.current;
+    if (!root) return;
+
+    applyHeadingIds(root);
+    rewriteImageSources(root, filePath);
+
+    // Enable GFM task checkboxes (micromark renders them disabled so raw-HTML
+    // checkboxes in the source stay inert) and mark ours for the delegate.
+    const cbs = root.querySelectorAll<HTMLInputElement>('.md-viewer input[type="checkbox"][disabled]');
+    cbs.forEach((cb) => {
+      cb.disabled = false;
+      cb.dataset.rocktierTask = "1";
+    });
+
+    // Single delegated click handler for anchor links (in-document + .md files)
+    const onClick = (e: MouseEvent) => {
+      const a = (e.target as HTMLElement).closest("a");
+      if (!a) return;
+      const href = a.getAttribute("href") || "";
+      if (href.startsWith("#")) {
+        e.preventDefault();
+        const target = root.querySelector(`#${CSS.escape(href.slice(1))}`);
+        target?.scrollIntoView({ behavior: "smooth" });
+        return;
+      }
+      // External links are dead inside a webview: Tauri swallows the navigation, so
+      // clicking one did nothing at all. Hand them to the OS — through the whitelist
+      // command, so only rocktier.com and mailto: can ever reach the browser.
+      if (/^(https?:|mailto:)/i.test(href)) {
+        e.preventDefault();
+        void invoke("open_url", { url: href }).catch(() => {});
+        return;
+      }
+      if (onOpenDocument && /\.(md|markdown)$/i.test(href)) {
+        e.preventDefault();
+        // A link written as `old%20notes.md` is a filename, not a URL — the
+        // percent-decoding is what makes such links resolve at all.
+        let decoded = href;
+        try { decoded = decodeURIComponent(href); } catch { /* not encoded; keep as is */ }
+        onOpenDocument(decoded);
+      }
+    };
+
+    // Toggle events bubble — one delegated listener writes back to the source.
+    const onCheckboxChange = (e: Event) => {
+      const cb = e.target as HTMLInputElement;
+      if (!onToggleTask || cb.type !== "checkbox" || !cb.dataset.rocktierTask) return;
+      const bound = root.querySelectorAll<HTMLInputElement>("input[data-rocktier-task]");
+      const idx = Array.prototype.indexOf.call(bound, cb);
+      if (idx === -1) return;
+      // 复审 F10：源文档里的原始 HTML checkbox 会挤占序号，导致
+      // taskLines[idx] 与实际行错位。匹配不到行号时直接忽略，
+      // 绝不猜行号误改别处。
+      const line = taskLines?.[idx];
+      if (!line) return;
+      onToggleTask(line, cb.checked);
+    };
+
+    root.addEventListener("click", onClick);
+    root.addEventListener("change", onCheckboxChange);
+    return () => {
+      root.removeEventListener("click", onClick);
+      root.removeEventListener("change", onCheckboxChange);
+    };
+  }, [html, filePath, taskLines, onToggleTask, onOpenDocument]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  return (
+    <div className="preview-pane">
+      {/* 面板头（设计稿 07）：「预览」+ 滚动同步说明。同步由 useScrollSync 保证，
+          这里只陈述事实，不另造状态。 */}
+      <div className="pane-head">
+        <b>{t("pane.preview")}</b>
+        <span className="spacer" />
+        {scrollSync ? <span className="mono">{t("pane.synced")}</span> : null}
+      </div>
+      <div className="preview-scroll" ref={ref as React.Ref<HTMLDivElement>} onScroll={onScroll}>
+        <div className="md-viewer" dangerouslySetInnerHTML={{ __html: html }} />
+      </div>
+    </div>
+  );
+});

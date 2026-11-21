@@ -1,0 +1,1607 @@
+/* ═══════════════════════════════════════════════════════════════════
+   ROCKTIER MARKDOWN — App Layout & Components
+
+   2026-11-12 起材质语言换到 lenso 那一套（Apple iOS 27 玻璃的 Web 实现，
+   github.com/LioRael/lenso-ui）。只借规则，不引入它的依赖。
+   ═══════════════════════════════════════════════════════════════════ */
+
+/* ── LENSO 材质层 ────────────────────────────────────────────────────
+ *
+ * 三条规则（其余都是细节）：
+ *   1. 玻璃只给**浮在内容之上**的东西：侧栏抽屉、对话框、toast、查找条。
+ *      正文与预览永远是不透明的安静面 —— 文字绝不隔着毛玻璃读。
+ *   2. 玻璃不是「调透明度」一件事，是三件：半透底面 + **.5px** 内描边
+ *      （不是 1px，半像素才像玻璃边缘）+ 模糊。
+ *   3. 形状只有两档：控件胶囊 999px，容器 18px。
+ *
+ * 为什么不把这些值直接写在元素上，而要收成令牌：
+ *   家族的 contrast-gate 判据⑤要求「一切字面颜色都要有对比度论证」。
+ *   而玻璃的颜色是半透明的，判据①的「令牌 × 表面」矩阵看不见它 ——
+ *   矩阵里的表面全是不透明令牌值。所以这里把玻璃收成**产品私有令牌**
+ *   （不进母版 tokens.css），另配 scripts/verify-glass-contrast.mjs：
+ *   它按真实叠层顺序把「底 → 遮罩 → 玻璃 → 文字」合成后算对比度，
+ *   对每一档取纯白/纯黑两个极端底，并带正反对照自检。
+ *   CSS 里因此不再出现裸的半透明颜色。
+ *
+ * 与设计稿的偏离（2026-11-13 重写；2026-11-14 柔光底落定）：
+ *   窗口仍是不透明的（tauri.conf 未开 transparent / vibrancy），背后没有
+ *   桌面可折射。这条约束的真实含义不是「所以要更不透明」，而是
+ *   「Web 层能做到的只有『挡住自己家的内容』」—— 玻璃感来自
+ *   **能看见背后被模糊的内容**，不是来自半透本身。
+ *   2026-11-14 的解法不是去开透明窗口，而是把设计稿那层桌面柔光**画进
+ *   应用自己**（--wash-*，见 .app-shell）：玻璃折射的是自家这层渐变。
+ *   跨平台一致、零平台依赖，代价是它不跟随用户的真实壁纸。
+ *   所以 2026-11-13 把 alpha 整体下调：见透率 chrome 6% /
+ *   抽屉 11.7%（深）14.4%（浅）/ 对话框 9.9%（深）12%（浅）。
+ *   旧值（抽屉 5.8%、对话框 1.8%）在屏幕上就是实色板，用户原话
+ *   「没看到很有效果」—— 那是判据只守下限造成的。
+ *
+ * 取值口径：
+ *   chrome 贴边工具条 / 标签栏 / 状态条；panel 侧栏与对话框；
+ *   pill 状态条与分段控件；raise 抬起来的那一枚（选中项、活动标签）。
+ *   浮在**任意内容**之上且无遮罩托底（toast / 查找条）的面，alpha 必须
+ *   ≥ .90：否则浅色档配深色照片、深色档配白底扫描件时，文字会掉到
+ *   3:1 以下。这类面**不做玻璃**，判据对它们不设见透率。
+ *   两端红线都由 verify-glass-contrast.mjs 守（过薄 → 可读性红；
+ *   过厚 → 见透率红）。
+ *
+ * 危险色不许裸在玻璃上：
+ *   对话框里的吊销通告 / 错误行自带 --pane-bg 不透明底。这不是补丁，
+ *   是 lenso 规则 1 的字面要求 —— 撤掉 --danger 之后面板才降到 .78。
+ * ─────────────────────────────────────────────────────────────────── */
+
+:root {
+  /* 画布 / 页面 / chrome 三级明度：玻璃要「读得出来」，前提是它压的
+     那一层不是同一个明度。浅色档沿用 macOS 惯例（灰画布 + 白纸）。
+     2026-11-13：深色档原来是 #050507 / #121215，只差 13 个 RGB 值，
+     卡片在屏幕上根本看不出浮起（实测 lum 5.1 / 18.2）—— 拉开到
+     #000000 / #17171b 才有「纸放在桌上」的层次。 */
+  --canvas: #000000;
+  --pane-bg: #17171b;
+  /* chrome 从**实色**改成半透：原来是 #1c1c20（alpha=1），模糊一个实色
+     背景等于没模糊，工具栏 / 标签栏 / 状态条因此从来就不是玻璃。
+     2026-11-15：.94/.92 仍然是「几乎不透」—— 那是 11-12 那版没有柔光底时
+     撑对比度用的补救值。画布有了 --wash-* 之后，**透出来的就是颜色本身**，
+     这里直接回到 lenso 原值 .92/.78（设计稿 rgba(28,28,31,.92→.78)）。
+     2026-11-15 深夜：用户真机看后判深色「透光模式不佳」—— 设计稿的 .92/.78
+     是垫在亮壁纸上的，我们深色档垫的是自绘暗柔光，同 alpha 透不出可感知的
+     颜色。降到 .78/.62（见透率约 22%/38%），与浅色档 .72/.56 的透光档位
+     对齐；可读性由 verify-glass-contrast 六点采样守底。 */
+  --glass-chrome-a: rgba(28, 28, 31, 0.78);
+  --glass-chrome-b: rgba(28, 28, 31, 0.62);
+  /* 深色档的 panel 比设计稿暗一档（lenso 原值是 rgba(58,58,64,…)）。
+     2026-11-13：--danger 已从玻璃上撤走（错误提示改自带不透明底），
+     这条「必须压到 30 附近」的约束随之解除，面板 .96 → .78，
+     见透率 1.8% → 9.9% —— 对话框终于也是玻璃了。 */
+  --glass-panel-a: rgba(34, 34, 40, 0.78);
+  --glass-panel-b: rgba(28, 28, 34, 0.76);
+  /* 抽屉从 .87/.84 降到 .74/.72：见透率 5.8% → 11.7%。
+     这是「lenso 看不出来」的主诉所在 —— 旧值下背后文字只透出 5.8%，
+     再被 blur(50px) 糊一遍，屏幕上就是一块实心板。 */
+  --glass-drawer-a: rgba(48, 48, 56, 0.74);
+  --glass-drawer-b: rgba(36, 36, 43, 0.72);
+  /* float 保持 .95/.93：它没有遮罩托底，直接压在预览内容上，白底扫描件
+     + tertiary 的物理下限就是 .84。判据对 float 不设见透率，理由在此。 */
+  --glass-float-a: rgba(28, 28, 32, 0.95);
+  --glass-float-b: rgba(24, 24, 28, 0.93);
+  --glass-pill-a: rgba(255, 255, 255, 0.10);
+  --glass-pill-b: rgba(255, 255, 255, 0.05);
+  --glass-track: rgba(120, 120, 128, 0.20);
+  --glass-raise-a: rgba(255, 255, 255, 0.16);
+  --glass-raise-b: rgba(255, 255, 255, 0.09);
+  --glass-hairline: rgba(255, 255, 255, 0.10);
+  /* 内描边加亮：玻璃之所以看着像玻璃，一半靠这条 0.5px 的边缘光。
+     画布压到纯黑之后，.14 在屏幕上会被吃掉，抬到 .18。 */
+  --glass-hairline-strong: rgba(255, 255, 255, 0.18);
+  /* 标题栏底缝：设计稿 .glass-chrome 的 `inset 0 -1px 0 rgba(0,0,0,.3)`。
+     深色档这里**不是**发光细线，是一条暗缝 —— 玻璃片压在窗口上，缝在
+     下方；画成亮线会变成「两条工具条叠着」的时代感。 */
+  --glass-seam: rgba(0, 0, 0, 0.30);
+  /* 顶边高光：lenso 的 sheen，玻璃被上方光源打亮的那一道。
+     只在标题栏出现，因为只有它贴着窗口上沿。 */
+  --glass-top-sheen: rgba(255, 255, 255, 0.07);
+  --glass-sheen: rgba(255, 255, 255, 0.06);
+  --glass-blur: 50px;
+  --glass-saturate: 160%;
+  --glass-radius: 18px;
+  /* 画布变黑之后浮层要更重的影子才「抬得起来」（原来的 .55 在黑底上读不出） */
+  --glass-shadow: 0 10px 30px rgba(0, 0, 0, 0.68);
+  --glass-shadow-pill: 0 2px 8px rgba(0, 0, 0, 0.40);
+  /* 模态遮罩：点击才出现、几秒就关，压暗本身就是「现在该看这个」的交互语言，
+     与玻璃是否透没有关系，保持 .55 不动。 */
+  --scrim: rgba(0, 0, 0, 0.55);
+  /* 布局尺寸：这两个在母版 tokens.css 里有默认值（44 / 260），
+     产品层按 lenso 设计稿覆写 —— 标题栏 52px（文件名 + 路径两行），
+     侧栏 220px（设计稿 .side 的 218 + 2px 呼吸）。母版不动。 */
+  --toolbar-h: 52px;
+  --sidebar-w: 220px;
+  /* 抽屉遮罩：常驻可开可关的侧栏不是模态，压到 .55 等于把整屏熄灯，
+     用户看的是「抽屉浮在文档上」，不是「文档被停用」。2026-11-13 起两档分开
+     （原来共用一个 --scrim）。见透率 (1-.20)×(1-.74) = 20.8%。
+     约束不在遮罩本身，在文字：抽屉里所有文字都提到 --text-secondary 之后，
+     深色档 4.56:1 才撑得住这个透度 —— 详见 verify-glass-contrast.mjs。 */
+  --scrim-drawer: rgba(0, 0, 0, 0.20);
+
+  /* ── 品牌柔光底（B 方案，2026-11-14）───────────────────────────────
+     设计稿里玻璃「有东西可折射」，是因为窗口背后垫着一层粉紫青的桌面柔光。
+     真实窗口不透明，背后没有壁纸 —— 那就把这层柔光**画进应用自己**：
+     三团 radial（左上冷、右上紫、底部青）+ 一条 160° 线性底，
+     位置与色相照设计稿，**强度压到设计稿的一半左右**。
+     为什么不照抄强度：设计稿那层是「模拟别人家的壁纸」，艳一点是它的工作；
+     真实应用这层要陪用户读一整天文档，还得让玻璃面板从它上面浮起来。
+     半强度既留住冷暖交替的层次，又不至于让白纸黑字旁边一直在发色。
+     这层的存在改变了「画布」这个底的语义：它**不再是一个颜色**，
+     而是一条渐变。所以判据也改了 —— verify-glass-contrast.mjs 现在按
+     六个采样点取极端底（三段底 + 三团柔光），不再只取一个 --canvas。 */
+  --canvas-2: #040406;
+  --canvas-3: #0b0910;
+  --wash-1: #12203f;
+  --wash-2: #33142e;
+  --wash-3: #0e2a27;
+}
+
+[data-theme="light"] {
+  /* 浅色档的三级层次本来就成立（灰画布 + 白纸），不动画布。 */
+  --canvas: #e6e6eb;
+  --pane-bg: #ffffff;
+  /* 同深色档：实色 → 半透，否则 backdrop-filter 无从生效。
+     2026-11-15：.94/.92 → lenso 原值 .72/.56。这条是「朦胧透光」的**全部**
+     来源 —— 浅色档压在柔光上，.94 等于把左侧冷光整个挡住（合成后 252 白），
+     .72 才透得出那层淡蓝。上限由 verify-glass-contrast 的 chrome 见透率守。 */
+  --glass-chrome-a: rgba(255, 255, 255, 0.72);
+  --glass-chrome-b: rgba(255, 255, 255, 0.56);
+  /* 浅色档没有 danger 那个包袱（--danger #b8342a 在亮面上有 4.9:1 余量），
+     所以面板可以真的做成玻璃：.96 → .80，见透率 2.4% → 12%。 */
+  --glass-panel-a: rgba(255, 255, 255, 0.80);
+  --glass-panel-b: rgba(250, 250, 252, 0.78);
+  /* 抽屉 .90/.87 → .76/.74，见透率 6.0% → 14.4%。白玻璃变灰对黑字更有利，
+     浅色档可以比深色档透得多；但纯黑内容（夜空照片）是最坏底，
+     再透下去 tertiary（rgba(0,0,0,.60)）就撑不住 4.5:1 了。 */
+  --glass-drawer-a: rgba(255, 255, 255, 0.76);
+  --glass-drawer-b: rgba(251, 251, 253, 0.74);
+  --glass-float-a: rgba(255, 255, 255, 0.96);
+  --glass-float-b: rgba(250, 250, 252, 0.94);
+  --glass-pill-a: rgba(255, 255, 255, 0.86);
+  --glass-pill-b: rgba(255, 255, 255, 0.66);
+  --glass-track: rgba(120, 120, 128, 0.13);
+  --glass-raise-a: rgba(255, 255, 255, 0.98);
+  --glass-raise-b: rgba(255, 255, 255, 0.90);
+  --glass-hairline: rgba(0, 0, 0, 0.10);
+  --glass-hairline-strong: rgba(0, 0, 0, 0.16);
+  --glass-seam: rgba(0, 0, 0, 0.05);
+  --glass-top-sheen: rgba(255, 255, 255, 0.55);
+  --glass-sheen: rgba(255, 255, 255, 0.70);
+  --glass-blur: 25px;
+  /* 设计稿浅色档是 saturate(180%)：玻璃把背后的柔光「提纯」一档，
+     透出来才是有色光而不是灰白雾。深色档 160% 照旧。 */
+  --glass-saturate: 180%;
+  --glass-shadow: 0 10px 30px rgba(0, 0, 0, 0.20);
+  --glass-shadow-pill: 0 2px 8px rgba(0, 0, 0, 0.10);
+  --scrim: rgba(0, 0, 0, 0.40);
+  /* 浅色档同理两档分开。.15 而不是跟深色档一样的 .20：白玻璃 + 黑字对透度
+     远没那么敏感（实测 .10 到 .55 之间对比度恒为 4.53:1，卡的是玻璃不是遮罩），
+     没理由让浅色档替深色档保守。 */
+  --scrim-drawer: rgba(0, 0, 0, 0.15);
+
+  /* 浅色档柔光：色相照设计稿（#c9d6ff / #ffd9e8 / #b8f2e6），
+     每个都往底色方向退半步 —— 全量 pastel 在白纸旁边会「抢戏」，
+     而这里的任务是给玻璃提供明暗层次，不是当主角。
+     线性底（--canvas → --canvas-2 → --canvas-3）比设计稿稍暗一点：
+     设计稿是 #eef1f7 起，比白色面板还亮，18px 卡片的边缘就浮不起来了。 */
+  --canvas-2: #eaebf1;
+  --canvas-3: #efedef;
+  --wash-1: #cfdaf9;
+  --wash-2: #f9dfe9;
+  --wash-3: #cdece5;
+}
+
+.app-shell {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  width: 100vw;
+  /* 品牌柔光底：三团 radial 压一条 160° 线性底。层序有意义 ——
+     第一条在**最上面**，所以柔光盖在底噪之上、面板之下。
+     整窗铺满（fixed 定位的 ::before 也行，但没必要多一个层）。 */
+  background-color: var(--canvas);
+  background-image:
+    radial-gradient(120% 90% at 12% 0%, var(--wash-1) 0%, transparent 55%),
+    radial-gradient(100% 80% at 92% 8%, var(--wash-2) 0%, transparent 52%),
+    radial-gradient(120% 100% at 60% 110%, var(--wash-3) 0%, transparent 58%),
+    linear-gradient(160deg, var(--canvas) 0%, var(--canvas-2) 50%, var(--canvas-3) 100%);
+  overflow: hidden;
+  position: relative;
+}
+
+.app-body {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+  /* 面板与窗口边缘之间留出画布，卡片才「浮」得起来（设计稿 0 16 16 + 12 缝） */
+  padding: 0 16px 12px;
+  gap: 12px;
+}
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: var(--toolbar-h);
+  padding: 0 14px;
+  background: linear-gradient(180deg, var(--glass-chrome-a) 0%, var(--glass-chrome-b) 100%);
+  border-bottom: none;
+  position: relative;
+  z-index: 20;
+  flex-shrink: 0;
+  gap: 12px;
+  /* 玻璃片的边：上沿一道被光打亮的高光，下沿一条暗缝。
+     原来只有下沿一条 1px 的 hairline-strong（浅色 .16），比设计稿的
+     rgba(0,0,0,.05) 重三倍，压在低 alpha 的玻璃上就成了一条硬边 ——
+     而「朦胧」靠的正是边界不要抢眼。 */
+  box-shadow: inset 0 1px 0 var(--glass-top-sheen), inset 0 -1px 0 var(--glass-seam);
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+}
+
+/* The 70px offset exists to clear the macOS traffic lights in the Overlay
+   titlebar. Windows keeps its native titlebar, so it must not pay the same tax.
+   `is-mac` is set from main.tsx at startup. */
+html.is-mac .toolbar {
+  padding-left: 70px;
+}
+
+.toolbar-side {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.toolbar-center {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: 1;
+  justify-content: center;
+}
+
+.toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* 品牌收成一枚 18px 图标：标题栏的主角是文档名与路径，不是产品名。
+   设计稿（lenso）里标题栏第一行就是文件名 —— 产品名由窗口标题、
+   应用图标和关于面板承担，不必在界面里再喊一次。 */
+.toolbar-mark {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  opacity: 0.9;
+}
+
+/* 文档标题：两行（文件名 / 所在目录），lenso 的 doc-title。
+   两行都做省略号截断 —— 路径可能很长，宁可截断也不许把分段控件挤走。 */
+.doc-title {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  max-width: 340px;
+}
+
+.doc-title .name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+  color: var(--text-primary);
+  line-height: 1.25;
+  white-space: nowrap;
+}
+
+.doc-title .name > :first-child,
+.doc-title .name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.doc-title .path {
+  font-size: 10.5px;
+  line-height: 1.2;
+  color: var(--text-tertiary);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tbar-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  /* 图标按钮 = 胶囊（设计稿 .icon-btn 30px 圆形） */
+  border-radius: var(--radius-pill);
+  color: var(--text-tertiary);
+  position: relative;
+  overflow: hidden;
+}
+
+.tbar-btn:hover {
+  color: var(--text-primary);
+  background: var(--accent-muted);
+}
+
+.tbar-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.tbar-btn:disabled:hover {
+  color: inherit;
+  background: transparent;
+}
+
+.tbar-btn:active {
+  background: var(--accent-hover);
+  /* 按下时背景翻成近乎不透明，文字必须跟着翻，否则按下瞬间文字消失 */
+  color: var(--on-accent);
+}
+
+.tbar-btn.active {
+  color: var(--text-primary);
+  background: var(--glass-track);
+  box-shadow: inset 0 0 0 0.5px var(--glass-hairline);
+}
+
+/* ── 主操作按钮：导出 PDF（设计稿 .primary-btn）──────────────────────
+   实底反白用家族单色 accent（深色白底黑字 / 浅色黑底白字），
+   不占用品牌红 —— 红只作状态点（家族常量 1）。胶囊形状 + 顶部高光，
+   是 lenso 里「唯一一枚实心控件」的处理。 */
+.export-btn {
+  height: 29px;
+  padding: 0 15px;
+  margin-left: 4px;
+  border: none;
+  border-radius: var(--radius-pill);
+  background: var(--accent);
+  color: var(--on-accent);
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+  flex: none;
+  box-shadow: inset 0 1px 0 var(--glass-sheen);
+  transition: background-color var(--dur-state) var(--ease),
+              opacity var(--dur-state) var(--ease);
+}
+
+.export-btn:hover {
+  background: var(--accent-hover);
+}
+
+/* ── 视图切换：iOS 分段控件 ─────────────────────────────────────────
+   三个词与面板一致：仅编辑 / 分屏 / 仅预览。选中项是「抬起来的那一枚」
+   —— 轨道压暗、选中项提亮并带投影。aria-pressed 同时向读屏表达选中，
+   视觉之外还有第二通道。 */
+.view-switch {
+  display: flex;
+  background: var(--glass-track);
+  border: none;
+  border-radius: var(--radius-pill);
+  padding: 3px;
+  gap: 2px;
+}
+
+.view-switch .seg-btn {
+  height: 23px;
+  padding: 0 12px;
+  border: none;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 11.5px;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color var(--dur-state) var(--ease),
+              color var(--dur-state) var(--ease);
+}
+
+.view-switch .seg-btn:hover {
+  color: var(--text-primary);
+}
+
+.view-switch .seg-btn[aria-pressed="true"] {
+  background: linear-gradient(180deg, var(--glass-raise-a) 0%, var(--glass-raise-b) 100%);
+  color: var(--text-primary);
+  font-weight: 600;
+  box-shadow: inset 0 0 0 0.5px var(--glass-hairline), var(--glass-shadow-pill);
+}
+
+/* ── 面板头：源码 / 预览栏顶部的标签行 ───────────────────────────── */
+.pane-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 30px;
+  padding: 0 14px;
+  border-bottom: 1px solid var(--glass-hairline);
+  background: transparent;
+  font-size: 11px;
+  color: var(--text-tertiary);
+  flex: none;
+  user-select: none;
+}
+
+.pane-head b {
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.pane-head .mono {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-tertiary);
+}
+
+.pane-head .spacer {
+  flex: 1;
+}
+
+.editor-container {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+  position: relative;
+  gap: 12px;
+}
+
+/* 两个面板是不透明的安静面（--pane-bg）：
+   正文与预览的文字绝不隔着毛玻璃读，这是 lenso 的第一条规则。 */
+.editor-pane {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 200px;
+  position: relative;
+  background: var(--pane-bg);
+  border-radius: var(--glass-radius);
+  box-shadow: inset 0 0 0 0.5px var(--glass-hairline);
+  overflow: hidden;
+}
+
+.preview-pane {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 200px;
+  position: relative;
+  background: var(--pane-bg);
+  border-radius: var(--glass-radius);
+  box-shadow: inset 0 0 0 0.5px var(--glass-hairline);
+  overflow: hidden;
+}
+
+.editor-scroll {
+  flex: 1;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* The textarea itself is the scrolling container so its scroll events can
+   drive the bidirectional sync (the wrapper never overflows). */
+.editor-area {
+  flex: 1;
+  width: 100%;
+  overflow-y: auto;
+  padding: 40px 48px;
+  background: transparent;
+  border: none;
+  resize: none;
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 14px;
+  line-height: 1.8;
+  caret-color: var(--accent);
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  tab-size: 4;
+}
+
+.editor-area::selection {
+  background: var(--selection);
+}
+
+.preview-scroll {
+  flex: 1;
+  overflow-y: auto;
+}
+
+/* ── 侧栏：常驻玻璃面板（设计稿 .side）──────────────────────────
+   2026-11-14 从「浮层抽屉 + 遮罩」改成**流内常驻面板**。
+   抽屉那套的代价是连锁的：它必须压在内容上，而玻璃要透出东西才有
+   材质感（D-146），于是要遮罩、要让正文左对齐、还要把抽屉遮罩和
+   模态遮罩拆成两档。改成常驻面板后这些补丁全部不需要 —— 它不覆盖
+   任何东西，透出来的是画布与窗口背后的色阶，布局也不再随开合跳动。
+   收起时直接 display:none：位移动画是「浮层」的语言，常驻面板不用。 */
+.sidebar {
+  flex: 0 0 var(--sidebar-w);
+  width: var(--sidebar-w);
+  align-self: stretch;
+  background: linear-gradient(180deg, var(--glass-drawer-a) 0%, var(--glass-drawer-b) 100%);
+  border-radius: var(--glass-radius);
+  border-right: none;
+  box-shadow: inset 0 0 0 0.5px var(--glass-hairline-strong), var(--glass-shadow);
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.sidebar:not(.open) {
+  display: none;
+}
+
+/* 抽屉自己的头：高度不再等于工具栏（它已经不在工具栏上了），只留一行标题 */
+.sidebar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px 10px;
+  border-bottom: 1px solid var(--glass-hairline);
+  height: auto;
+}
+
+.sidebar-title {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  /* 抽屉里不再出现 --text-tertiary（2026-11-13）。它不是审美选择：
+     见透率提到 20%+ 之后，tertiary 在「白底扫描件」这种最坏底上只剩
+     3.4-3.6:1，而这几处都是 10-11px 的小字 —— 小字正是最需要对比度的地方。
+     与其把整个玻璃退回实色板，不如把抽屉的弱化层级收一档：
+     标题用 primary，其余小字用 secondary。verify-glass 会扫本文件，
+     任何 .sidebar* 规则再写回 tertiary 直接判红。 */
+  color: var(--text-primary);
+}
+
+.sidebar-close {
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-sm);
+  font-size: 16px;
+  color: var(--text-secondary);
+}
+
+.sidebar-close:hover {
+  background: var(--accent-muted);
+  color: var(--text-primary);
+}
+
+.sidebar-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.sidebar-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* 侧栏分区标题：非标题元素（div）。此前是 h3 —— 读屏的标题序列会从这 4 个
+   h3 起跳、排在文档 h1 之前，结构层级是错的（2026-10-25 审计 D-78）。 */
+.sidebar-section-title {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  /* tertiary → secondary，理由同 .sidebar-title：10px 小字 + 20% 见透的玻璃
+     这一对组合过不了 4.5:1。上层层次留给字号与字重去表达。 */
+  color: var(--text-secondary);
+  padding: 0 8px;
+}
+
+.sidebar-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  /* 选定框（Lenso 设计稿 .outline-item）：8px 圆角的安静方框，选中再加 500 字重，
+     不用品牌色与指示条。12px 的旧圆角在短行上偏「药丸」，设计稿定为 8px。 */
+  border-radius: 8px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.sidebar-item:hover {
+  background: var(--accent-muted);
+  color: var(--text-primary);
+}
+
+.sidebar-item .icon {
+  opacity: 0.5;
+  flex-shrink: 0;
+}
+
+/* ── 侧栏文件区（设计稿 07 .rail）────────────────────────────────
+   「打开文件」常驻入口 + 最近打开列表；当前文档用 aria-current 高亮。 */
+.sidebar-item.rail-open {
+  width: 100%;
+  text-align: left;
+}
+
+.rail-recent {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.sidebar-item.is-current {
+  background: var(--accent-muted);
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+.rail-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 大纲区块在固定高度列表前占住剩余空间，短文档时快捷键区不会被顶到中间 */
+.sidebar-section--outline {
+  flex: 1 0 auto;
+  min-height: 0;
+}
+
+.sidebar-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.sidebar-head .sidebar-section-title {
+  margin: 0;
+}
+
+.toc-collapse {
+  width: 24px;
+  height: 24px;
+  border: 1px solid var(--border-mid);
+  border-radius: 6px;
+  background: var(--accent-muted);
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.toc-collapse:hover {
+  background: var(--accent-muted);
+  color: var(--text-primary);
+}
+
+.toc-filter {
+  width: 100%;
+  box-sizing: border-box;
+  background: var(--accent-muted);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  padding: 5px 10px;
+}
+
+.toc-filter:focus {
+  border-color: var(--border-mid);
+}
+
+/* 空大纲占位：区块常驻后无标题时给一行弱化提示 */
+.toc-empty {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-secondary);
+  user-select: none;
+}
+
+.shortcuts {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 12px;
+}
+
+.shortcuts .row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.shortcuts .key {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-secondary);
+  padding: 2px 6px;
+  border-radius: var(--radius-sm);
+  background: var(--accent-muted);
+  border: 1px solid var(--border);
+}
+
+.shortcuts .desc {
+  color: var(--text-secondary);
+}
+
+/* ── Table of Contents (TOC) ────────────────────────────────────── */
+
+.toc {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 0 4px;
+}
+
+.toc-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  text-align: left;
+  font-size: 12.5px;
+  padding: 5px 8px;
+  border-radius: 8px; /* 选定框同款 8px（Lenso 设计稿），见 .sidebar-item 注 */
+  color: var(--text-secondary);
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  border-left: 2px solid transparent;
+  transition: all var(--dur-fast);
+}
+
+/* 标题文字占剩余宽度，省略号在文字上而不是整行 */
+.toc-item .toc-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 密度条（设计稿 07 .density）：44px 细条，长度=该节行数占比。
+   单色（--text-tertiary 填充 / --border-strong 槽），不占品牌红。 */
+.toc-item .density {
+  width: 44px;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--border-strong);
+  overflow: hidden;
+  flex: none;
+}
+
+.toc-item .density i {
+  display: block;
+  height: 100%;
+  background: var(--text-tertiary);
+}
+
+.toc-item:hover {
+  color: var(--text-primary);
+  background: var(--accent-muted);
+  border-left-color: var(--border-strong);
+}
+
+.toc-item.level-1 {
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.toc-item.level-2 {
+  padding-left: 16px;
+}
+
+.toc-item.level-3 {
+  padding-left: 28px;
+  font-size: 12px;
+}
+
+.toc-item.level-4,
+.toc-item.level-5,
+.toc-item.level-6 {
+  padding-left: 38px;
+  font-size: 11.5px;
+}
+
+/* ── Toast ──────────────────────────────────────────────────────── */
+
+/* ── Toast：浮在正文之上的玻璃 ──────────────────────────────────────
+   它是唯一「压在任意内容上、又没有遮罩托底」的浮层 —— 预览里可能是一张
+   照片，也可能是白底扫描件。所以 --glass-float-* 的 alpha 定在 .93 以上，
+   由 verify-glass-contrast.mjs 对白底/黑底两个极端验算。 */
+.toast {
+  position: fixed;
+  bottom: 52px;
+  right: 16px;
+  padding: 8px 18px;
+  background: linear-gradient(180deg, var(--glass-float-a) 0%, var(--glass-float-b) 100%);
+  border: none;
+  border-radius: 14px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  z-index: 50;
+  box-shadow: inset 0 0 0 0.5px var(--glass-hairline), var(--glass-shadow-pill);
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  animation: toastIn 0.2s var(--ease);
+}
+
+@keyframes toastIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* 语气分级（家族铁律 7：保存成功与保存失败必须视觉可区分）。
+   玻璃圆角里放不下「左边条」—— 3px 直边会被圆角切成一段弧，看着像坏了。
+   改成**彩色圆点 + 底色染色**双编码：点为形状/色相，底为强度，
+   两者都不依赖单一颜色（铁律 2）。info 不给点：中性提示不需要语气。 */
+.toast--success::before,
+.toast--error::before {
+  content: "";
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  margin-right: 8px;
+  vertical-align: 1px;
+  flex: none;
+}
+
+.toast--success {
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--success) 12%, var(--glass-float-a)) 0%,
+    color-mix(in srgb, var(--success) 8%, var(--glass-float-b)) 100%
+  );
+  box-shadow: inset 0 0 0 0.5px var(--glass-hairline), var(--glass-shadow-pill);
+  color: var(--text-primary);
+}
+.toast--success::before { background: var(--success); }
+
+.toast--error {
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--danger) 14%, var(--glass-float-a)) 0%,
+    color-mix(in srgb, var(--danger) 10%, var(--glass-float-b)) 100%
+  );
+  box-shadow: inset 0 0 0 0.5px var(--glass-hairline), var(--glass-shadow-pill);
+  color: var(--text-primary);
+}
+.toast--error::before { background: var(--danger); }
+
+/* 窄窗口先让出路径行：文件名比「它在哪个目录」重要 */
+@media (max-width: 1040px) {
+  .doc-title .path {
+    display: none;
+  }
+}
+
+@media (max-width: 720px) {
+  .editor-container {
+    flex-direction: column;
+  }
+  /* 竖排时两块面板之间靠 gap 分隔，不再需要一条边线 */
+  .toolbar-center {
+    display: none;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   Frontmatter Info Panel
+   ═══════════════════════════════════════════════════════════════════ */
+
+.frontmatter-panel {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 260px;
+  max-height: 60vh;
+  overflow-y: auto;
+  background: linear-gradient(180deg, var(--glass-float-a) 0%, var(--glass-float-b) 100%);
+  border: none;
+  border-radius: var(--glass-radius);
+  padding: 14px 16px;
+  z-index: 50;
+  box-shadow: inset 0 0 0 0.5px var(--glass-hairline-strong), var(--glass-shadow);
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  font-size: 13px;
+  color: var(--text-secondary);
+  animation: slideIn var(--dur-normal) var(--ease);
+}
+
+.fm-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.fm-title {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.fm-close {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 18px;
+  cursor: pointer;
+  padding: 0 4px;
+  line-height: 1;
+}
+
+.fm-close:hover { color: var(--text-secondary); }
+
+.fm-body {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 6px 12px;
+  margin: 0;
+}
+
+.fm-body dt {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-tertiary);
+  align-self: start;
+}
+
+.fm-body dd {
+  margin: 0;
+  color: var(--text-secondary);
+  word-break: break-word;
+}
+
+@keyframes slideIn {
+  from { opacity: 0; transform: translateX(8px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   Status Bar
+   ═══════════════════════════════════════════════════════════════════ */
+
+/* ── 状态栏：浮起来的玻璃胶囊 ──────────────────────────────────────
+   仍在 flex 流里（margin 让它离底边与左右各留一点），因此**不覆盖正文**
+   —— 上一版设想的「bottom:0 悬浮盖住末行」在这里不成立，也就没有
+   「末行被遮」的补偿留白问题。 */
+.status-bar {
+  display: flex;
+  align-items: center;
+  align-self: flex-start;
+  height: 30px;
+  /* 宽度跟着内容走：lenso 的 floating controls 是一枚短胶囊，
+     不是一条把整行占满的横条。左对齐到面板的左边界（16px）。 */
+  width: fit-content;
+  max-width: calc(100% - 32px);
+  margin: 0 0 12px 16px;
+  padding: 0 14px;
+  background: linear-gradient(180deg, var(--glass-pill-a) 0%, var(--glass-pill-b) 100%);
+  border-top: none;
+  border-radius: var(--radius-pill);
+  box-shadow: inset 0 0 0 0.5px var(--glass-hairline), var(--glass-shadow-pill);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  font-size: 11px;
+  color: var(--text-tertiary);
+  gap: 16px;
+  flex-shrink: 0;
+  user-select: none;
+}
+
+.status-bar .sep {
+  width: 1px;
+  height: 12px;
+  background: var(--glass-hairline);
+}
+
+/* ── 状态栏内容（设计稿 07 .statusbar）────────────────────────────
+   左起：进行态（红点+文字）/ 文件名 / 字数·行数·阅读时长（mono），
+   右端是导出快捷键提示。数字全部来自真实状态（stats / doc.modified）。 */
+.status-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-secondary);
+}
+
+.status-state .dot-live {
+  flex: none;
+}
+
+.status-file {
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.status-bar .mono {
+  font-family: var(--mono);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-tertiary);
+}
+
+.status-hint {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  color: var(--text-muted);
+}
+
+/* 语言切换（status bar 右端，低调入口）。24px 命中区：2026-10-16 UX 审计
+   实测原生 select 只有 15px 高，点不实。注：语言集 2026-10-13 已收敛为
+   en/zh，旧注释「8 门」作废。 */
+.status-lang {
+  margin-left: auto;
+  background: none;
+  border: none;
+  box-sizing: border-box;
+  height: 24px;
+  padding: 0 2px;
+  font: inherit;
+  font-size: 11px;
+  color: var(--text-tertiary);
+  cursor: pointer;
+}
+.status-lang:hover { color: var(--text-primary); }
+
+.status-bar .spacer {
+  flex: 1;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   Read mode (preview-only): centered narrow column
+   ═══════════════════════════════════════════════════════════════════ */
+
+.view-preview .md-viewer {
+  max-width: 860px;
+  margin: 0 auto;
+}
+
+/* GFM 任务复选框：可点击切换（Preview.tsx 会解除 disabled 并委派点击）。
+   13px 是浏览器默认值，2026-10-16 UX 审计实测命中区过小 —— 提到 16px
+   （与 GitHub / VS Code 渲染态一致；正文内联控件，不作 24px  chrome 标准）。 */
+.md-viewer input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  vertical-align: -2px;
+}
+
+.view-preview .preview-pane {
+  display: flex;
+  justify-content: center;
+}
+
+/* ============ FindReplace 工具条（自 FindReplace.tsx 抽离，2026-09-26 UI 评审） ============ */
+.find-replace-bar {
+  position: absolute;
+  /* 内缩成一条浮在文档上的玻璃条，而不是贴着面板顶边的通栏 */
+  top: 8px;
+  left: 8px;
+  right: 8px;
+  z-index: 5;
+  background: linear-gradient(180deg, var(--glass-float-a) 0%, var(--glass-float-b) 100%);
+  border-bottom: none;
+  border-radius: 14px;
+  padding: 8px 10px;
+  box-shadow: inset 0 0 0 0.5px var(--glass-hairline-strong), var(--glass-shadow-pill);
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  font: inherit;
+}
+
+/* 单行控件区：flex 从 bar 拆到 row，便于禁用态在下方追加一行提示 */
+.find-replace-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  min-width: 0;
+}
+
+/* preview-only：编辑器 textarea 未挂载，查找替换整体禁用 */
+.find-replace-bar--disabled .find-replace-row {
+  opacity: 0.5;
+}
+
+.find-replace-hint {
+  margin-top: 5px;
+  font-size: 12px;
+  color: var(--text-tertiary);
+  user-select: none;
+}
+
+.find-replace-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  border: 1px solid var(--border, rgba(255, 255, 255, 0.06));
+  background: var(--bg-primary, #000);
+  color: var(--text-primary, #fff);
+  padding: 4px 8px;
+  font-size: 13px;
+  border-radius: 4px;
+  font-family: inherit;
+}
+
+.find-replace-input:focus {
+  border-color: var(--border-mid, rgba(255, 255, 255, 0.1));
+}
+
+.find-replace-count {
+  font-size: 12px;
+  color: var(--text-tertiary);
+  min-width: 40px;
+  text-align: center;
+  flex-shrink: 0;
+  user-select: none;
+}
+
+.fr-options {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  flex-shrink: 0;
+  font-size: 11px;
+}
+
+.fr-actions {
+  display: flex;
+  gap: 2px;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.fr-separator {
+  width: 1px;
+  height: 18px;
+  background: var(--border, rgba(255, 255, 255, 0.06));
+  flex-shrink: 0;
+}
+
+.fr-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary, rgba(255, 255, 255, 0.7));
+  padding: 4px 6px;
+  font-size: 14px;
+  line-height: 1;
+  border-radius: 4px;
+  cursor: pointer;
+  white-space: normal;
+  transition: background 0.15s, color 0.15s;
+}
+
+.fr-btn--bordered {
+  border: 1px solid var(--border, rgba(255, 255, 255, 0.06));
+  padding: 4px 8px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.fr-btn:hover:not(:disabled) {
+  background: var(--accent-muted, rgba(255, 255, 255, 0.08));
+  color: var(--text-primary, #fff);
+}
+
+.fr-btn--active,
+.fr-btn--active:hover:not(:disabled) {
+  background: var(--accent, rgba(255, 255, 255, 0.15));
+  /* --accent-foreground 全库未定义（浅色主题回落 #0a0a0a = 黑字黑底 1.06:1）；
+     家族单色 accent 的反色就是 --bg-primary，两主题各 21:1 */
+  color: var(--bg-primary, #0a0a0a);
+}
+
+.fr-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   License（家族 L6）：状态栏授权胶囊 + 许可与激活对话框
+   ═══════════════════════════════════════════════════════════════════ */
+
+/* 状态栏胶囊（点击打开许可对话框）：样式已收编为母版 tokens.css 的
+   .badge-license（2026-10-25 审计 D-78），本地不再保留视觉定义。 */
+
+.license-overlay {
+  position: fixed;
+  inset: 0;
+  background: var(--scrim);
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  backdrop-filter: blur(2px);
+}
+
+/* 模态玻璃：背后有 --scrim 托底，底被限定住了，所以可以比 toast 透一点。
+   18px 圆角 + 半像素描边，lenso 里的「浮层」就是这一档。 */
+.license-dialog {
+  width: min(440px, calc(100vw - 48px));
+  max-height: min(80vh, 560px);
+  overflow-y: auto;
+  background: linear-gradient(180deg, var(--glass-float-a) 0%, var(--glass-float-b) 100%);
+  border: none;
+  border-radius: var(--glass-radius);
+  box-shadow: inset 0 0 0 0.5px var(--glass-hairline-strong), var(--glass-shadow);
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  padding: 18px 20px;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.license-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.license-header h3 {
+  margin: 0;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.license-close {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 18px;
+  cursor: pointer;
+  padding: 0 4px;
+  line-height: 1;
+}
+.license-close:hover { color: var(--text-primary); }
+
+.license-body p { margin: 0 0 10px; }
+
+/* 吊销通告（B1）：回执已清、info 与试用到期无从区分，靠调用方传 revoked 标记。
+   文字用 --danger（浅档 #b8342a = 5.86:1、暗档 #ff4a3d = 5.37:1，均达 AA）。
+
+   2026-11-13：面板改成真玻璃之后，这里必须自带**不透明底**。
+   危险提示裸在毛玻璃上读，对比度会随背后内容漂移（浅色档配纯黑内容时
+   #b8342a 只有 3.67:1）。这也是 lenso 规则 1 的字面要求：文字不隔玻璃读，
+   错误提示更不该。撤掉 --danger 之后面板才能从 .96 降到 .78。 */
+.license-revoked-notice {
+  border: 1px solid var(--danger);
+  border-radius: 8px;
+  padding: 8px 10px;
+  color: var(--danger);
+  background: var(--pane-bg);
+}
+.license-revoked-notice small { color: inherit; }
+
+.license-body small { color: var(--text-tertiary); line-height: 1.5; }
+
+.license-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.license-field label {
+  font-size: 11px;
+  color: var(--text-tertiary);
+}
+
+.license-field input {
+  padding: 7px 12px;
+  background: var(--bg-primary, rgba(0, 0, 0, 0.3));
+  border: 1px solid var(--glass-hairline-strong);
+  border-radius: 10px;
+  font: inherit;
+  color: var(--text-primary);
+}
+.license-field input:focus { border-color: var(--accent-brand, var(--accent)); }
+
+/* 同上：错误行也自带不透明底 —— 12px 红字压在毛玻璃上是最难读的组合 */
+.license-error {
+  color: var(--danger);
+  font-size: 12px;
+  background: var(--pane-bg);
+  border-radius: 7px;
+  padding: 6px 9px;
+  line-height: 1.45;
+  margin: 0;
+}
+
+.license-footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+
+.license-footer-spacer { flex: 1; }
+
+.license-footer button {
+  padding: 6px 15px;
+  border: 1px solid var(--glass-hairline-strong);
+  border-radius: var(--radius-pill);
+  font: inherit;
+  font-size: 12px;
+  color: var(--text-primary);
+  background: var(--accent-muted, rgba(255, 255, 255, 0.08));
+}
+.license-footer button:hover:not(:disabled) {
+  background: var(--accent-glow, rgba(255, 255, 255, 0.15));
+}
+.license-footer button:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.license-footer button.license-activate {
+  background: var(--accent-brand, var(--accent));
+  border-color: transparent;
+  color: var(--bg-primary, #0a0a0a);
+}
+.license-footer button.license-activate:hover:not(:disabled) {
+  background: var(--accent-brand, var(--accent));
+  filter: brightness(1.1);
+}
+
+/* ── 检查更新对话框（入口：帮助菜单「检查更新…」）────────────────────
+   点击才联网：启动时、工作中、后台都不检查，见 services/updates.ts 头注。
+   右下角常驻悬浮入口已移除 —— fixed 定位没有 right 时会停在静态位置，
+   盖住底部内容（Compressor v0.1.10 实测），故全部收进菜单 + 本对话框。 */
+.update-overlay {
+  position: fixed;
+  inset: 0;
+  background: var(--scrim);
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  backdrop-filter: blur(2px);
+}
+
+.update-dialog {
+  width: min(440px, calc(100vw - 48px));
+  max-height: min(80vh, 560px);
+  overflow-y: auto;
+  background: linear-gradient(180deg, var(--glass-float-a) 0%, var(--glass-float-b) 100%);
+  border: none;
+  border-radius: var(--glass-radius);
+  box-shadow: inset 0 0 0 0.5px var(--glass-hairline-strong), var(--glass-shadow);
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  padding: 18px 20px;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.update-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.update-header h3 {
+  margin: 0;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.update-close {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 18px;
+  cursor: pointer;
+  padding: 0 4px;
+  line-height: 1;
+}
+.update-close:hover { color: var(--text-primary); }
+
+.update-body p { margin: 0 0 10px; }
+
+.update-body small { color: var(--text-muted); line-height: 1.5; }
+
+.update-footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-mid);
+}
+
+.update-footer-spacer { flex: 1; }
+
+.update-footer button {
+  padding: 6px 15px;
+  border: 1px solid var(--glass-hairline-strong);
+  border-radius: var(--radius-pill);
+  font-family: inherit;
+  font-size: 12px;
+  color: var(--text-primary);
+  background: var(--bg-card, transparent);
+  cursor: pointer;
+}
+.update-footer button:hover { border-color: var(--accent); }
+
+/* 「获取 v…」主按钮：有新版时唯一需要用户点的动作，用 accent 让它显眼。 */
+.update-footer button.update-get-btn {
+  background: var(--accent);
+  border-color: transparent;
+  color: var(--on-accent, #fff);
+  font-weight: 600;
+}
+
+/* 确认框正文：恢复草稿 / 外部修改的提示带 \n\n 分段，必须保留换行。 */
+.confirm-message { white-space: pre-line; }
+
+/* ── 面板边界（2026-10-25 审计 D-78 的后续）──────────────────────
+   那时靠把 border-right 提到 --border-hover 来分辨三栏。现在面板改成了
+   浮在灰画布上的白卡片（浅色档 --canvas #f0f0f3 / --pane-bg #ffffff），
+   边界由**明度差 + 半像素描边**表达，不再需要这条补丁。
+   留一行说明，免得后来者照着旧注释去加边框。 */
+
+/* ── 标签栏：玻璃胶囊条（原来是一条贴边通栏 + 方角标签）──────────────
+   只在 ≥2 张标签时渲染（单文档时它是噪音）。标签做成一枚枚胶囊，
+   活动标签是「抬起来的那一枚」：提亮 + 投影 + 半像素描边。 */
+.tabbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: auto;
+  padding: 2px 16px 8px;
+  /* 设计稿里标签直接坐在底衬上，没有第二条通栏 —— 再加一层 chrome
+     底就变成「两条工具条叠着」，那是 2010 年代的窗口语言。 */
+  background: transparent;
+  border-bottom: none;
+  box-shadow: none;
+  flex-shrink: 0;
+  overflow: hidden;
+}
+
+.tabbar-strip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  /* 不再 flex:1：「新建」要贴在最后一张标签右边（设计稿的 .tab-add），
+     而不是被推到窗口最右端，跟标签隔着一整个空白。 */
+  flex: 0 1 auto;
+  min-width: 0;
+}
+.tabbar-strip::-webkit-scrollbar { display: none; }
+
+.tab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 27px;
+  max-width: 200px;
+  min-width: 92px;
+  padding: 0 6px 0 12px;
+  border-radius: var(--radius-pill);
+  background: var(--glass-track);
+  box-shadow: inset 0 0 0 0.5px var(--glass-hairline);
+  color: var(--text-tertiary);
+  font-size: 12px;
+  cursor: pointer;
+  user-select: none;
+  position: relative;
+  transition: background-color var(--dur-hover) var(--ease),
+              color var(--dur-hover) var(--ease);
+}
+.tab:hover { color: var(--text-secondary); }
+
+.tab--active {
+  background: linear-gradient(180deg, var(--glass-raise-a) 0%, var(--glass-raise-b) 100%);
+  color: var(--text-primary);
+  font-weight: 500;
+  box-shadow: inset 0 0 0 0.5px var(--glass-hairline-strong), var(--glass-shadow-pill);
+}
+
+.tab-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+  min-width: 0;
+}
+
+/* 未保存标记：一个小实心点。颜色不用红 —— 未保存是常态，不是错误。 */
+.tab-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--text-secondary);
+  flex-shrink: 0;
+}
+
+.tab-close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  opacity: 0;
+  flex-shrink: 0;
+  transition: opacity var(--dur-hover) var(--ease),
+              background-color var(--dur-hover) var(--ease);
+}
+/* 关闭按钮只在悬停活动标签时出现；但键盘聚焦时必须可见，否则无法操作 */
+.tab:hover .tab-close,
+.tab--active .tab-close,
+.tab-close:focus-visible { opacity: 1; }
+.tab-close:hover { background: var(--accent-muted); }
+
+.tabbar-new {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 27px;
+  height: 27px;
+  border: 0;
+  background: var(--glass-track);
+  box-shadow: inset 0 0 0 0.5px var(--glass-hairline);
+  color: var(--text-tertiary);
+  cursor: pointer;
+  border-radius: var(--radius-pill);
+  flex-shrink: 0;
+  transition: color var(--dur-hover) var(--ease),
+              background-color var(--dur-hover) var(--ease);
+}
+.tabbar-new:hover { color: var(--text-primary); background: var(--accent-muted); }
