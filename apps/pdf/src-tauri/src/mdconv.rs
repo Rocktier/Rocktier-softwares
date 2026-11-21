@@ -1,0 +1,1473 @@
+//! PDF → Markdown 的**结构推断**内核（纯逻辑，不依赖 pdfium）。
+//!
+//! 这一层只吃「带位置的字符」，吐出markdown 块。上层负责从 pdfium 取字符。
+//! 拆开的原因：结构推断是这个功能里最容易出错的部分（阈值、聚类、边界），
+//! 必须能在没有 PDF 的情况下用单测反复验证。
+//!
+//! ## 启发式（按路线图 R4）
+//!
+//! - **字号聚类 → 标题**：统计每行「代表字号」（按字符数加权众数），
+//!   按出现频率降序取前几个明显大于正文的簇 → h1/h2/h3。
+//! - **字重 → 辅助**：标题行通常加粗；但**光靠加粗不能判标题**
+//!   （表格表头、图注、导航条也常加粗），必须字号也更大。
+//! - **行距 → 段落**：同栏相邻两行的基线间距显著大于行内间距 → 新段落。
+//! - **前缀 → 列表**：`-` `•` `1.` `1)` `a.` `i.` `（1）` 等。
+//! - **缩进 → 层级**：列表/引用按 x 起点缩进分级。
+//! - **表格 v1 降级**：检测到多栏对齐时输出为纯文本行 + TODO 注释，
+//!   不猜表格结构（猜错比不猜更糟）。见`table_like_regions`。
+//! - **双栏 → 列序**：先按「列间大间隙」把每行切成段，再找一条**没有任何段
+//!   跨越**的竖直空白带；两侧都有足量成段正文时，先左列（上→下）后右列。
+//!   任何一段跨越候选带 → 不切（保守回退到旧行为）。见`find_two_col_gutter`。
+
+use std::collections::BTreeMap;
+
+/// 一个带位置的字符（pdfium 层负责构造）。
+#[derive(Debug, Clone, PartialEq)]
+pub struct Glyph {
+    /// 原文（可能是代理对/多码位的组合）
+    pub text: String,
+    /// 缩放后字号（pt）
+    pub size: f32,
+    /// 700 及以上算粗体
+    pub bold: bool,
+    pub italic: bool,
+    /// 字符包围盒（PDF 点，左下原点）
+    pub x0: f32,
+    pub y0: f32,
+    pub x1: f32,
+    pub y1: f32,
+    /// 旋转角（度）。正文恒为 0；页边竖排行号是 270。
+    ///
+    /// 存在的唯一理由：转行按 y 基线聚类，会把**任何**基线相��的
+    /// 字形并进同一行，不看角度就分不清哪个来自页边。
+    pub rotation_deg: f32,
+}
+
+/// 一行：由字符按基线与水平间距聚类而来。
+#[derive(Debug, Clone, PartialEq)]
+pub struct Line {
+    pub text: String,
+    /// 行内出现次数最多的字号（按字符数加权）
+    pub size: f32,
+    /// 行内是否**主要**为粗体（≥60% 的非空白字符）
+    pub bold: bool,
+    pub italic: bool,
+    pub x0: f32,
+    pub x1: f32,
+    /// 基线（用y0，代表行的垂直位置）
+    pub baseline: f32,
+    /// 行内「大于一个字宽」的词间间隙的 x 位置 —— 表格列边界就靠它。
+    /// 刻意存几何位置而非靠文本里的连续空格：`finish_line` 会把空格收敛成
+    /// 一个，靠空格数量判断列数在真实 PDF 上不成立。
+    pub gaps: Vec<f32>,
+}
+
+/// 推断出的块类型。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BlockKind {
+    Heading(u8),
+    Paragraph,
+    ListItem(u8),
+    Quote,
+}
+
+/// markdown 输出用的块。
+#[derive(Debug, Clone, PartialEq)]
+pub struct Block {
+    pub kind: BlockKind,
+    pub text: String,
+}
+
+/// 整篇转换的统计与告警（前端要如实展示，不能静默失败）。
+#[derive(Debug, Clone, Default, PartialEq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Stats {
+    pub pages: usize,
+    pub lines: usize,
+    pub headings: usize,
+    pub paragraphs: usize,
+    pub list_items: usize,
+    pub tableish_regions: usize,
+    /// 正文识别到的主要字号（用于前端提示用户核对）
+    pub body_size: f32,
+}
+
+/// 非致命问题：如实告诉用户哪里可能不准。
+///
+/// 前端**必须**展示这些 —— 静默的转换结果比报错更糟：
+/// 用户会以为拿到的 Markdown 是对的。
+#[derive(Debug, Clone, PartialEq, serde::Serialize)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+pub enum Warning {
+    /// 该页几乎没有可提取文本 —— 极可能是扫描件
+    LooksScanned { page: usize },
+    /// 检测到疑似表格，v1 只输出纯文本
+    TablesNotConverted { regions: usize },
+    /// 双栏切分生效，且全文存在表格样区域 —— 长文本单元格的两列表与双栏
+    /// 几何同构（C3：中位 ink 判别器挡不住），切栏可能把表格行切碎。
+    /// 旧路径有 TablesNotConverted 兜底，切栏路径的表格信号会被列序重排
+    /// 打乱，故在切栏与表格同时成立时显式告警，交人工复核。
+    ColumnSplitWithTables { regions: usize },
+    /// 字符总数为 0
+    EmptyDocument,
+}
+
+/// 转换选项。
+///
+/// `Default` 是**派生**的，不是手写的 —— 曾经手写 `impl Default`，
+/// clippy 的 `derivable_impls` 报红（CI 用 `-D warnings`，直接失败）。
+/// 手写版与派生版当时等价，但**加字段时手写版不会跟着变**，编译器
+/// 也不提示，两边悄悄漂移。派生就没这个缝隙。
+#[derive(Debug, Clone, Copy, Default)]
+pub struct Options {
+    /// 正文判定基准；为 None 时自动估计
+    pub body_size: Option<f32>,
+}
+
+// ────────────────────────────────────────────────────────────────────
+// 字符 → 行
+// ────────────────────────────────────────────────────────────────────
+
+/// 把字符聚成行。
+///
+/// 两级判定，顺序很重要：
+/// 1. **先按基线聚类** —— 基线容差取「字号 × 0.6」，
+///    因为行内字号可能有小幅波动（上下标），但基线必须一致。
+/// 2. **同一基线内按水平间距插入空格** —— PDF 里字间距是排版信息，
+///    直接拼接会把英文单词粘成 `Helloworld`。间距阈值取字宽的一部分，
+///    避免把字母间距较大的字体误插空格。
+// 生产链路（pdf_to_md）走 glyphs_to_lines_ex；本包装只剩测试在调用，
+// 而 cargo check / clippy 不编译 cfg(test)，会被 -D dead-code 判死，
+#[cfg_attr(not(test), allow(dead_code))]
+// 故仅对非 test 构建豁免（test 构建下若真有未使用仍会暴露）。
+pub fn glyphs_to_lines(glyphs: &[Glyph]) -> Vec<Line> {
+    glyphs_to_lines_ex(glyphs).0
+}
+
+/// 带切栏信息的 `glyphs_to_lines`：第二返回值 = 本页是否命中了双栏切分。
+///
+/// 生产链路（pdf_to_md）据此在「切栏页 + 表格区域」同时成立时发
+/// `ColumnSplitWithTables` 告警（C3：切栏可能把长文本单元格的表格行切碎，
+/// 且切栏后的列序重排会打乱表格检测信号，旧兜底告警跟不上）。
+pub fn glyphs_to_lines_ex(glyphs: &[Glyph]) -> (Vec<Line>, bool) {
+    if glyphs.is_empty() {
+        return (Vec::new(), false);
+    }
+    // pdfium 的 char迭代顺序通常已是阅读序，但仍按基线归并更稳。
+    let mut indexed: Vec<&Glyph> = glyphs.iter().collect();
+    indexed.sort_by(|a, b| {
+        // y 轴向上 → 先按基线从大到小（视觉上从上到下），再按 x 从小到大
+        b.y0.partial_cmp(&a.y0)
+            .unwrap_or(std::cmp::Ordering::Equal)
+            .then(a.x0.partial_cmp(&b.x0).unwrap_or(std::cmp::Ordering::Equal))
+    });
+
+    let center = |g: &Glyph| (g.y0 + g.y1) / 2.0;
+    let mut lines: Vec<Vec<&Glyph>> = Vec::new();
+    for g in indexed {
+        let mut placed = false;
+        if let Some(cur) = lines.last_mut() {
+            // 与当前簇的**y 中心**比较（不是字号 —— 曾写成 size 导致每个字符自成一簇）。
+            // 容差取字符自身字号的 0.6 倍：行内字号可能小幅波动，但基线必须一致。
+            let n = cur.len() as f32;
+            let cur_center: f32 = cur.iter().map(|g| center(g)).sum::<f32>() / n;
+            let tol = (g.size * 0.6).max(1.0);
+            if (center(g) - cur_center).abs() <= tol {
+                cur.push(g);
+                placed = true;
+            }
+        }
+        if !placed {
+            lines.push(vec![g]);
+        }
+    }
+
+    // 聚类只保证「同基线」，但基线有微小抖动时同一视觉行仍可能被拆成两簇，
+    // 两簇的 x 会交错（如 "Hello" 与 "World" 交错）。
+    // 故先合并「基线接近且水平区间重叠」的相邻簇，再生成Line。
+    let merged = merge_interleaved(lines);
+
+    // 行 → 段（在列间大间隙处切开），再做双栏判定。
+    // 判定不过 → 逐簇 finish_line（旧行为：左右两栏同一基线拼成一行）。
+    let mut segs: Vec<Seg> = Vec::new();
+    for cl in &merged {
+        for seg in segment_row(cl) {
+            segs.push(seg);
+        }
+    }
+    if let Some((gx0, gx1)) = find_two_col_gutter(&segs) {
+        let mut left: Vec<Seg> = segs.iter().filter(|s| s.x1 <= gx0).cloned().collect();
+        let mut right: Vec<Seg> = segs.iter().filter(|s| s.x0 >= gx1).cloned().collect();
+        let by_reading = |a: &Seg, b: &Seg| {
+            b.baseline
+                .partial_cmp(&a.baseline)
+                .unwrap_or(std::cmp::Ordering::Equal)
+                .then(a.x0.partial_cmp(&b.x0).unwrap_or(std::cmp::Ordering::Equal))
+        };
+        left.sort_by(by_reading);
+        right.sort_by(by_reading);
+        return (
+            left
+                .into_iter()
+                .chain(right)
+                .map(|s| finish_line(&s.glyphs))
+                .collect(),
+            true,
+        );
+    }
+
+    (
+        merged
+            .iter()
+            .filter_map(|cluster| {
+                if cluster.is_empty() {
+                    return None;
+                }
+                Some(finish_line(cluster))
+            })
+            .collect(),
+        false,
+    )
+}
+
+// ────────────────────────────────────────────────────────────────────
+// 双栏检测（R4 多栏，v1 只处理左右两栏）
+// ────────────────────────────────────────────────────────────────────
+
+/// 一个「行内段」：同一基线簇被列间大间隙切开后的连续字形串。
+#[derive(Clone)]
+struct Seg<'a> {
+    glyphs: Vec<&'a Glyph>,
+    x0: f32,
+    x1: f32,
+    /// 该段的基线（同簇共享，取最左字形的 y0 —— 与 finish_line 一致）
+    baseline: f32,
+    /// 非空白字符数 —— 区分「成段正文」（长）与「表格单元格」（短）
+    ink: usize,
+}
+
+/// 把一个基线簇按列间大间隙切成段。间隙阈值与 `Line.gaps` 同源（1.5×字宽）：
+/// 正常词距（≈0.25×字号）远到不了这条线，真正的栏间空白才会切开。
+fn segment_row<'a>(cluster: &[&'a Glyph]) -> Vec<Seg<'a>> {
+    if cluster.is_empty() {
+        return Vec::new();
+    }
+    let mut sorted: Vec<&Glyph> = cluster.to_vec();
+    sorted.sort_by(|a, b| a.x0.partial_cmp(&b.x0).unwrap_or(std::cmp::Ordering::Equal));
+
+    let mut out: Vec<Seg> = Vec::new();
+    let mut cur: Vec<&Glyph> = vec![sorted[0]];
+    let mut prev = sorted[0];
+    for g in &sorted[1..] {
+        let gap = g.x0 - prev.x1;
+        let ref_w = (prev.x1 - prev.x0).max(g.x1 - g.x0).max(1.0);
+        if gap > ref_w * 1.5 {
+            out.push(close_seg(&cur));
+            cur = vec![g];
+        } else {
+            cur.push(g);
+        }
+        prev = g;
+    }
+    out.push(close_seg(&cur));
+    out
+}
+
+fn close_seg<'a>(cluster: &[&'a Glyph]) -> Seg<'a> {
+    let ink = cluster
+        .iter()
+        .map(|g| g.text.chars().filter(|c| !c.is_whitespace()).count())
+        .sum();
+    Seg {
+        x0: cluster.iter().map(|g| g.x0).fold(f32::MAX, f32::min),
+        x1: cluster.iter().map(|g| g.x1).fold(f32::MIN, f32::max),
+        baseline: cluster[0].y0,
+        ink,
+        glyphs: cluster.to_vec(),
+    }
+}
+
+/// 找「双栏分隔带」：一条没有任何段跨越的竖直空白带，且两侧都有足够的成段正文。
+///
+/// ## 判据与阈值
+///
+/// - 带宽 ≥ 8pt：正常词距在 10pt 字号下 ≈2.5pt，栏间空白通常 ≥18pt —— 8pt 卡在
+///   两者之间，配合下方的「两侧质量」门槛兜底。
+/// - 两侧段数各 ≥ max(4, 总段数 25%)：单栏文档右缘之外偶尔落一个页码，数量
+///   门槛让它够不成「右栏」。
+/// - 两侧段的中位 ink ≥ 12 字符：**表格与双栏正文在几何上同构**（两列单元格
+///   与两栏正文都是「左右两串 + 中间空带」），唯一可用的几何差异是单元格短、
+///   正文行长。中位长度是最便宜的判别器——不完美，但 v1 够用，且表格页
+///   本来就有 TablesNotConverted 告警兜底。
+/// - **零跨越**是硬条件：任何横贯全宽的元素（标题、图）落在候选带上，这条带
+///   就从「空带并集」里消失 —— 该页自动回退到旧行为，宁可漏切不可切错。
+/// - **合格候选带必须恰好一条**（C2）：≥2 条说明页面不是干净的双栏（三栏、
+///   表格混排等）。旧版取「最宽」一条，会把三栏页的左「栏」切成一、二列
+///   按基线交错输出 —— 比不切更糟。多带即歧义，歧义就整体回退单栏，
+///   由表格告警与人工复核兜底。
+///
+/// ## C1 幻影栏（两端对齐文本）：已用仿真实证，判定几何判据不可行
+///
+/// 两端对齐（justify）的单栏文本，某行的词距被撑大到超过 1.5×字宽时，
+/// 该行会被切成左右两半 —— 若各行的切口恰好落在同一列，就会凭空多出一条
+/// 「空带」，被误当成双栏分隔带。
+///
+/// 2026-10-20 用 `scripts/c1-phantom-sim.py`（复刻本文件的切段与找带逻辑）
+/// 对 10 类场景做了实证，结论：
+///
+/// - **真双栏与幻影栏在段这一层几何同构**（都是「左右两串 + 中间空带」），
+///   字体度量之外找不到可靠的几何判据。四个候选判据的实测表现：
+///   「右半首字符大写率」会误伤真双栏（右栏以小写开头是技术文档常态）；
+///   「带内空隙 vs 段内词距」在真双栏同样会命中（栏内文字也是两端对齐的，
+///   栏内词距会被拉得同样大）；「各行间隙极差」被真双栏的**段末短行**带偏；
+///   「切口位置 MAD」在真双栏上干净（恒为 0），但它抓不到真会误切的那种幻影
+///   —— 那种幻影恰恰要求各行切口位置一致，MAD 也是 0。
+/// - **真实触发面比预想窄得多**：真实两端对齐把多余宽度**分摊到所有词距**，
+///   于是每行会产生**多个**超阈值空隙 → 多条候选带 → C2 的「恰一条」规则
+///   已经自动回退不切。实测「各行前段文字不同」「只有部分行被撑开」两类
+///   真实幻影场景**本来就不会被误切**（区间并集里空隙连成一片，没有窄带）。
+///
+/// 故 C1 保持**已知局限**不做启发式改动 —— 盲加判据的期望收益低于回归风险
+/// （把真双栏判成幻影 = 漏切，违反「宁可漏切不可切错」）。治本路径见
+/// findings D-59：需要字体度量（判断带内空隙是否由被拉伸的空格构成）。
+fn find_two_col_gutter<'a>(segs: &[Seg<'a>]) -> Option<(f32, f32)> {
+    const MIN_SEGMENTS_PER_SIDE: usize = 4;
+    const MIN_SIDE_MASS_FRAC: f32 = 0.25;
+    const MIN_GUTTER_WIDTH: f32 = 8.0;
+    const MIN_MEDIAN_INK: usize = 12;
+
+    if segs.len() < 8 {
+        return None;
+    }
+
+    // 区间并集 → 空带 = 相邻合并区间之间的缝
+    let mut ivs: Vec<(f32, f32)> = segs.iter().map(|s| (s.x0, s.x1)).collect();
+    ivs.sort_by(|a, b| {
+        a.0.partial_cmp(&b.0)
+            .unwrap_or(std::cmp::Ordering::Equal)
+            .then(a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal))
+    });
+    let mut merged: Vec<(f32, f32)> = Vec::new();
+    for (a, b) in ivs {
+        match merged.last_mut() {
+            Some(last) if a <= last.1 => last.1 = last.1.max(b),
+            _ => merged.push((a, b)),
+        }
+    }
+
+    let need = (((segs.len() as f32) * MIN_SIDE_MASS_FRAC).ceil() as usize).max(MIN_SEGMENTS_PER_SIDE);
+    let mut candidates: Vec<(f32, f32)> = Vec::new();
+    for w in merged.windows(2) {
+        let (s0, s1) = (w[0].1, w[1].0);
+        if s1 - s0 < MIN_GUTTER_WIDTH {
+            continue;
+        }
+        let left = segs.iter().filter(|s| s.x1 <= s0).count();
+        let right = segs.iter().filter(|s| s.x0 >= s1).count();
+        if left < need || right < need {
+            continue;
+        }
+        let ink_left = median_ink(segs.iter().filter(|s| s.x1 <= s0));
+        let ink_right = median_ink(segs.iter().filter(|s| s.x0 >= s1));
+        if ink_left < MIN_MEDIAN_INK || ink_right < MIN_MEDIAN_INK {
+            continue;
+        }
+        candidates.push((s0, s1));
+    }
+    // C2：恰一条合格带才切；零条回退，多条（三栏/混排）同样回退 —— 见函数头注。
+    if candidates.len() == 1 {
+        candidates.into_iter().next()
+    } else {
+        None
+    }
+}
+
+fn median_ink<'g>(segs: impl Iterator<Item = &'g Seg<'g>>) -> usize {
+    let mut v: Vec<usize> = segs.map(|s| s.ink).collect();
+    v.sort_unstable();
+    v.get(v.len() / 2).copied().unwrap_or(0)
+}
+
+/// 合并基线接近、但 x 区间交错的相邻簇。
+///
+/// 场景：pdfium 的 `loose_bounds()` 对同一基线上的字符给出的 y 会有亚点级抖动，
+/// 超出 0.6×字号 的容差就会把一行拆成 "HHeelllo" / "WWeorrlld" 两簇。
+/// 判据：相邻两簇基线差在容差内，**且** 水平区间有重叠 —— 真正的上下两行
+/// x 区间通常也重叠，故还要求两簇字号相同（跨行几乎必同字号，但上下行若有
+/// 标题混排则字号不同，用字号再挡一道）。
+fn merge_interleaved(clusters: Vec<Vec<&Glyph>>) -> Vec<Vec<&Glyph>> {
+    let center = |g: &Glyph| (g.y0 + g.y1) / 2.0;
+    let mut out: Vec<Vec<&Glyph>> = Vec::with_capacity(clusters.len());
+    for cl in clusters {
+        if let Some(prev) = out.last_mut() {
+            let pc: f32 = prev.iter().map(|g| center(g)).sum::<f32>() / prev.len() as f32;
+            let cc: f32 = cl.iter().map(|g| center(g)).sum::<f32>() / cl.len() as f32;
+            let ps: f32 = prev.iter().map(|g| g.size).sum::<f32>() / prev.len() as f32;
+            let cs: f32 = cl.iter().map(|g| g.size).sum::<f32>() / cl.len() as f32;
+            let tol = (cs * 0.6).max(1.0);
+            let p_lo = prev.iter().map(|g| g.x0).fold(f32::MAX, f32::min);
+            let p_hi = prev.iter().map(|g| g.x1).fold(f32::MIN, f32::max);
+            let c_lo = cl.iter().map(|g| g.x0).fold(f32::MAX, f32::min);
+            let c_hi = cl.iter().map(|g| g.x1).fold(f32::MIN, f32::max);
+            let overlaps = c_lo <= p_hi && p_lo <= c_hi;
+            if (pc - cc).abs() <= tol && (ps - cs).abs() <= 0.3 && overlaps {
+                prev.extend(cl);
+                continue;
+            }
+        }
+        out.push(cl);
+    }
+    out
+}
+
+/// 由一个基线簇生成 `Line`。
+fn finish_line(cluster: &[&Glyph]) -> Line {
+    let mut sorted: Vec<&Glyph> = cluster.to_vec();
+    sorted.sort_by(|a, b| a.x0.partial_cmp(&b.x0).unwrap_or(std::cmp::Ordering::Equal));
+
+    let mut text = String::new();
+    let mut gaps: Vec<f32> = Vec::new();
+    let mut prev: Option<&Glyph> = None;
+    for g in &sorted {
+        if let Some(p) = prev {
+            // 间距 = 当前字符左边界 − 前一个字符右边界
+            let gap = g.x0 - p.x1;
+            let ref_w = (p.x1 - p.x0).max(g.x1 - g.x0);
+            // 超过四分之一字宽算「词间空格」
+            if gap > ref_w * 0.28 && !text.ends_with(' ') && !g.text.starts_with(' ') {
+                text.push(' ');
+            }
+            // 超过 1.5 字宽 = 列间大间隙，位置记下来给表格检测用
+            if gap > ref_w * 1.5 {
+                gaps.push((p.x1 + g.x0) / 2.0);
+            }
+        }
+        text.push_str(&g.text);
+        prev = Some(g);
+    }
+
+    // 字号：按字符数加权众数（避免一个大字号水印拉高整行）
+    let mut sizes: BTreeMap<i32, usize> = BTreeMap::new();
+    for g in cluster {
+        if g.text.trim().is_empty() {
+            continue;
+        }
+        // 0.1pt 精度分桶
+        *sizes.entry((g.size * 10.0).round() as i32).or_insert(0) += g.text.chars().count();
+    }
+    let size = sizes
+        .iter()
+        .max_by_key(|(k, v)| (**v, -*k))
+        .map(|(k, _)| *k as f32 / 10.0)
+        .unwrap_or_else(|| cluster[0].size);
+
+    let mut ink = 0usize;
+    let mut bold_ink = 0usize;
+    let mut ital_ink = 0usize;
+    for g in cluster {
+        let n = g.text.chars().count();
+        if g.text.trim().is_empty() {
+            continue;
+        }
+        ink += n;
+        if g.bold {
+            bold_ink += n;
+        }
+        if g.italic {
+            ital_ink += n;
+        }
+    }
+
+    Line {
+        text: collapse_spaces(&text),
+        size,
+        bold: ink > 0 && bold_ink * 100 >= ink * 60,
+        italic: ink > 0 && ital_ink * 100 >= ink * 60,
+        x0: sorted.iter().map(|g| g.x0).fold(f32::MAX, f32::min),
+        x1: sorted.iter().map(|g| g.x1).fold(f32::MIN, f32::max),
+        baseline: cluster[0].y0,
+        gaps,
+    }
+}
+
+fn collapse_spaces(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    let mut prev_space = false;
+    for c in s.chars() {
+        let is_space = c == ' ' || c == '\u{0}';
+        if is_space {
+            if !prev_space && !out.is_empty() {
+                out.push(' ');
+            }
+            prev_space = true;
+        } else {
+            out.push(c);
+            prev_space = false;
+        }
+    }
+    while out.ends_with(' ') {
+        out.pop();
+    }
+    out
+}
+
+// ────────────────────────────────────────────────────────────────────
+// 列表前缀识别
+// ────────────────────────────────────────────────────────────────────
+
+/// 识别列表前缀，返回（标记后的文本，缩进级0=无）。
+///
+/// 刻意**只认前缀**、不靠缩进猜：PDF 里缩进可能是版式留白，
+/// 而 `1.` `•` `-` 是作者明确表达的结构意图。
+fn strip_list_marker(text: &str) -> Option<(String, u8)> {
+    let t = text.trim_start();
+    // 有序：1. / 1) / 1、/ (1) / （1）
+    for open in ["(", "（"] {
+        if t.starts_with(open) {
+            let close_ch = if open == "(" { ')' } else { '）' };
+            // open 是 &str，用字节长度（全角括号 3 字节）
+            let open_len = open.len();
+            if let Some(rel) = t[open_len..].find(close_ch) {
+                let close = open_len + rel;
+                let inner = &t[open_len..close];
+                if !inner.is_empty() && inner.chars().all(|c| c.is_ascii_digit()) {
+                    let rest = &t[close + close_ch.len_utf8()..];
+                    let rest = rest.trim_start_matches(['.', '、', ')', '）', ' ']);
+                    return Some((rest.to_string(), 0));
+                }
+            }
+        }
+    }
+    // 有序的「数字 + 分隔符」形式：2.  2)  2、  2） （中英文标点都收）
+    {
+        let digits: String = t.chars().take_while(|c| c.is_ascii_digit()).collect();
+        if !digits.is_empty() {
+            let after = &t[digits.len()..];
+            for sep in [')', '）', '.', '、'] {
+                if let Some(rest) = after.strip_prefix(sep) {
+                    let rest = rest.trim_start_matches(['.', '、', ')', '）', ' ']);
+                    if !rest.is_empty() {
+                        return Some((rest.to_string(), 0));
+                    }
+                }
+            }
+        }
+    }
+    // 无序：- / – / — / • / · / ◦ / ▪ / * / ·
+    for m in ["-", "–", "—", "•", "·", "◦", "▪", "*", "+"] {
+        if let Some(rest) = t.strip_prefix(m) {
+            // 必须在行首紧跟空格或行尾，避免把「-」算作减号、「*」算作强调
+            if rest.is_empty() || rest.starts_with(' ') {
+                return Some((rest.trim().to_string(), 0));
+            }
+        }
+    }
+    // 无序数字伪装：`1.` `a.` `iv.`
+    if let Some(dot) = t.find(['.', '、']) {
+        let head = &t[..dot];
+        let rest = t[dot + t[dot..].chars().next().map(|c| c.len_utf8()).unwrap_or(1)..].trim_start();
+        if !head.is_empty() && head.chars().count() <= 4 && rest.starts_with(|c: char| !c.is_ascii_digit() || c != ' ') {
+            let all_digit = head.chars().all(|c| c.is_ascii_digit());
+            let all_alpha = head.chars().all(|c| c.is_ascii_alphabetic());
+            if (all_digit || all_alpha) && !rest.is_empty() {
+                return Some((rest.to_string(), 0));
+            }
+        }
+    }
+    None
+}
+
+/// 引用块：`>` 或全角 `＞`，或引号成对包裹的整段（v1 只认显式 `>`）。
+fn strip_quote_marker(text: &str) -> Option<String> {
+    let t = text.trim_start();
+    for m in [">", "＞", "│"] {
+        if let Some(rest) = t.strip_prefix(m) {
+            return Some(rest.trim().to_string());
+        }
+    }
+    None
+}
+
+// ────────────────────────────────────────────────────────────────────
+// 正文尺寸与标题判定
+// ────────────────────────────────────────────────────────────────────
+
+/// 估计正文字号：取**按字符数加权**的众数簇。
+///
+/// 不能取「出现最多的字号」——那通常是对的，但遇到标题密集的目录页
+/// 会偏大。改用加权众数 + 偏向较小一侧（正文总是字符最多的一类）。
+pub fn estimate_body_size(lines: &[Line]) -> f32 {
+    let mut hist: BTreeMap<i32, usize> = BTreeMap::new();
+    for l in lines {
+        let ink = l.text.chars().filter(|c| !c.is_whitespace()).count();
+        if ink == 0 {
+            continue;
+        }
+        *hist.entry((l.size * 10.0).round() as i32).or_insert(0) += ink;
+    }
+    if hist.is_empty() {
+        return 10.0;
+    }
+    // **加权中位数**而非众数。
+    //
+    // 众数在两类文档上会失效：① 目录页/幻灯片 —— 标题行数多于正文；
+    // ② 有一个巨大的封面标题 —— 它字符数多，把众数整个拉走。
+    // 中位数对「少数极端值」稳健：只要过半字符是正文字号，就能定住。
+    let total: usize = hist.values().sum();
+    let half = total / 2;
+    let mut acc = 0usize;
+    for (k, v) in hist.iter() {
+        acc += v;
+        if acc > half {
+            return *k as f32 / 10.0;
+        }
+    }
+    hist.keys().next().map(|k| *k as f32 / 10.0).unwrap_or(10.0)
+}
+
+/// 该行相对正文是否算标题，返回层级（1..=6）。
+///
+/// 条件：字号明显大于正文 **且** 加粗或独占一行且不太长。
+/// 刻意收紧：宁可漏判也不误判 —— 误判会把整段正文变成标题。
+fn heading_level(line: &Line, body: f32, max_line_chars: usize, hmap: &BTreeMap<i32, u8>) -> Option<u8> {
+    let ink = line.text.chars().filter(|c| !c.is_whitespace()).count();
+    if ink == 0 {
+        return None;
+    }
+    if line.size < body * 1.12 {
+        return None;
+    }
+    // 目录项 / 页眉页脚：太长的行不是标题
+    if ink > max_line_chars {
+        return None;
+    }
+    // **按字号聚类的相对排名**决定层级，而不是固定比例阈值。
+    //
+    // 固定阈值在不同文档上表现完全不同：正文 10pt、标题 12pt 时 1.2 倍就该是
+    // h2，却掉进临界区变 h4；而正文 24pt 的文档里 1.2 倍只差 5pt，判成标题反而
+    // 是误判。曾实测出 `# Chapter One` + `#### Section` 这种断裂嵌套。
+    // 相对排名与文档自身尺度无关，层级也不会和字号差距不匹配。
+    let bucket = (line.size * 10.0).round() as i32;
+    if let Some(&lvl) = hmap.get(&bucket) {
+        return Some(lvl);
+    }
+    // 未进入聚类（字符太少，多为水印/页码）—— 临界区仍要求加粗
+    if line.bold {
+        Some(4)
+    } else {
+        None
+    }
+}
+
+/// **字号聚类 → 标题层级映射**（0.1pt 分桶 → 层级）。
+///
+/// 只对**明显大于正文**（≥1.12×）的字号聚类，且每簇至少 2 个非空白字符 ——
+/// 否则一个偶然出现的巨大字号（水印、页码）会独占 h1。
+fn heading_map(lines: &[Line], body: f32) -> BTreeMap<i32, u8> {
+    let mut hist: BTreeMap<i32, usize> = BTreeMap::new();
+    for l in lines {
+        let ink = l.text.chars().filter(|c| !c.is_whitespace()).count();
+        if ink == 0 || l.size < body * 1.12 {
+            continue;
+        }
+        *hist.entry((l.size * 10.0).round() as i32).or_insert(0) += ink;
+    }
+    // 按**字号降序**排名；字号相同则字符数多者优先。
+    //
+    // 曾按字符数降序排名（理由是「免得一个偶然的巨字号独占 h1」），
+    // 结果真实 demo 上层级整个反了：标题 `Facilities Inspection Report`
+    // 只有 29 字，而四个章节名加起来更多，于是章节名拿到了 h1、
+    // 文档标题只拿到 h2。
+    //
+    // 层级就该由字号决定 —— 视觉上更大的字就是更高级的标题。
+    // 水印之类的巨字号确实会误占h1，但那是另一类问题（该靠跨页重复
+    // 与边缘带剔除，见 pdf_to_md::drop_running_furniture），不该用
+    // 反转层级来规避。
+    let mut ranked: Vec<(i32, usize)> = hist.into_iter().filter(|(_, ink)| *ink >= 2).collect();
+    ranked.sort_by(|a, b| b.0.cmp(&a.0).then(b.1.cmp(&a.1)));
+    let mut map = BTreeMap::new();
+    for (i, (bucket, _)) in ranked.into_iter().enumerate() {
+        if i >= 4 {
+            break; // 最多到 h4，再多说明是装饰而非层级
+        }
+        map.insert(bucket, i as u8 + 1);
+    }
+    map
+}
+
+// ────────────────────────────────────────────────────────────────────
+// 表格候选检测
+// ────────────────────────────────────────────────────────────────────
+
+/// 检测「多栏对齐」的行组，返回疑似表格区域数。
+///
+/// v1 只用于**告知用户**，不改变输出结构 —— 猜表格结构错得离谱时，
+/// 保留纯文本让人自己看，比输出一个错的表格更有用。
+fn table_like_regions(lines: &[Line]) -> usize {
+    // 连续 ≥3 行、每行都有「大间隙」，且这些间隙的 x 位置在行间大致对齐
+    // —— 这就是最常见的表格形态。v1 只用它来**告知用户**，不改变输出结构。
+    let mut regions = 0usize;
+    let mut run: Vec<&Vec<f32>> = Vec::new();
+
+    let flush = |run: &mut Vec<&Vec<f32>>, regions: &mut usize| {
+        if run.len() >= 3 {
+            let first = run[0];
+            // ⚠️ 阈值必须是 **≥1** 个列间隙，不能要求 ≥2 ——
+            // 两列表格（每行 1 个间隙）才是最常见的情形，曾因此永远检不出。
+            if !first.is_empty() {
+                let consistent = run.iter().filter(|xs| {
+                    let hit = xs.iter().filter(|x| first.iter().any(|f| (f - *x).abs() < 6.0)).count();
+                    hit * 10 >= first.len() * 6
+                }).count();
+                if consistent * 10 >= run.len() * 6 {
+                    *regions += 1;
+                }
+            }
+        }
+        run.clear();
+    };
+
+    for l in lines {
+        if l.gaps.is_empty() {
+            flush(&mut run, &mut regions);
+        } else {
+            run.push(&l.gaps);
+        }
+    }
+    flush(&mut run, &mut regions);
+    regions
+}
+
+// ────────────────────────────────────────────────────────────────────
+// 主流程：行 → 块
+// ────────────────────────────────────────────────────────────────────
+
+/// 把行序列推断成 markdown 块。
+pub fn lines_to_blocks(lines: &[Line], opts: Options) -> (Vec<Block>, Stats, Vec<Warning>) {
+    let mut stats = Stats { lines: lines.len(), ..Default::default() };
+    let mut warnings = Vec::new();
+
+    if lines.is_empty() {
+        warnings.push(Warning::EmptyDocument);
+        return (Vec::new(), stats, warnings);
+    }
+
+    let body = opts.body_size.unwrap_or_else(|| estimate_body_size(lines));
+    stats.body_size = body;
+
+    // 正文左边界的众数 —— 缩进判定要用绝对量而非倍数
+    let left_mode = {
+        let mut hist: BTreeMap<i32, usize> = BTreeMap::new();
+        for l in lines {
+            let ink = l.text.chars().filter(|c| !c.is_whitespace()).count();
+            if ink == 0 {
+                continue;
+            }
+            *hist.entry((l.x0 / 2.0).round() as i32).or_insert(0) += ink;
+        }
+        hist.iter().max_by_key(|(k, v)| (**v, -*k)).map(|(k, _)| *k as f32 * 2.0).unwrap_or(0.0)
+    };
+
+    let hmap = heading_map(lines, body);
+
+    let regions = table_like_regions(lines);
+    if regions > 0 {
+        stats.tableish_regions = regions;
+        warnings.push(Warning::TablesNotConverted { regions });
+    }
+
+    let max_line_chars = lines
+        .iter()
+        .map(|l| l.text.chars().filter(|c| !c.is_whitespace()).count())
+        .max()
+        .unwrap_or(80)
+        .max(40);
+
+    let mut blocks: Vec<Block> = Vec::new();
+
+    for (i, line) in lines.iter().enumerate() {
+        let trimmed = line.text.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+
+        // 1. 显式引用 —— 构造成真正的 Quote 块，
+        //    这样**连续的引用行会合并成同一个引用块**（markdown 语义要求），
+        //    而不是各自成为独立段落。
+        if let Some(q) = strip_quote_marker(trimmed) {
+            if !q.is_empty() {
+                match blocks.last_mut() {
+                    Some(Block { kind: BlockKind::Quote, text }) => {
+                        text.push('\n');
+                        text.push_str(&q);
+                    }
+                    _ => blocks.push(Block { kind: BlockKind::Quote, text: q }),
+                }
+                continue;
+            }
+        }
+
+        // 2. 标题（字号为主 + 加粗为辅）
+        //
+        //    ⚠️ 必须在列表**之前**判。曾把列表放前面，理由是「作者明确写了
+        //    列表符号，意图更明确」—— 结果商业文档里最常见的标题形态
+        //    `1. Summary` / `2. Equipment inventory` 全被判成列表项
+        //    （真实 demo 上 4 个章节标题漏掉 4 个）。
+        //    字号才是更硬的证据：`heading_level` 已要求 ≥1.12× 正文，
+        //    正文的列表项过不了这道门槛，两种判定不会互相吃掉。
+        if let Some(level) = heading_level(line, body, max_line_chars, &hmap) {
+            stats.headings += 1;
+            blocks.push(Block { kind: BlockKind::Heading(level), text: trimmed.to_string() });
+            continue;
+        }
+
+        // 3. 显式列表（作者明确表达的结构意图）
+        if let Some((item, _)) = strip_list_marker(trimmed) {
+            if !item.is_empty() {
+                // 缩进分级：按 x0 相对左边界的偏移分两档，够用且不易过拟合
+                let indent = ((line.x0 - left_mode) / (body * 6.0)).round().max(0.0);
+                let lvl = (indent as u8).min(3);
+                stats.list_items += 1;
+                blocks.push(Block { kind: BlockKind::ListItem(lvl), text: item });
+                continue;
+            }
+        }
+
+        // 4. 正文段落：与上一正文行间距不大则合并
+        let merge = match blocks.last() {
+            Some(Block { kind: BlockKind::Paragraph, .. }) => {
+                let prev_line = &lines[i - 1];
+                // 行距：基线间距与字号之比。正常行距 ≈ 1.2–1.5倍字号；
+                // 超过 1.8 倍通常意味着段落间隔
+                let gap = prev_line.baseline - line.baseline;
+                gap < line.size * 1.85
+                    && (line.x0 - left_mode).abs() < body * 0.6
+            }
+            _ => false,
+        };
+
+        if merge {
+            if let Some(Block { kind: BlockKind::Paragraph, text }) = blocks.last_mut() {
+                if line.italic {
+                    text.push_str(&format!(" *{}*", trimmed));
+                } else if line.bold {
+                    text.push_str(&format!(" **{}**", trimmed));
+                } else {
+                    text.push(' ');
+                    text.push_str(trimmed);
+                }
+                continue;
+            }
+        }
+
+        stats.paragraphs += 1;
+        let t = if line.italic && trimmed.chars().count() > 1 {
+            format!("*{}*", trimmed)
+        } else if line.bold && trimmed.chars().count() > 1 {
+            format!("**{}**", trimmed)
+        } else {
+            trimmed.to_string()
+        };
+        blocks.push(Block { kind: BlockKind::Paragraph, text: t });
+    }
+
+    (blocks, stats, warnings)
+}
+
+// ────────────────────────────────────────────────────────────────────
+// 输出
+// ────────────────────────────────────────────────────────────────────
+
+/// 渲染成 markdown 文本。
+pub fn blocks_to_markdown(blocks: &[Block]) -> String {
+    let mut out = String::new();
+    for b in blocks {
+        match b.kind {
+            BlockKind::Heading(l) => {
+                out.push_str(&"#".repeat(l as usize));
+                out.push(' ');
+                out.push_str(&escape_heading(&b.text));
+                out.push_str("\n\n");
+            }
+            BlockKind::Paragraph => {
+                out.push_str(&escape_inline(&b.text));
+                out.push_str("\n\n");
+            }
+            BlockKind::ListItem(l) => {
+                let pad = "  ".repeat(l as usize);
+                out.push_str(&pad);
+                out.push_str("- ");
+                out.push_str(&escape_inline(&b.text));
+                out.push('\n');
+            }
+            BlockKind::Quote => {
+                // ⚠️ 多行引用块必须**每行**都加`> `。
+                // 只给首行加的话，CommonMark 会把它当普通段落 + 后续行，
+                // 引用语义整个丢掉 —— 实测过 3 行引用产出：
+                //   > first quote line
+                //   second quote line
+                for line in b.text.split('\n') {
+                    out.push_str("> ");
+                    out.push_str(&escape_inline(line));
+                    out.push('\n');
+                }
+                out.push('\n');
+            }
+        }
+    }
+    // 列表块之间需要空行分隔才符合 CommonMark
+    let mut fixed = String::with_capacity(out.len());
+    let lines: Vec<&str> = out.split('\n').collect();
+    let mut prev_list = false;
+    for (i, l) in lines.iter().enumerate() {
+        let is_list = l.starts_with("- ") || l.starts_with("  - ");
+        if is_list && !prev_list && i > 0 && !lines[i - 1].is_empty() {
+            fixed.push('\n');
+        }
+        fixed.push_str(l);
+        if !l.is_empty() {
+            fixed.push('\n');
+        }
+        prev_list = is_list;
+    }
+    // 收敛连续空行为最多一个
+    let mut result = String::new();
+    let mut blanks = 0;
+    for c in fixed.chars() {
+        if c == '\n' {
+            blanks += 1;
+            if blanks > 1 {
+                continue;
+            }
+        } else {
+            blanks = 0;
+        }
+        result.push(c);
+    }
+    while result.ends_with('\n') {
+        result.pop();
+    }
+    result.push('\n');
+    result
+}
+
+/// 标题里`#` 与空格需转义，否则会被当成更高级标题。
+fn escape_heading(s: &str) -> String {
+    escape_inline(s).trim_start_matches('#').trim_start().to_string()
+}
+
+fn escape_inline(s: &str) -> String {
+    // 只转义会破坏结构的字符，不做过度转义（免得满屏反斜杠）
+    let mut out = String::with_capacity(s.len());
+    for c in s.chars() {
+        match c {
+            '<' => out.push_str("&lt;"),
+            '>' => out.push_str("&gt;"),
+            _ => out.push(c),
+        }
+    }
+    out
+}
+
+// ────────────────────────────────────────────────────────────────────
+// 测试
+// ────────────────────────────────────────────────────────────────────
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// 造一个「单词」：由若干字符组成，总宽 = n * w
+    fn word(x: f32, baseline: f32, size: f32, s: &str, bold: bool) -> Vec<Glyph> {
+        let w = size * 0.5;
+        s.chars()
+            .enumerate()
+            .map(|(i, c)| Glyph {
+                text: c.to_string(),
+                size,
+                bold,
+                italic: false,
+                x0: x + i as f32 * w,
+                x1: x + i as f32 * w + w,
+                y0: baseline,
+                y1: baseline + size * 0.7,
+                rotation_deg: 0.0,
+            })
+            .collect()
+    }
+
+    /// 造一行：多个词，词间留一个「空格宽」的间隙。
+    /// ⚠️ x 起点必须由调用方指定 —— 曾固定为 100.0，导致同一行里两个词
+    /// 完全重叠、输出交错（看起来像排序 bug，实际是测试数据造错了）。
+    fn line_of(x0: f32, y: f32, size: f32, s: &str, bold: bool) -> Vec<Glyph> {
+        let mut out = Vec::new();
+        let mut x = x0;
+        let space = size * 0.5;
+        for tok in s.split(' ') {
+            out.extend(word(x, y, size, tok, bold));
+            x += tok.chars().count() as f32 * size * 0.5 + space;
+        }
+        out
+    }
+
+    #[test]
+    fn 行聚类_同基线并成一行() {
+        // 两词必须错开摆放：都从 x=100 起会完全重叠，输出自然交错
+        let mut g = line_of(100.0, 700.0, 10.0, "Hello", false);
+        g.extend(line_of(130.0, 700.0, 10.0, "World", false));
+        let lines = glyphs_to_lines(&g);
+        assert_eq!(lines.len(), 1, "同基线应合并成一行");
+        assert_eq!(lines[0].text, "Hello World", "词间应插空格，实际: {:?}", lines[0].text);
+    }
+
+    #[test]
+    fn 行聚类_不同基线分行() {
+        let mut g = line_of(100.0, 700.0, 10.0, "First", false);
+        g.extend(line_of(100.0, 680.0, 10.0, "Second", false));
+        let lines = glyphs_to_lines(&g);
+        assert_eq!(lines.len(), 2);
+        assert_eq!(lines[0].text, "First");
+        assert_eq!(lines[1].text, "Second");
+    }
+
+    #[test]
+    fn 行聚类_输出按阅读顺序() {
+        // y 轴向上：先给的应是视觉上「下面」那行
+        let mut g = line_of(100.0, 600.0, 10.0, "lower", false);
+        g.extend(line_of(100.0, 720.0, 10.0, "upper", false));
+        let lines = glyphs_to_lines(&g);
+        assert_eq!(lines[0].text, "upper", "行顺序应从上到下");
+        assert_eq!(lines[1].text, "lower");
+    }
+
+    #[test]
+    fn 字号_按字符数加权众数而非平均() {
+        let l1 = Line {
+            text: "a".into(), size: 30.0, bold: true, italic: false,
+            x0: 0.0, x1: 10.0, baseline: 700.0,
+            gaps: vec![],
+        };
+        let l2 = Line {
+            text: "normal body text here".into(), size: 10.0, bold: false, italic: false,
+            x0: 0.0, x1: 100.0, baseline: 690.0,
+            gaps: vec![],
+        };
+        let body = estimate_body_size(&[l1, l2]);
+        assert!((body - 10.0).abs() < 0.01, "应取正文字号而非大字号，实际 {}", body);
+    }
+
+    /// 造一组构成文档的行，用来得到真实的聚类映射
+    fn doc_with(sizes: &[f32]) -> Vec<Line> {
+        sizes
+            .iter()
+            .enumerate()
+            .map(|(i, sz)| {
+                let s = format!("Heading level sample {}", i);
+                Line {
+                    text: s.clone(), size: *sz, bold: true, italic: false, x0: 100.0,
+                    x1: 100.0 + s.len() as f32 * 5.0, baseline: 700.0 - i as f32 * 12.0,
+                    gaps: vec![],
+                }
+            })
+            .collect()
+    }
+
+    #[test]
+    fn 标题_按字号聚类排名而非固定比例() {
+        // 文档含22 / 16 / 12 三档标题 + 10pt 正文
+        let mut doc = doc_with(&[22.0, 16.0, 12.0]);
+        // 正文必须**字符量足够** —— 3 个字符的正文会被标题的150 字符压过
+        doc.push(Line {
+            // .repeat() 已经返回 String，.into() 是多余转换（clippy: useless_conversion）
+            text: "这是正文行，字数需要多于全部标题字之和，否则加权中位数会把标题当正文。".repeat(3),
+            size: 10.0, bold: false, italic: false,
+            x0: 100.0, x1: 200.0, baseline: 600.0, gaps: Vec::new(),
+        });
+        let body = estimate_body_size(&doc);
+        let hmap = heading_map(&doc, body);
+        let mk = |size: f32, bold: bool, s: &str| Line {
+            text: s.into(), size, bold, italic: false, x0: 100.0,
+            x1: 100.0 + s.len() as f32 * 5.0, baseline: 700.0, gaps: vec![],
+        };
+        // 最大字号簇 → h1，其后依次 h2 / h3
+        assert_eq!(heading_level(&mk(22.0, true, "T"), body, 80, &hmap), Some(1));
+        assert_eq!(heading_level(&mk(16.0, true, "S"), body, 80, &hmap), Some(2));
+        assert_eq!(heading_level(&mk(12.0, true, "Sub"), body, 80, &hmap), Some(3));
+        // 字号与正文相同 → 绝不判标题
+        assert_eq!(heading_level(&mk(10.0, true, "Just bold"), body, 80, &hmap), None);
+        // 未聚类且不加粗 → 不判标题
+        assert_eq!(heading_level(&mk(11.5, false, "Slight"), body, 80, &hmap), None);
+    }
+
+    #[test]
+    fn 标题_聚类与文档尺度无关() {
+        let mut small = doc_with(&[22.0, 16.0, 12.0]);
+        small.push(Line { text: "正文内容需要足够字数才能压过标题".repeat(6), size: 10.0,
+            bold: false, italic: false, x0: 100.0, x1: 200.0, baseline: 600.0, gaps: vec![] });
+        let mut large = doc_with(&[52.8, 38.4, 28.8]);
+        large.push(Line { text: "正文内容需要足够字数才能压过标题".repeat(6), size: 24.0,
+            bold: false, italic: false, x0: 100.0, x1: 200.0, baseline: 600.0, gaps: vec![] });
+        let lv = |d: &Vec<Line>, probe: f32| {
+            let b = estimate_body_size(d);
+            let m = heading_map(d, b);
+            heading_level(&Line { text: "x".into(), size: probe * b / 10.0, bold: true,
+                italic: false, x0: 0.0, x1: 5.0, baseline: 0.0, gaps: vec![] }, b, 80, &m)
+        };
+        // 同一结构、正文放大 2.4 倍：层级分配应完全一致
+        for (probe, expect) in [(22.0, Some(1)), (16.0, Some(2)), (12.0, Some(3))] {
+            assert_eq!(lv(&small, probe), expect, "小尺度 {probe}pt");
+            assert_eq!(lv(&large, probe), expect, "大尺度 {probe}pt");
+        }
+    }
+
+    #[test]
+    fn 标题_过长的行不判标题() {
+        let long = "x".repeat(200);
+        let l = Line {
+            text: long.clone(), size: 20.0, bold: true, italic: false,
+            x0: 0.0, x1: 1000.0, baseline: 700.0,
+            gaps: vec![],
+        };
+        assert_eq!(heading_level(&l, 10.0, 80, &BTreeMap::new()), None, "超长行不是标题");
+    }
+
+    #[test]
+    fn 列表_识别各种前缀() {
+        assert_eq!(strip_list_marker("- item").map(|x| x.0), Some("item".into()));
+        assert_eq!(strip_list_marker("• item").map(|x| x.0), Some("item".into()));
+        assert_eq!(strip_list_marker("1. item").map(|x| x.0), Some("item".into()));
+        assert_eq!(strip_list_marker("2) item").map(|x| x.0), Some("item".into()));
+        assert_eq!(strip_list_marker("(3) item").map(|x| x.0), Some("item".into()));
+        assert_eq!(strip_list_marker("（4）item").map(|x| x.0), Some("item".into()));
+        assert_eq!(strip_list_marker("a. item").map(|x| x.0), Some("item".into()));
+        // 不是列表
+        assert!(strip_list_marker("-3 degrees").is_none(), "负数不是列表");
+        assert!(strip_list_marker("a-b").is_none(), "连字符不是列表");
+        assert!(strip_list_marker("no marker").is_none());
+    }
+
+    #[test]
+    fn 引用_识别显式引用标记() {
+        assert_eq!(strip_quote_marker("> quoted"), Some("quoted".into()));
+        assert_eq!(strip_quote_marker("＞全角"), Some("全角".into()));
+        assert!(strip_quote_marker("not a quote").is_none());
+    }
+
+    #[test]
+    fn 端到端_标题段落列表() {
+        let mut g = Vec::new();
+        g.extend(line_of(100.0, 780.0, 22.0, "Chapter One", true));
+        g.extend(line_of(100.0, 760.0, 12.0, "Section", true));
+        // 正文两行，行距紧
+        g.extend(line_of(100.0, 720.0, 10.0, "This is the first body", false));
+        g.extend(line_of(100.0, 708.0, 10.0, "line continuing the same", false));
+        // 新段落（行距大）
+        g.extend(line_of(100.0, 660.0, 10.0, "A separate paragraph", false));
+        // 列表
+        g.extend(line_of(100.0, 630.0, 10.0, "- item one", false));
+        g.extend(line_of(100.0, 618.0, 10.0, "- item two", false));
+
+        let lines = glyphs_to_lines(&g);
+        let (blocks, stats, _) = lines_to_blocks(&lines, Options::default());
+        let md = blocks_to_markdown(&blocks);
+
+        assert!(md.contains("# Chapter One"), "应为一级标题:\n{}", md);
+        assert!(md.contains("## Section"), "应为二级标题:\n{}", md);
+        assert!(md.contains("This is the first body line continuing the same"),
+                "紧行距应合并为一段:\n{}", md);
+        assert!(md.contains("A separate paragraph"), "大行距应另起一段:\n{}", md);
+        assert!(md.contains("- item one"), "应保留列表:\n{}", md);
+        assert!(stats.list_items >= 2, "应统计到 2 个列表项");
+        println!("---\n{}\n--- stats={:?}", md, stats);
+    }
+
+    #[test]
+    fn 输出_转义会破坏结构的字符() {
+        let b = vec![Block { kind: BlockKind::Heading(2), text: "a < b > c".into() }];
+        let md = blocks_to_markdown(&b);
+        assert!(md.contains("&lt;"), "应转义<:{}", md);
+        assert!(md.contains("&gt;"), "应转义 >:{}", md);
+    }
+
+    #[test]
+    fn 空文档_给出空文档告警() {
+        let (_, _, w) = lines_to_blocks(&[], Options::default());
+        assert!(w.contains(&Warning::EmptyDocument));
+    }
+
+    #[test]
+    fn 表格候选_被检出且不改变结构() {
+        // 三行，每行两个大间隙（>1.5 字宽）且位置对齐 —— 典型两列表格
+        let mut g = Vec::new();
+        let mk_row = |y: f32, a: &str, b: &str| {
+            let mut v = line_of(100.0, y, 10.0, a, false);
+            // 间隙给足 60pt（= 12 个字宽），确保 > 1.5 字宽阈值
+            let off = 100.0 + a.chars().count() as f32 * 5.0 + 60.0;
+            v.extend(word(off, y, 10.0, b, false));
+            v
+        };
+        g.extend(mk_row(700.0, "Name", "Value"));
+        g.extend(mk_row(688.0, "Alpha", "1"));
+        g.extend(mk_row(676.0, "Beta", "2"));
+        let lines = glyphs_to_lines(&g);
+        let (_, stats, w) = lines_to_blocks(&lines, Options::default());
+        assert!(
+            stats.tableish_regions >= 1 || w.iter().any(|x| matches!(x, Warning::TablesNotConverted { .. })),
+            "应检出表格候选"
+        );
+    }
+
+    #[test]
+    fn 引用_连续多行合并成一个引用块() {
+        // 踩过的坑：曾把引用行当普通段落、前缀拼进文本，
+        // 于是连续 3 行引用产出 3 个独立段落，而不是一个引用块。
+        let mut g = Vec::new();
+        g.extend(line_of(100.0, 700.0, 10.0, "> first quote line", false));
+        g.extend(line_of(100.0, 688.0, 10.0, "> second quote line", false));
+        g.extend(line_of(100.0, 676.0, 10.0, "> third quote line", false));
+        // 引用块之后接正文
+        g.extend(line_of(100.0, 650.0, 10.0, "normal body text", false));
+
+        let lines = glyphs_to_lines(&g);
+        let (blocks, _, _) = lines_to_blocks(&lines, Options::default());
+        let md = blocks_to_markdown(&blocks);
+
+        assert_eq!(
+            blocks.iter().filter(|b| b.kind == BlockKind::Quote).count(),
+            1,
+            "3 行引用应合成 1 个 Quote 块:\n{}",
+            md
+        );
+        assert!(md.contains("> first quote line"), "{}", md);
+        assert!(md.contains("> second quote line"), "{}", md);
+        assert!(md.contains("> third quote line"), "{}", md);
+        // 正文不应被并进引用块
+        assert!(md.contains("normal body text"), "{}", md);
+        assert_eq!(blocks.iter().filter(|b| b.kind == BlockKind::Paragraph).count(), 1);
+    }
+
+    /// 编号章节名（`1. Summary`）必须是**标题**，不能是列表项。
+    ///
+    /// 踩过的坑：曾把列表判定排在标题之前，理由是「作者写了列表符号，
+    /// 意图更明确」。真实 demo 上 4 个章节标题全部漏判成列表项 ——
+    /// 而 `1. / 2. / 3.` 编号章节是商业与法律文档最常见的标题形态。
+    #[test]
+    fn 编号章节名_判为标题而非列表项() {
+        let mut g = Vec::new();
+        g.extend(line_of(100.0, 700.0, 10.0, "Introductory sentence here.", false));
+        g.extend(line_of(100.0, 672.0, 13.0, "1. Summary", true));
+        g.extend(line_of(100.0, 650.0, 10.0, "Body of the summary section.", false));
+        g.extend(line_of(100.0, 622.0, 13.0, "2. Equipment inventory", true));
+        // 同字号的真列表项仍然是列表（字号是硬证据）
+        g.extend(line_of(100.0, 594.0, 10.0, "- Replace the supply filters.", false));
+
+        let lines = glyphs_to_lines(&g);
+        let (blocks, stats, _) = lines_to_blocks(&lines, Options::default());
+
+        let heads: Vec<&str> = blocks
+            .iter()
+            .filter(|b| matches!(b.kind, BlockKind::Heading(_)))
+            .map(|b| b.text.as_str())
+            .collect();
+        assert_eq!(heads, vec!["1. Summary", "2. Equipment inventory"], "编号章节名应判为标题");
+
+        assert_eq!(stats.headings, 2, "标题数");
+        assert_eq!(stats.list_items, 1, "只有真列表项算列表");
+    }
+
+    /// 层级由**字号**决定，不由字符数决定。
+    ///
+    /// 曾按字符数排名，于是「字符更多的章节名」抢走h1、文档标题降级成 h2 ——
+    /// 层级整个反过来。
+    #[test]
+    fn 标题层级_按字号而非字符数排名() {
+        let mut g = Vec::new();
+        // 文档标题：字号最大但字数少
+        g.extend(line_of(100.0, 760.0, 20.0, "Facilities Inspection Report", true));
+        // 四个章节名：字号次之但字数多；每个章节名下都跟两行正文 ——
+        // 必须有正文，否则 estimate_body_size 会把 13pt 当成正文基准，
+        // 那时 13pt 自然过不了「≥1.12× 正文」这道门槛。
+        for (i, t) in ["1. Summary", "2. Equipment inventory", "3. Actions", "4. Sign-off"]
+            .iter()
+            .enumerate()
+        {
+            let top = 730.0 - i as f32 * 60.0;
+            g.extend(line_of(100.0, top, 13.0, t, true));
+            g.extend(line_of(100.0, top - 18.0, 10.0, "Body paragraph for this section.", false));
+            g.extend(line_of(100.0, top - 32.0, 10.0, "A second line of running text.", false));
+        }
+
+        let lines = glyphs_to_lines(&g);
+        let (blocks, _, _) = lines_to_blocks(&lines, Options::default());
+
+        let lvl = |t: &str| {
+            blocks
+                .iter()
+                .find(|b| b.text == t)
+                .map(|b| b.kind)
+                .and_then(|k| match k {
+                    BlockKind::Heading(l) => Some(l),
+                    _ => None,
+                })
+        };
+        assert_eq!(lvl("Facilities Inspection Report"), Some(1), "最大字号应是 h1");
+        assert_eq!(lvl("1. Summary"), Some(2), "次大字号应是 h2");
+    }
+
+    /// 双栏页面：左右两栏同一基线的行不再拼成一行，输出先左列（上→下）后右列。
+    /// 这是 R4 真实验收里报的核心缺陷（阶段 23：左右分栏同行拼行）。
+    #[test]
+    fn 双栏_先左栏后右栏_不再拼行() {
+        let mut g = Vec::new();
+        for i in 0..4 {
+            let y = 700.0 - i as f32 * 14.0;
+            g.extend(line_of(100.0, y, 10.0, &format!("LeftColumnLine{}", i + 1), false));
+            g.extend(line_of(400.0, y, 10.0, &format!("RightColumnLine{}", i + 1), false));
+        }
+        let lines = glyphs_to_lines(&g);
+
+        let texts: Vec<&str> = lines.iter().map(|l| l.text.as_str()).collect();
+        assert_eq!(
+            texts,
+            vec![
+                "LeftColumnLine1", "LeftColumnLine2", "LeftColumnLine3", "LeftColumnLine4",
+                "RightColumnLine1", "RightColumnLine2", "RightColumnLine3", "RightColumnLine4",
+            ],
+            "应先左列后右列，不得拼行: {texts:?}"
+        );
+    }
+
+    /// 左对齐的通栏标题落在候选带之外的一段空带上：仍会切栏，标题按基线
+    /// 归入左列流的首位 —— 阅读顺序恰好正确（标题 → 左栏 → 右栏）。
+    /// 注意：**居中**横贯带心的通栏元素会被错分进右列流 —— v1 已知局限。
+    #[test]
+    fn 双栏_左对齐通栏标题_归左列首位() {
+        let mut g = Vec::new();
+        // 标题横跨左栏并压过部分候选带（x≈100..320）
+        g.extend(line_of(100.0, 760.0, 12.0, "Report Title Spanning The Left Region", true));
+        for i in 0..4 {
+            let y = 712.0 - i as f32 * 14.0;
+            g.extend(line_of(100.0, y, 10.0, &format!("LeftColumnLine{}", i + 1), false));
+            g.extend(line_of(400.0, y, 10.0, &format!("RightColumnLine{}", i + 1), false));
+        }
+        let lines = glyphs_to_lines(&g);
+        let texts: Vec<&str> = lines.iter().map(|l| l.text.as_str()).collect();
+        assert_eq!(texts.first(), Some(&"Report Title Spanning The Left Region"), "{texts:?}");
+        assert_eq!(texts[1], "LeftColumnLine1", "{texts:?}");
+        assert_eq!(texts.last(), Some(&"RightColumnLine4"), "{texts:?}");
+        // 标题不得与任何栏行拼在一起
+        assert!(texts.iter().all(|t| !t.contains("LeftColumnLineReport")), "{texts:?}");
+    }
+
+    /// 三栏页（C2 回归）：两个候选带都合格时必须回退单栏。
+    /// 旧版取「最宽」带，会把三栏页的左「栏」切成一、二列按基线交错输出 ——
+    /// 比不切更糟。回退后走旧行为（同基线三栏拼成一行），交人工复核。
+    #[test]
+    fn 三栏页_双候选带_回退不切栏() {
+        let mut g = Vec::new();
+        for i in 0..4 {
+            let y = 700.0 - i as f32 * 14.0;
+            g.extend(line_of(100.0, y, 10.0, &format!("FirstColumnLine{}", i + 1), false));
+            g.extend(line_of(400.0, y, 10.0, &format!("SecondColumnLine{}", i + 1), false));
+            g.extend(line_of(700.0, y, 10.0, &format!("ThirdColumnLine{}", i + 1), false));
+        }
+        let (lines, split) = glyphs_to_lines_ex(&g);
+        assert!(!split, "两个合格候选带必须回退单栏，不得切栏");
+
+        let texts: Vec<&str> = lines.iter().map(|l| l.text.as_str()).collect();
+        assert_eq!(texts.len(), 4, "回退后每基线一行（三栏同行，旧行为）: {texts:?}");
+        for t in &texts {
+            assert!(t.contains("FirstColumnLine"), "{texts:?}");
+            assert!(t.contains("SecondColumnLine"), "{texts:?}");
+            assert!(t.contains("ThirdColumnLine"), "{texts:?}");
+        }
+    }
+
+    /// 真双栏的 ex 版契约：恰好一条合格带 → 切栏且 split=true
+    ///（C2 的「多带回退」不能误伤干净的双栏页）。
+    #[test]
+    fn 双栏页_ex版_切栏并回报true() {
+        let mut g = Vec::new();
+        for i in 0..4 {
+            let y = 700.0 - i as f32 * 14.0;
+            g.extend(line_of(100.0, y, 10.0, &format!("LeftColumnLine{}", i + 1), false));
+            g.extend(line_of(400.0, y, 10.0, &format!("RightColumnLine{}", i + 1), false));
+        }
+        let (lines, split) = glyphs_to_lines_ex(&g);
+        assert!(split, "真双栏必须切栏");
+        let texts: Vec<&str> = lines.iter().map(|l| l.text.as_str()).collect();
+        assert_eq!(texts.first(), Some(&"LeftColumnLine1"), "{texts:?}");
+        assert_eq!(texts.last(), Some(&"RightColumnLine4"), "{texts:?}");
+    }
+
+    /// 表格形态（短单元格 + 对齐大间隙）不切栏：切了会把行式阅读变成列式，
+    /// 比 v1 的「保留行序 + 告警」更糟。短格中位长度门槛在此兜底。
+    #[test]
+    fn 表格形态_不切栏_保留行序与告警() {
+        let mut g = Vec::new();
+        let mk_row = |y: f32, a: &str, b: &str| {
+            let mut v = line_of(100.0, y, 10.0, a, false);
+            let off = 100.0 + a.chars().count() as f32 * 5.0 + 60.0;
+            v.extend(word(off, y, 10.0, b, false));
+            v
+        };
+        g.extend(mk_row(700.0, "Name", "Value"));
+        g.extend(mk_row(688.0, "Alpha", "1"));
+        g.extend(mk_row(676.0, "Beta", "2"));
+        g.extend(mk_row(664.0, "Gamma", "3"));
+
+        let lines = glyphs_to_lines(&g);
+        let texts: Vec<&str> = lines.iter().map(|l| l.text.as_str()).collect();
+        assert_eq!(texts.len(), 4, "应保持 4 行行序: {texts:?}");
+        assert_eq!(texts[0], "Name Value", "表格行不得被拆成两列: {texts:?}");
+
+        let (_, stats, w) = lines_to_blocks(&lines, Options::default());
+        assert!(
+            stats.tableish_regions >= 1 || w.iter().any(|x| matches!(x, Warning::TablesNotConverted { .. })),
+            "表格候选告警应保留"
+        );
+    }
+
+    /// 单栏页面：右缘外的页码不够「右栏质量」，不得切栏（回归保护）。
+    #[test]
+    fn 单栏_右缘页码_不切栏() {
+        let mut g = Vec::new();
+        for i in 0..6 {
+            let y = 700.0 - i as f32 * 14.0;
+            g.extend(line_of(100.0, y, 10.0, &format!("Single column body line number {}", i + 1), false));
+        }
+        g.extend(word(520.0, 700.0, 10.0, "1", false));
+
+        let lines = glyphs_to_lines(&g);
+        let texts: Vec<&str> = lines.iter().map(|l| l.text.as_str()).collect();
+        // 判定不变量：**不切栏**。页码与首行同基线，仍会被拼进同一行 —— 这是
+        // 既有行为（跨页重复的页码由 drop_running_furniture 剔除；单页 unit
+        // test 没有跨页上下文）。要断言的是「没有发生列序重排」。
+        assert_eq!(texts.len(), 6, "6 行（页码拼进首行）: {texts:?}");
+        assert!(
+            texts[0].starts_with("Single column body line number 1"),
+            "首行不得被列序重排: {texts:?}"
+        );
+        for (i, t) in texts.iter().skip(1).enumerate() {
+            assert_eq!(
+                t,
+                &format!("Single column body line number {}", i + 2),
+                "正文行序不得被重排: {texts:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn 幂等_同一输入两次输出一致() {
+        let mut g = Vec::new();
+        g.extend(line_of(100.0, 700.0, 10.0, "hello", false));
+        g.extend(line_of(100.0, 688.0, 10.0, "- world", false));
+        let lines = glyphs_to_lines(&g);
+        let a = blocks_to_markdown(&lines_to_blocks(&lines, Options::default()).0);
+        let b = blocks_to_markdown(&lines_to_blocks(&lines, Options::default()).0);
+        assert_eq!(a, b);
+    }
+}
+
+
+

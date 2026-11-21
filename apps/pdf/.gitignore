@@ -1,0 +1,39 @@
+node_modules/
+dist/
+.DS_Store
+Thumbs.db
+
+# Rust build artefacts
+src-tauri/target/
+# Tauri 的 gen/ 基本是生成物，但 Windows 打包的**输入**是手写的（清单模板、图标、
+# bundle.config.json），必须进仓库。原来那条 `src-tauri/gen/` 是目录级排除，git 不会
+# 进入被排除的目录，所以里面的文件一个都没跟踪 —— 本地看着齐全，CI 全新检出后
+# tauri-windows-bundle 直接报 "bundle.config.json not found"。
+# 目录级排除必须换成通配符 + 反排除，git 才有机会下降进去。
+src-tauri/gen/*
+!src-tauri/gen/windows/
+
+# Pdfium binaries are fetched at build time (npm run fetch:pdfium), not committed.
+src-tauri/resources/pdfium/
+src-tauri/resources/pdfium-runtime/
+
+# Licence texts are staged into resources/ by `npm run sync:legal` during the
+# build; the copies at the repository root stay the source of truth.
+src-tauri/resources/legal/
+
+*.log
+.env
+.vite/
+src-tauri/resources/qpdf/
+
+# 签名 sidecar 由 scripts/provision-sign-engine-*.{sh,ps1} 构建，产物不入库。
+src-tauri/resources/sign-engine/*
+!src-tauri/resources/sign-engine/.gitkeep
+
+# 家族契约由台账仓 rocktier-docs 单一维护，本地开发用符号链接挂过来。
+# 绝不能提交副本 —— 9 份手工同步的副本曾全部漂移。
+docs/rocktier
+
+# MAS 打包产物（scripts/build-appstore.sh 输出到 build/appstore/）
+*.pkg
+build/

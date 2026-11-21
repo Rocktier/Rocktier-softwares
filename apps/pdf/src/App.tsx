@@ -1,0 +1,1341 @@
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { getCurrentWindow } from '@tauri-apps/api/window';
+import { DropZone } from './components/DropZone';
+import { FindBar } from './components/FindBar';
+import { FormDialog } from './components/FormDialog';
+import { Inspector } from './components/Inspector';
+import { MergeDialog } from './components/MergeDialog';
+import { NoteDialog } from './components/NoteDialog';
+import { PageViewer } from './components/PageViewer';
+import { PasswordDialog } from './components/PasswordDialog';
+import { Modal } from './components/Modal';
+import { RedactBar } from './components/RedactBar';
+import { RedactDialog } from './components/RedactDialog';
+import { SecurityDialog } from './components/SecurityDialog';
+import { CompressDialog } from './components/CompressDialog';
+import { MarkdownDialog } from './components/MarkdownDialog';
+import { LicenseDialog } from './components/LicenseDialog';
+import { SplitDialog } from './components/SplitDialog';
+import { StampDialog } from './components/StampDialog';
+import { SignDialog, type SignTab, type SignPlacement } from './components/SignDialog';
+import { StatusBar } from './components/StatusBar';
+import { ThumbnailRail } from './components/ThumbnailRail';
+import { Toolbar } from './components/Toolbar';
+import { usePdf } from './hooks/usePdf';
+import { useI18n, useT } from './i18n';
+import { localizeError } from './services/errorText';
+import { signCapabilities } from './services/sign';
+import {
+  buildMenu,
+  copyText,
+  exportPageImages,
+  exportPageImagesLong,
+  fileStem,
+  imagesToPdf,
+  pdfToImagePdf,
+  initialFile,
+  onMenuAction,
+  onOpenFile,
+  openUrl,
+  pageText,
+  pickDirectory,
+  pickPngSavePath,
+  pickImages,
+  pickPdf,
+  pickSavePath,
+  removePassword,
+  revealInFinder,
+  searchDocument,
+  setPassword,
+    compressDocument,
+  licenseStatus,
+  onLicenseExpired,
+  revalidateLicence,
+  type LicenseInfo,
+  } from './services/engine';
+import { RECENT_MAX, clearStoredRecent, readRecent, writeRecent } from './utils';
+import type { AnnotTool, DocumentInfo, MarkupRect, RedactRect, SearchHit, StampKind } from './types';
+import { checkForUpdates, currentVersion, type UpdateResult, type UpdateState } from './services/updates';
+import { UpdateDialog } from './components/UpdateDialog';
+
+/** 打包时写死，与 tag 同源 —— 不会出现系统里装着新版本而代码里写着旧版本的错位。 */
+const APP_VERSION = currentVersion();
+
+/** 两态：light ⇄ dark（2026-11-15 用户令：全家族取消「跟随系统」，图标只做太阳/月亮）。 */
+type Theme = 'light' | 'dark';
+type Resolved = 'light' | 'dark';
+type Dialog =
+  | 'merge'
+  | 'split'
+  | 'stamp'
+  | 'security'
+  | 'form'
+  | 'compress'
+  | 'markdown'
+  | 'license'
+  | 'digital-sign'
+  | null;
+
+/* 2026-10-04 键改名：家族命名空间统一用「.」（此前 PDF 用的是 "rocktier-pdf-editor.theme"，
+   其余产品用 "rocktier.theme"）。改名是为了跨产品一致，不是为了折腾用户，所以读取时
+   仍回落旧键 —— 否则老用户升级后主题被静默重置成默认值。旧键不删。 */
+const THEME_KEY = 'rocktier.theme';
+const THEME_KEY_LEGACY = 'rocktier-pdf-editor.theme';
+
+/* 打开请求的兜底时限（毫秒）。pdfium 打开一份文档实测在秒级以内，超过这个时长
+   还不返回，就是后端 IPC 挂住了 —— 挂住时 busy 永远为真：状态栏的「处理中」不再
+   消失、Recent 列表永久置灰、界面除了那行 10.5px 小字之外没有任何解释。
+   到点把进行中状态交还给用户（解除禁用），并把完整路径留成一条可复制的提示。 */
+const OPEN_STALL_MS = 8000;
+
+export function App() {
+  const t = useT();
+
+  /* 更新检查。状态只由用户点击推进 —— 没有任何 effect 会自动发起联网请求，
+     这是「除非你要求，应用不会联网」这条承诺的落点。 */
+  const [updateState, setUpdateState] = useState<UpdateState>('idle');
+  const [updateResult, setUpdateResult] = useState<UpdateResult | null>(null);
+  /* 结果框的开合。只由菜单「检查更新…」打开 —— 右下角常驻入口已移除
+     （fixed 定位不稳定，容易盖住底部内容，Compressor v0.1.10 实测复现）。 */
+  const [updateOpen, setUpdateOpen] = useState(false);
+  const updateChecking = useRef(false);
+
+  const runUpdateCheck = useCallback(async () => {
+    if (updateChecking.current) return;
+    updateChecking.current = true;
+    setUpdateState('checking');
+    try {
+      const result = await checkForUpdates();
+      setUpdateResult(result);
+      setUpdateState(result.hasUpdate ? 'available' : 'uptodate');
+      /* 顺带吊销复检：同一次点击、同一承诺（只在点击时联网）。revoked → 清回执，
+         授权状态回到未激活，并立即弹激活对话框（B2：此前只清回执不弹窗，用户
+         要等到下一次写操作被 LICENSE_EXPIRED 拦截才知道出事；B1：对话框顶部
+         显示吊销专属通告，而非让人以为试用到期）。 */
+      const verdict = await revalidateLicence();
+      if (verdict === 'revoked') {
+        refreshLicense();
+        setLicenseRevoked(true);
+        setDialog('license');
+      }
+    } catch {
+      setUpdateState('failed');
+    } finally {
+      updateChecking.current = false;
+    }
+  }, []);
+  const { lang } = useI18n();
+  const pdf = usePdf();
+
+  const [theme, setTheme] = useState<Theme>(() => readTheme());
+  const [recent, setRecent] = useState<string[]>(readRecent);
+  const [zoom, setZoom] = useState(1);
+  const [current, setCurrent] = useState(0);
+  const [jump, setJump] = useState<{ index: number; token: number } | null>(null);
+  const [dialog, setDialog] = useState<Dialog>(null);
+  const [license, setLicense] = useState<LicenseInfo | null>(null);
+  /* B1：吊销复检判定 revoked 时置位，激活框顶部显示「许可已被吊销」专属通告 ——
+     回执已清、info 与试用到期无从区分，verdict 是唯一可靠的传递点。 */
+  const [licenseRevoked, setLicenseRevoked] = useState(false);
+
+  const refreshLicense = useCallback(() => {
+    void licenseStatus()
+      .then(setLicense)
+      // 读不到授权状态不该打断使用：按"没有状态"处理，界面就不显示胶囊。
+      .catch(() => setLicense(null));
+  }, []);
+  const [dragActive, setDragActive] = useState(false);
+  const [toast, setToast] = useState<{ text: string; error?: boolean; sticky?: boolean } | null>(null);
+  /** 正在打开的文件路径（没有则为 null）。既是空态那一行的进行中指示，也是
+   *  兜底计时的对象 —— 见 OPEN_STALL_MS。 */
+  const [openingPath, setOpeningPath] = useState<string | null>(null);
+
+  const [findOpen, setFindOpen] = useState(false);
+  const [findQuery, setFindQuery] = useState('');
+  const [hits, setHits] = useState<SearchHit[]>([]);
+  const [activeHit, setActiveHit] = useState(0);
+  const searchToken = useRef(0);
+  const [markupTool, setMarkupTool] = useState<AnnotTool | null>(null);
+  // 脱敏是独立于 markupTool 的选区模式（同一互斥组），但拖出来的矩形先
+  // 累积在画布上，等用户在确认弹层里点头才真正应用——永久删除必须有一道闸。
+  const [redactMode, setRedactMode] = useState(false);
+  const [redactRects, setRedactRects] = useState<RedactRect[]>([]);
+  const [redactConfirm, setRedactConfirm] = useState(false);
+  const [noteAt, setNoteAt] = useState<{ page: number; x: number; y: number } | null>(null);
+  const [sigPath, setSigPath] = useState<string | null>(null);
+
+  /* ── 数字签名 ─────────────────────────────────────────────────── */
+  const [signTab, setSignTab] = useState<SignTab>('sign');
+  /** 用户在真实页面上点出来的签名位置（未旋转 PDF 坐标，页码 0 起步）。 */
+  const [signPlacement, setSignPlacement] = useState<SignPlacement | null>(null);
+  /** 签名引擎在不在这个安装包里 —— 不在就禁用工具栏入口（引擎缺失没有可用路径）。 */
+  const [signEngine, setSignEngine] = useState(false);
+  /**
+   * 放置模式：对话框**收起但不卸载**。坐标只能从真实页面上点出来，模态框挡着就没法点；
+   * 而直接卸载对话框会连带丢掉 SignTabSign 里的证书选择、签署人姓名和外观图片
+   * （那是它的本地状态）—— 与 Task 10 把标签页做成常驻挂载是同一个理由。
+   *
+   * 必须**派生而不是存储**：armed 的定义就是「对话框开着 + dsign 工具拿着」，所以任何
+   * 改动 `dialog` 或 `markupTool` 的既有转换都会自动解除它。存一个布尔的话有两条实测漏路：
+   * (A) 点工具栏里直接 setDialog 的那几支（merge/stamp/security…）再关掉，坐标一点击页面
+   * 就把用户没要求的签名框拉回来；(B) 换一支 markup 工具后 `markupTool` 已不是 dsign，
+   * 但收起态的对话框连同它的 Esc 监听还活着，页面层的 annot-layer 也继续盖着，什么都选不了。
+   */
+  const signPlacementMode = dialog === 'digital-sign' && markupTool === 'dsign';
+
+  // 引擎是否随包只取决于安装，与会话里打开哪份文档无关，所以挂载时探测一次。
+  // 浏览器 dev 构建没有后端：拒绝也按「不可用」处理，界面就不会承诺做不到的事。
+  useEffect(() => {
+    void signCapabilities()
+      .then((c) => setSignEngine(c.engineAvailable))
+      .catch(() => setSignEngine(false));
+  }, []);
+
+  /**
+   * 旧坐标作废的两个触发点：
+   * - 换文档（打开另一份 / 签完改名）—— path 变了，坐标指的是另一份文件的另一页。
+   * - 文档结构变了 —— 删页/移页/旋转/撤销这些一律经 `usePdf.applyDoc`，它会 revision+1。
+   *   只看 path 拦不住这一类：原地保存（工具栏「保存」/签署前的落盘）不改 path，于是
+   *   「在第 10 页点好位置 → 删掉前面 3 页 → 原地保存 → 签名」会把签名落到用户从没点过的页上
+   *   —— 索引还在范围内，后端 SIGN_PAGE_OUT_OF_RANGE 根本不会触发。
+   * 反向也要保住：`pdf.save()` 走的是 `adoptSaved`，它**不**自增 revision，
+   * 所以「选好位置 → 先保存 → 再签」这条正路留着坐标。
+   */
+  useEffect(() => {
+    setSignPlacement(null);
+  }, [pdf.doc?.path, pdf.revision]);
+
+  // 签名对话框不在了，dsign 这支工具就没有能落地的地方：留着它，页面里的 annot-layer
+  // 会一直盖在页面上（文字选不了、页也点不动），而界面上没有任何「工具还拿着」的迹象。
+  // 收起态的定义是 dialog === 'digital-sign'，所以工具栏那几支直接 setDialog 的入口
+  // （merge/stamp/security…）以及签名完成后的收尾，都由这里统一兜住。
+  useEffect(() => {
+    if (dialog !== 'digital-sign') setMarkupTool((tool) => (tool === 'dsign' ? null : tool));
+  }, [dialog]);
+
+  const [pwPrompt, setPwPrompt] = useState<{ path: string; incorrect: boolean } | null>(null);
+  // 关窗 / 打开另一个文件 / 拖拽替换，三条替换路径共用一个守卫。
+  const [guard, setGuard] = useState<
+    { kind: 'close' } | { kind: 'open'; path: string; password?: string } | null
+  >(null);
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+    try {
+      localStorage.setItem(THEME_KEY, theme);
+    } catch {
+      /* ignore */
+    }
+  }, [theme]);
+
+  const cycleTheme = useCallback(() => {
+    setTheme((prev) => (prev === 'dark' ? 'light' : 'dark'));
+  }, []);
+
+  const notify = useCallback((text: string, error = false, sticky = false) => {
+    setToast({ text, error, sticky });
+    // sticky = 不自动消失：兜底提示带的是完整路径，用户要的是选中复制，
+    // 2.6 秒就闪掉的路径等于没给。关闭走渲染处那颗独立按钮。
+    if (!sticky) window.setTimeout(() => setToast(null), 2600);
+  }, []);
+
+  /** 记一笔最近打开。同一路径只留一条，最新的排最前。 */
+  const rememberRecent = useCallback((path: string) => {
+    setRecent((prev) => {
+      const next = [path, ...prev.filter((p) => p !== path)].slice(0, RECENT_MAX);
+      writeRecent(next);
+      return next;
+    });
+  }, []);
+
+  const clearRecent = useCallback(() => {
+    setRecent([]);
+    clearStoredRecent();
+  }, []);
+
+  // 菜单打开与拖拽共用：报告结果、需要时弹密码框。定义在拖拽监听之前 ——
+  // useEffect 的依赖数组在渲染期求值，晚于 const 声明会踩 TDZ。
+  const runOpen = useCallback(
+    async (path: string, password?: string) => {
+      setOpeningPath(path);
+      const { info, error } = await pdf.openPathWithResult(path, password);
+      // 用函数式清理：并发时（拖拽 + 菜单同开）先返回的那个不能把后一次请求的
+      // 进行中指示抹掉。挂起不返回时这一行永远跑不到 —— 兜底见 OPEN_STALL_MS。
+      setOpeningPath((cur) => (cur === path ? null : cur));
+      if (info) {
+        setCurrent(0);
+        setZoom(1);
+        setFindQuery('');
+        setHits([]);
+        setActiveHit(0);
+        // 换文档后旧选区指向的是别的页面，必须清干净。
+        setRedactRects([]);
+        setRedactMode(false);
+        rememberRecent(path);
+        notify(t('toast.opened', { name: info.name }));
+      } else if (error === 'PASSWORD_REQUIRED' || error === 'PASSWORD_INCORRECT') {
+        setPwPrompt({ path, incorrect: error === 'PASSWORD_INCORRECT' });
+      } else if (error) {
+        /* 打开失败必须落在**视线中心**。此前这里没有 else 分支，失败只进
+           usePdf 的 error state，最终显示在底部状态栏那行 11px 小字上 ——
+           而用户的视线在中央的 dropzone，于是体验就是「点了没反应」。
+           文案走 localizeError：底层真实原因（文件不存在 / 不是 PDF / 已损坏）
+           比一句笼统的「无法打开」有用得多，且不隐藏细节。 */
+        notify(localizeError(error, t), true);
+      }
+    },
+    [notify, pdf, rememberRecent, t]
+  );
+
+  // 丢掉一份带未保存修改的内存文档是最贵的错误：任何替换先过守卫。
+  const requestOpen = useCallback(
+    (path: string, password?: string) => {
+      if (pdf.doc?.dirty) setGuard({ kind: 'open', path, password });
+      else void runOpen(path, password);
+    },
+    [pdf.doc?.dirty, runOpen]
+  );
+
+  /* 打开挂起的兜底，理由见 OPEN_STALL_MS。到点做两件事：把进行中状态解除（Recent
+     立刻重新可点，用户不用重启应用就能重试），再留一条不自动消失、路径可选中复制
+     的提示。措辞只说事实 —— 「仍未结束」，不谎报「失败」：迟到的成功照样会渲染。 */
+  useEffect(() => {
+    if (!openingPath) return;
+    const stalled = openingPath;
+    const timer = window.setTimeout(() => {
+      setOpeningPath((cur) => (cur === stalled ? null : cur));
+      notify(t('toast.stillOpening', { sec: OPEN_STALL_MS / 1000, path: stalled }), true, true);
+    }, OPEN_STALL_MS);
+    return () => window.clearTimeout(timer);
+  }, [openingPath, notify, t]);
+
+  /* ── Drag & drop from the OS ────────────────────────────────── */
+  useEffect(() => {
+    let disposed = false;
+    let unlisten: (() => void) | undefined;
+
+    void getCurrentWindow()
+      .onDragDropEvent((event) => {
+        if (disposed) return;
+        if (event.payload.type === 'enter' || event.payload.type === 'over') {
+          setDragActive(true);
+          return;
+        }
+        if (event.payload.type === 'leave') {
+          setDragActive(false);
+          return;
+        }
+        setDragActive(false);
+        const path = event.payload.paths.find((p) => p.toLowerCase().endsWith('.pdf'));
+        if (path) requestOpen(path);
+      })
+      .then((fn) => {
+        if (disposed) fn();
+        else unlisten = fn;
+      });
+
+    return () => {
+      disposed = true;
+      unlisten?.();
+    };
+  }, [requestOpen]);
+
+  /* ── Files the OS asked us to open (double-click / "Open With") ─ */
+  // Cold start: the path arrives via argv (Windows/Linux) or a buffered
+  // RunEvent::Opened (macOS) — ask Rust once after mount. Warm start (macOS,
+  // app already running): the matching RunEvent becomes "open-file". The
+  // page-load re-emit can deliver the same path a second time; the
+  // current-document check swallows that echo.
+  const docPathRef = useRef<string | null>(null);
+  useEffect(() => {
+    docPathRef.current = pdf.doc?.path ?? null;
+  }, [pdf.doc?.path]);
+
+  /* 这里必须只跑一次。
+     `requestOpen` 经 `runOpen` 依赖整个 `usePdf()` 返回值，而那个对象每次渲染
+     都是新的 —— 把它放进依赖数组，effect 就每帧重跑。`initial_file` 后端只
+     clone 不 take（热启动还会把新路径写回同一个 slot），于是每帧都会重新打开
+     同一份文档：revision 自增 → 渲染缓存被清 → 大页面永远渲染不完，界面卡在
+     「处理中」。用 ref 拿最新回调，effect 才能稳定在挂载时执行一次。 */
+  const requestOpenRef = useRef(requestOpen);
+  useEffect(() => {
+    requestOpenRef.current = requestOpen;
+  }, [requestOpen]);
+
+  useEffect(() => {
+    let disposed = false;
+    let unlisten: (() => void) | undefined;
+    void initialFile()
+      .then((path) => {
+        if (!disposed && path && path !== docPathRef.current) requestOpenRef.current(path);
+      })
+      .catch(() => {
+        /* browser dev builds have no backend */
+      });
+    void onOpenFile((path) => {
+      if (disposed || path === docPathRef.current) return;
+      requestOpenRef.current(path);
+    }).then((fn) => {
+      if (disposed) fn();
+      else unlisten = fn;
+    });
+    return () => {
+      disposed = true;
+      unlisten?.();
+    };
+  }, []);
+
+  /* ── Native menu ────────────────────────────────────────────── */
+  /* 菜单项启用态依赖「是否有文档」：无文档时「导出为 Markdown」「查找」置灰，
+     而不是让用户点了没反应。打开/关闭文档也要重建，否则启用态会停在旧值。 */
+  const hasDoc = pdf.doc != null;
+  useEffect(() => {
+    void buildMenu(lang, hasDoc);
+  }, [lang, hasDoc]);
+
+  useEffect(() => {
+    let disposed = false;
+    let unlisten: (() => void) | undefined;
+
+    void onMenuAction((id) => {
+      switch (id) {
+        case 'open':
+          void openFile();
+          break;
+        case 'save':
+          void save();
+          break;
+        case 'save-as':
+          void saveAs();
+          break;
+        case 'export-markdown':
+          // 转换需要已打开的文档；没打开时静默忽略（菜单项可能仍可点）
+          if (pdf.doc) setDialog('markdown');
+          break;
+        case 'undo':
+          void pdf.stepHistory('undo');
+          break;
+        case 'redo':
+          void pdf.stepHistory('redo');
+          break;
+        case 'find':
+          if (pdf.doc) setFindOpen(true);
+          break;
+        case 'actual-size':
+          setZoom(1);
+          break;
+        case 'toggle-theme':
+          cycleTheme();
+          break;
+        case 'license':
+          setDialog('license');
+          refreshLicense();
+          break;
+        case 'check-updates':
+          setUpdateOpen(true);
+          void runUpdateCheck();
+          break;
+        case 'website':
+          void openUrl('https://rocktier.com/');
+          break;
+        case 'feedback':
+          void openUrl('mailto:hello@rocktier.com');
+          break;
+        default:
+          break;
+      }
+    }).then((fn) => {
+      if (disposed) fn();
+      else unlisten = fn;
+    });
+
+    return () => {
+      disposed = true;
+      unlisten?.();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pdf.doc, pdf.stepHistory, lang]);
+
+  /* ── License: read the trial state once, and open the dialog whenever a write
+     was refused for lack of one. Listening here rather than checking the error
+     string in every action's catch: the gate is in Rust and covers seventeen
+     commands, so a per-action check would be seventeen chances to miss one. ── */
+  useEffect(() => {
+    refreshLicense();
+    let disposed = false;
+    let unlisten: (() => void) | undefined;
+    void onLicenseExpired(() => {
+      setDialog('license');
+      refreshLicense();
+    }).then((fn) => {
+      if (disposed) fn();
+      else unlisten = fn;
+    });
+    return () => {
+      disposed = true;
+      unlisten?.();
+    };
+  }, [refreshLicense]);
+
+  /* ── Keyboard shortcuts ─────────────────────────────────────── */
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const mod = e.metaKey || e.ctrlKey;
+      if (mod && e.key.toLowerCase() === 'o') {
+        e.preventDefault();
+        void openFile();
+      } else if (mod && e.key.toLowerCase() === 's') {
+        e.preventDefault();
+        // ⇧ 必须分流：此前 ⌘⇧S 走的也是保存，覆盖当前文件 —— 用户以为在「另存为」
+        void (e.shiftKey ? saveAs() : save());
+      } else if (mod && e.key.toLowerCase() === 'f') {
+        e.preventDefault();
+        if (pdf.doc) setFindOpen(true);
+      } else if (mod && e.key.toLowerCase() === 'z') {
+        e.preventDefault();
+        void pdf.stepHistory(e.shiftKey ? 'redo' : 'undo');
+      } else if ((e.key === 'Delete' || e.key === 'Backspace') && pdf.selected.length > 0) {
+        // 守卫对话框开着时，退格归对话框（决定保不保存），不许穿透删页。
+        if (guard) return;
+        // 焦点在可编辑元素里时，退格/删除是"改字"，不是"删页"。
+        // 少了这道守卫，用户在查找框、表单值或批注文字里按退格会静默删掉一整页 ——
+        // 只有撤销能救回来，而用户多半不知道发生了什么。
+        const el = e.target as HTMLElement | null;
+        const editing =
+          !!el &&
+          (el.isContentEditable ||
+            el.tagName === 'INPUT' ||
+            el.tagName === 'TEXTAREA' ||
+            el.tagName === 'SELECT');
+        if (editing) return;
+        e.preventDefault();
+        void removeSelected();
+      } else if (e.key === 'Escape' && redactMode) {
+        // Esc 只退出选区模式（规格如此），已画的矩形与浮出条原地保留，
+        // 应用/取消交给浮出条——按 Esc 绝不能悄悄丢掉用户的选区。
+        if (redactConfirm) return; // 确认弹层开着时，Esc 归弹层。
+        e.preventDefault();
+        setRedactMode(false);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pdf.selected, pdf.doc, pdf.stepHistory, guard, redactMode, redactConfirm]);
+
+  /* ── Find ───────────────────────────────────────────────────── */
+  useEffect(() => {
+    if (!findOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        setFindOpen(false);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [findOpen]);
+
+  // Debounced full-document search; a token guards against out-of-order replies.
+  useEffect(() => {
+    if (!findOpen || !findQuery.trim() || !pdf.doc) {
+      setHits([]);
+      setActiveHit(0);
+      return;
+    }
+    const token = ++searchToken.current;
+    const handle = window.setTimeout(() => {
+      void searchDocument(findQuery)
+        .then((result) => {
+          if (token !== searchToken.current) return;
+          setHits(result);
+          setActiveHit(0);
+        })
+        .catch(() => {
+          if (token === searchToken.current) setHits([]);
+        });
+    }, 180);
+    return () => window.clearTimeout(handle);
+  }, [findQuery, findOpen, pdf.doc, pdf.revision]);
+
+  // Follow the active hit with the viewport.
+  useEffect(() => {
+    const hit = hits[activeHit];
+    if (hit) setJump({ index: hit.page, token: Date.now() });
+  }, [activeHit, hits]);
+
+  const stepHit = useCallback(
+    (delta: number) => {
+      setHits((prevHits) => {
+        if (prevHits.length === 0) return prevHits;
+        setActiveHit((prev) => (prev + delta + prevHits.length) % prevHits.length);
+        return prevHits;
+      });
+    },
+    []
+  );
+
+  /* ── Window close & replacement guard ────────────────────────── */
+  useEffect(() => {
+    let disposed = false;
+    let unlisten: (() => void) | undefined;
+
+    void getCurrentWindow()
+      .onCloseRequested((event) => {
+        if (pdf.doc?.dirty) {
+          event.preventDefault();
+          setGuard({ kind: 'close' });
+        }
+      })
+      .then((fn) => {
+        if (disposed) fn();
+        else unlisten = fn;
+      });
+
+    return () => {
+      disposed = true;
+      unlisten?.();
+    };
+  }, [pdf.doc]);
+
+  const resolveGuard = useCallback(
+    async (choice: 'save' | 'discard') => {
+      const pending = guard;
+      if (!pending) return;
+      if (choice === 'save') {
+        const saved = await pdf.save();
+        // 保存失败就留在守卫上，绝不能静默丢掉未保存的修改。
+        if (!saved) return;
+      }
+      setGuard(null);
+      if (pending.kind === 'close') {
+        // 必须是 destroy() 而不是 close()：close() 会再发一次 close-requested
+        // 事件，而"不保存"并不重置后端 dirty 标志，守卫会把窗口再次拦下 ——
+        // 用户点了"不保存"也永远关不掉。destroy() 由守卫自己兜底收尾：
+        // 走到这里代表"保存/不保存"已裁决，强制关窗、不再走第二遍守卫。
+        void getCurrentWindow().destroy();
+      } else {
+        void runOpen(pending.path, pending.password);
+      }
+    },
+    [guard, pdf, runOpen]
+  );
+
+  /* ── Actions ────────────────────────────────────────────────── */
+
+  const openFile = useCallback(async () => {
+    const path = await pickPdf();
+    if (!path) return;
+    requestOpen(path);
+  }, [requestOpen]);
+
+  const submitPassword = useCallback(
+    async (password: string) => {
+      if (!pwPrompt) return false;
+      const { info, error } = await pdf.openPathWithResult(pwPrompt.path, password);
+      if (info) {
+        setPwPrompt(null);
+        setCurrent(0);
+        setZoom(1);
+        setRedactRects([]);
+        setRedactMode(false);
+        rememberRecent(pwPrompt.path);
+        notify(t('toast.opened', { name: info.name }));
+        return true;
+      }
+      /* 密码类错误留在对话框里重试；其他失败（文件被删、损坏）要报出来，
+         否则对话框一关就像什么都没发生。 */
+      if (error && error !== 'PASSWORD_REQUIRED' && error !== 'PASSWORD_INCORRECT') {
+        notify(localizeError(error, t), true);
+      }
+      return !(error === 'PASSWORD_REQUIRED' || error === 'PASSWORD_INCORRECT');
+    },
+    [notify, pdf, pwPrompt, rememberRecent, t]
+  );
+
+  const save = useCallback(async () => {
+    const path = await pdf.save();
+    if (path) notify(t('toast.saved', { name: fileStem(path) + '.pdf' }));
+  }, [notify, pdf, t]);
+
+  const saveAs = useCallback(async () => {
+    if (!pdf.doc) return;
+    const target = await pickSavePath(pdf.doc.name);
+    if (!target) return;
+    const path = await pdf.saveAs(target);
+    if (path) notify(t('toast.saved', { name: fileStem(path) + '.pdf' }));
+  }, [notify, pdf, t]);
+
+  const removeSelected = useCallback(async () => {
+    const count = pdf.selected.length;
+    if (count === 0) return;
+    const { ok, error } = await pdf.removePages();
+    // 成功才报"已删除"；失败把根因弹成错误 toast，绝不谎报成功。
+    if (ok) notify(t('toast.deleted', { count }));
+    else if (error) notify(error, true);
+  }, [notify, pdf, t]);
+
+  const rotateSelected = useCallback(
+    async (degrees: number) => {
+      const count = pdf.selected.length || 1;
+      const { ok, error } = await pdf.rotate(degrees, current);
+      if (ok) notify(t('toast.rotated', { count }));
+      else if (error) notify(error, true);
+    },
+    [current, notify, pdf, t]
+  );
+
+  const extractSelected = useCallback(async () => {
+    if (pdf.selected.length === 0 || !pdf.doc) return;
+    const target = await pickSavePath(`${fileStem(pdf.doc.name)}-extract.pdf`);
+    if (!target) return;
+    const path = await pdf.extract(pdf.selected, target);
+    if (path) {
+      notify(t('toast.saved', { name: fileStem(path) + '.pdf' }));
+      void revealInFinder(path);
+    }
+  }, [notify, pdf, t]);
+
+  const copySelectedText = useCallback(async () => {
+    if (pdf.selected.length === 0) return;
+    try {
+      const text = await pageText(pdf.selected);
+      if (!text.trim()) {
+        notify(t('toast.noText'), true);
+        return;
+      }
+      await copyText(text);
+      notify(t('toast.copied'));
+    } catch (e) {
+      notify(e instanceof Error ? e.message : String(e), true);
+    }
+  }, [notify, pdf.selected, t]);
+
+  const applyStamp = useCallback(
+    async (kind: StampKind, text: string, fontSize: number, margin: number, opacity: number) => {
+      const { info, error } = await pdf.stamp(kind, text, fontSize, margin, opacity);
+      if (info) notify(t('stamp.done'));
+      // 失败要抛回给 StampDialog：它的错误 UI 会显示原因，而不是静默 onClose。
+      if (error) throw new Error(error);
+    },
+    [notify, pdf, t]
+  );
+
+  const exportImages = useCallback(async () => {
+    if (!pdf.doc) return;
+    const dir = await pickDirectory();
+    if (!dir) return;
+    const pages = pdf.selected.length > 0 ? pdf.selected : pdf.doc.pages.map((p) => p.index);
+    try {
+      const results = await exportPageImages(pages, dir, 1600);
+      notify(t('toast.exported', { count: results.length }));
+      if (results[0]) void revealInFinder(results[0].path);
+    } catch (e) {
+      notify(e instanceof Error ? e.message : String(e), true);
+    }
+  }, [notify, pdf, t]);
+
+  // 长图：全部选中页纵向拼成一张 PNG（对标帮小忙 pdf_2_png 的长图档，阶段 182）。
+  const exportLongImage = useCallback(async () => {
+    if (!pdf.doc) return;
+    const pages = pdf.selected.length > 0 ? pdf.selected : pdf.doc.pages.map((p) => p.index);
+    const target = await pickPngSavePath(`${fileStem(pdf.doc.name)}-long.png`);
+    if (!target) return;
+    try {
+      const result = await exportPageImagesLong(pages, target, 1600);
+      notify(t('toast.longImage', { name: fileStem(result.path) + '.png' }));
+      void revealInFinder(result.path);
+    } catch (e) {
+      notify(e instanceof Error ? e.message : String(e), true);
+    }
+  }, [notify, pdf, t]);
+
+  const runImagesToPdf = useCallback(async () => {
+    const imagePaths = await pickImages();
+    if (imagePaths.length === 0) return;
+    const target = await pickSavePath('images.pdf');
+    if (!target) return;
+    try {
+      const result = await imagesToPdf(imagePaths, target);
+      notify(t('toast.imagesPdf', { name: fileStem(result.path) + '.pdf' }));
+      void revealInFinder(result.path);
+    } catch (e) {
+      notify(e instanceof Error ? e.message : String(e), true);
+    }
+  }, [notify, t]);
+
+  // 转纯图 PDF：整本逐页渲染成位图再拼回 PDF，文字层不保留（防篡改外发副本）。
+  const runImageify = useCallback(async () => {
+    if (!pdf.doc) return;
+    const target = await pickSavePath(`${fileStem(pdf.doc.name)}-纯图.pdf`);
+    if (!target) return;
+    try {
+      const result = await pdfToImagePdf(target, 1600);
+      notify(t('toast.imagePdf', { name: fileStem(result.path) + '.pdf' }));
+      void revealInFinder(result.path);
+    } catch (e) {
+      notify(e instanceof Error ? e.message : String(e), true);
+    }
+  }, [notify, pdf, t]);
+
+  const applyMarkup = useCallback(
+    async (rect: MarkupRect) => {
+      if (!markupTool || markupTool === 'note' || markupTool === 'sign' || markupTool === 'dsign') {
+        return;
+      }
+      const color: [number, number, number] =
+        markupTool === 'highlight' ? [255, 235, 59] : [229, 57, 53];
+      const opacity = markupTool === 'highlight' ? 0.35 : 0.9;
+      const info = await pdf.markup(markupTool, rect, color, opacity);
+      if (info) notify(t('markup.done'));
+    },
+    [markupTool, notify, pdf, t]
+  );
+
+  /* ── Redaction ───────────────────────────────────────────────── */
+
+  /** Markup 与 Redact 同一互斥组：拿起一头，先放下另一头。 */
+  const chooseMarkupTool = useCallback((tool: AnnotTool | null) => {
+    setRedactMode(false);
+    setMarkupTool(tool);
+  }, []);
+
+  const toggleRedact = useCallback(() => {
+    setMarkupTool(null);
+    if (!redactMode) notify(t('redact.hint'));
+    setRedactMode((prev) => !prev);
+  }, [notify, redactMode, t]);
+
+  const addRedactRect = useCallback((rect: RedactRect) => {
+    setRedactRects((prev) => [...prev, rect]);
+  }, []);
+
+  /** 取消 = 丢掉全部待应用矩形并退出选区模式。 */
+  const cancelRedact = useCallback(() => {
+    setRedactRects([]);
+    setRedactMode(false);
+  }, []);
+
+  const confirmRedact = useCallback(async () => {
+    if (redactRects.length === 0) return;
+    const regions = redactRects.map((r) => ({
+      pageIndex: r.page,
+      x: r.x,
+      y: r.y,
+      width: r.width,
+      height: r.height,
+    }));
+    // 失败时把错误抛回给 RedactDialog 显示；矩形原地保留，用户可以重试。
+    const { outcome, error } = await pdf.redact(regions);
+    if (error) throw new Error(error);
+    if (!outcome) return;
+    setRedactRects([]);
+    setRedactMode(false);
+
+    const parts = [t('redact.done', { count: outcome.removed })];
+    if (outcome.crossed > 0) {
+      parts.push(t('redact.crossed', { count: outcome.crossed }));
+    }
+    notify(parts.join(' '), false);
+    // 校验告警（区域里疑似还有字）延迟一拍，否则会被前一条 toast 覆盖。
+    if (outcome.residualRegions > 0) {
+      window.setTimeout(
+        () => notify(t('redact.residual', { count: outcome.residualRegions }), true),
+        2700
+      );
+    }
+  }, [notify, pdf, redactRects, t]);
+
+  const applyNote = useCallback(
+    async (text: string) => {
+      if (!noteAt) return;
+      const info = await pdf.note(noteAt.page, noteAt.x, noteAt.y, text, [255, 200, 0]);
+      if (info) notify(t('note.done'));
+    },
+    [noteAt, notify, pdf, t]
+  );
+
+  const chooseSignature = useCallback(async () => {
+    const images = await pickImages();
+    if (images.length === 0) return;
+    setSigPath(images[0]);
+    setMarkupTool('sign');
+    notify(t('sign.hint'));
+    notify(t('sign.disclaimer'));
+  }, [notify, t]);
+
+  /* ── 数字签名 ─────────────────────────────────────────────────── */
+
+  const openSignDialog = useCallback(() => {
+    setSignTab('sign');
+    // 拿起对话框，就先放下页面上的放置模式，否则回来时两者同时 armed。
+    setMarkupTool((tool) => (tool === 'dsign' ? null : tool));
+    setDialog('digital-sign');
+  }, []);
+
+  /** 检查器里的「验证签名」入口：同一个对话框，直接落在验证页。 */
+  const openVerifyDialog = useCallback(() => {
+    setSignTab('verify');
+    setMarkupTool((tool) => (tool === 'dsign' ? null : tool));
+    setDialog('digital-sign');
+  }, []);
+
+  /**
+   * 关闭对话框：× 按钮与 Esc 走同一条路（Esc 监听在 useDialogA11y 的 window 上）。
+   * 依赖表必须保持为空 —— 这个回调的标识就是那条监听的 key，一变每帧重挂。
+   * 放置模式现在由 dialog/markupTool 派生，这里清 markupTool 就够了。
+   */
+  const closeSignDialog = useCallback(() => {
+    setDialog(null);
+    // 顺手把 dsign 工具放下：对话框都没了还拿着它，页面层会一直盖着让页面点不动。
+    setMarkupTool((tool) => (tool === 'dsign' ? null : tool));
+  }, []);
+
+  const requestSignPlacement = useCallback(() => {
+    // 对话框让位给页面：坐标只能从真实页面上取，模态框挡着就没法点。
+    // 是「收起」而不是「关掉」—— 见 signPlacementMode 的说明。对话框留在
+    // 'digital-sign'，拿起 dsign 这支工具即等于进入收起态（派生值随之为 true）。
+    setMarkupTool('dsign');
+    notify(t('dsign.sign.placementHint'));
+  }, [notify, t]);
+
+  /** 签好了：后端把签好的文件读回内存（只读），界面随之换成那一份。 */
+  const handleSigned = useCallback(
+    (info: DocumentInfo) => {
+      pdf.applyDoc(info);
+      setSignPlacement(null);
+      setDialog(null);
+      notify(t('toast.signed', { name: fileStem(info.path) + '.pdf' }));
+    },
+    [notify, pdf, t]
+  );
+
+  /**
+   * 另存一份**剥离签名**的可编辑副本 —— 就是 Save As 到新路径，后端写副本时会去掉
+   * 增量签名并解除只读，所以这里不需要（也不该有）独立的第二套只读规则。
+   */
+  const saveEditableCopy = useCallback(async () => {
+    if (!pdf.doc) return;
+    const target = await pickSavePath(`${fileStem(pdf.doc.name)}-editable.pdf`);
+    if (!target) return;
+    const saved = await pdf.saveAs(target);
+    if (saved) notify(t('dsignReady.copyDone', { name: fileStem(saved) + '.pdf' }));
+  }, [notify, pdf, t]);
+
+  /**
+   * 签名前的落盘。后端 `SIGN_DIRTY_DOC` 是权威（磁盘字节必须与所签内容逐字节对应），
+   * 这里只是给它一条能走通的路：先原地保存，没有磁盘路径（或原地保存被拒）就另存为。
+   */
+  const saveBeforeSigning = useCallback(async (): Promise<boolean> => {
+    if (!pdf.doc) return false;
+    if (pdf.doc.dirty) {
+      const saved = pdf.doc.path ? await pdf.save() : null;
+      if (saved) return true;
+      const target = await pickSavePath(pdf.doc.name || 'document.pdf');
+      if (!target) return false;
+      return (await pdf.saveAs(target)) !== null;
+    }
+    return true;
+  }, [pdf]);
+
+  const handlePageClick = useCallback(
+    async (page: number, x: number, y: number) => {
+      if (signPlacementMode) {
+        // 认派生值而不是只认 `markupTool === 'dsign'`：对话框已经被别的入口换走时，
+        // 点页面不该把签名框请回来（用户已经不在签名流程里了）。
+        // 坐标取自真实页面（未旋转 PDF 点，与 sign_pdf 同一套映射），取完就把工具放下、
+        // 把对话框请回来 —— 用户要的是「点一下就能回去继续签」。
+        setSignPlacement({ page, x, y });
+        setMarkupTool(null);
+        setDialog('digital-sign');
+        return;
+      }
+      if (markupTool === 'sign') {
+        if (!sigPath) return;
+        const info = await pdf.signature(page, x, y, 160, sigPath);
+        if (info) notify(t('sign.done'));
+        setMarkupTool(null);
+        return;
+      }
+      if (markupTool === 'note') setNoteAt({ page, x, y });
+    },
+    [markupTool, notify, pdf, signPlacementMode, sigPath, t]
+  );
+
+  const runSecurity = useCallback(
+    async (mode: 'set' | 'remove', password: string, ownerPassword: string) => {
+      if (!pdf.doc || !pdf.doc.path) {
+        throw new Error(t('security.needDoc'));
+      }
+      const target = await pickSavePath(
+        `${fileStem(pdf.doc.name)}-${mode === 'set' ? 'protected' : 'unlocked'}.pdf`
+      );
+      if (!target) return;
+
+      const result =
+        mode === 'set'
+          ? await setPassword(pdf.doc.path, target, password, ownerPassword)
+          : await removePassword(pdf.doc.path, target, password);
+
+      notify(t('security.done', { name: fileStem(result.path) + '.pdf' }));
+      void revealInFinder(result.path);
+    },
+    [notify, pdf.doc, t]
+  );
+
+  const selectPage = useCallback((index: number) => {
+    setCurrent(index);
+    setJump({ index, token: Date.now() });
+  }, []);
+
+  // 阅读区方向键翻页：直接算出目标页并跳转。
+  const stepPage = useCallback(
+    (delta: number) => {
+      if (!pdf.doc) return;
+      const next = Math.min(Math.max(0, current + delta), pdf.doc.pages.length - 1);
+      setCurrent(next);
+      setJump({ index: next, token: Date.now() });
+    },
+    [current, pdf.doc]
+  );
+
+  const toggleSelected = useCallback(
+    (index: number) => {
+      const next = pdf.selected.includes(index)
+        ? pdf.selected.filter((i) => i !== index)
+        : [...pdf.selected, index].sort((a, b) => a - b);
+      pdf.setSelected(next);
+    },
+    [pdf]
+  );
+
+  /* ── Render ─────────────────────────────────────────────────── */
+
+  const doc = pdf.doc;
+
+  /**
+   * 压缩到用户选定的**新文件**。压缩是有损操作，没理由让它有权覆盖原件 ——
+   * 与加密/解密一致。
+   */
+  const runCompress = useCallback(
+    async (profile: 'web' | 'balanced' | 'archive', output: string): Promise<boolean> => {
+      if (!doc) return false;
+      try {
+        const res = await compressDocument(doc.path, output, profile);
+        notify(t('toast.compressed', { name: fileStem(res.path) + '.pdf' }));
+        return true;
+      } catch (e) {
+        notify(String(e));
+        return false;
+      }
+    },
+    [doc, notify, t],
+  );
+
+  return (
+    <div className="app">
+      <Toolbar
+        doc={doc}
+        busy={pdf.busy}
+        zoom={zoom}
+        theme={theme}
+        markupTool={markupTool}
+        onMarkupTool={chooseMarkupTool}
+        redactActive={redactMode}
+        onRedactTool={toggleRedact}
+        onOpen={openFile}
+        onSave={save}
+        onSaveAs={saveAs}
+        onMerge={() => setDialog('merge')}
+        onSplit={() => setDialog('split')}
+        onStamp={() => setDialog('stamp')}
+        onExportImages={exportImages}
+        onExportLongImage={exportLongImage}
+            onImageify={runImageify}
+        onImagesToPdf={runImagesToPdf}
+        onSign={chooseSignature}
+        onDigitalSign={openSignDialog}
+        signEngineAvailable={signEngine}
+        onSecurity={() => setDialog('security')}
+        onCompress={() => setDialog('compress')}
+        onMarkdown={() => setDialog('markdown')}
+        onForm={() => setDialog('form')}
+        onUndo={() => void pdf.stepHistory('undo')}
+        onRedo={() => void pdf.stepHistory('redo')}
+        onRotate={rotateSelected}
+        onFind={() => {
+          if (doc) setFindOpen(true);
+        }}
+        onZoom={setZoom}
+        onToggleTheme={cycleTheme}
+      />
+
+      {doc ? (
+        /* main 地标 + 文档标题 h1（视觉隐藏）：文档壳类应用的可读结构 ——
+           读屏用户在标题序列里应该能直接跳到"当前打开的文档"（2026-10-25 审计 D-78：整屏 0 个标题、无 main） */
+        <main className="main">
+          <h1 className="visually-hidden">{doc.name}</h1>
+          <ThumbnailRail
+            pages={doc.pages}
+            revision={pdf.revision}
+            current={current}
+            selected={pdf.selected}
+            onSelect={selectPage}
+            onMove={pdf.move}
+          />
+          <div className="viewer-wrap">
+            <PageViewer
+              pages={doc.pages}
+              revision={pdf.revision}
+              zoom={zoom}
+              selected={pdf.selected}
+              jump={jump}
+              hits={hits}
+              activeHit={activeHit}
+              markupTool={markupTool}
+              onMarkup={(rect) => void applyMarkup(rect)}
+              redactMode={redactMode}
+              redactRects={redactRects}
+              onRedactRect={addRedactRect}
+              onNoteAt={handlePageClick}
+              onSelect={toggleSelected}
+              onVisible={setCurrent}
+              onStep={stepPage}
+            />
+            {redactRects.length > 0 ? (
+              <RedactBar
+                count={redactRects.length}
+                onApply={() => setRedactConfirm(true)}
+                onCancel={cancelRedact}
+              />
+            ) : null}
+            {findOpen ? (
+              <FindBar
+                query={findQuery}
+                hitCount={hits.length}
+                active={activeHit}
+                onQuery={setFindQuery}
+                onPrev={() => stepHit(-1)}
+                onNext={() => stepHit(1)}
+                onClose={() => setFindOpen(false)}
+              />
+            ) : null}
+          </div>
+          <Inspector
+            doc={doc}
+            current={current}
+            selectedCount={pdf.selected.length}
+            busy={pdf.busy}
+            signEngineAvailable={signEngine}
+            onSign={openSignDialog}
+            onVerify={openVerifyDialog}
+            onSaveEditableCopy={saveEditableCopy}
+            onDelete={removeSelected}
+            onExtract={extractSelected}
+            onCopyText={copySelectedText}
+            onCompress={() => setDialog('compress')}
+            onSecurity={() => setDialog('security')}
+            onForm={() => setDialog('form')}
+            onMarkdown={() => setDialog('markdown')}
+            onStamp={() => setDialog('stamp')}
+            onExportImages={exportImages}
+            onImagesToPdf={runImagesToPdf}
+          />
+        </main>
+      ) : (
+        /* 空态同样是主内容，包 main 让"有无文档"两种状态都恰好有一个 main 地标（D-78） */
+        <main className="empty-main">
+          <DropZone
+            onOpen={openFile}
+            dragActive={dragActive}
+            recent={recent}
+            onOpenRecent={requestOpen}
+            onClearRecent={clearRecent}
+            opening={openingPath}
+          />
+        </main>
+      )}
+
+      <StatusBar
+        doc={doc}
+        busy={pdf.busy}
+        error={pdf.error}
+        selectedCount={pdf.selected.length}
+        current={current}
+        zoom={zoom}
+        license={license}
+        onLicenseClick={() => {
+          setDialog('license');
+          refreshLicense();
+        }}
+      />
+
+      {/* 更新检查：入口在帮助菜单「检查更新…」，结果弹 UpdateDialog。
+          右下角常驻悬浮入口已移除（fixed 定位不稳定，容易盖住底部内容）。 */}
+      {updateOpen && (
+        <UpdateDialog
+          state={updateState}
+          result={updateResult}
+          currentVersion={APP_VERSION}
+          onClose={() => setUpdateOpen(false)}
+        />
+      )}
+
+      {dialog === 'merge' ? (
+        <MergeDialog onClose={() => setDialog(null)} onRun={pdf.merge} />
+      ) : null}
+      {dialog === 'split' && doc ? (
+        <SplitDialog
+          pageCount={doc.pageCount}
+          onClose={() => setDialog(null)}
+          onRun={pdf.split}
+        />
+      ) : null}
+      {dialog === 'stamp' && doc ? (
+        <StampDialog onClose={() => setDialog(null)} onRun={applyStamp} />
+      ) : null}
+      {dialog === 'security' && doc ? (
+        <SecurityDialog onClose={() => setDialog(null)} onRun={runSecurity} />
+      ) : null}
+      {dialog === 'license' ? (
+        <LicenseDialog
+          info={license}
+          revoked={licenseRevoked}
+          onRefresh={refreshLicense}
+          onClose={() => { setDialog(null); setLicenseRevoked(false); }}
+        />
+      ) : null}
+      {dialog === 'compress' && doc ? (
+        <CompressDialog
+          defaultName={fileStem(doc.path) + '-compressed.pdf'}
+          onClose={() => setDialog(null)}
+          onRun={runCompress}
+        />
+      ) : null}
+      {dialog === 'markdown' && doc ? (
+        <MarkdownDialog
+          defaultName={fileStem(doc.path) + '.md'}
+          onClose={() => setDialog(null)}
+        />
+      ) : null}
+      {dialog === 'form' && doc ? (
+        <FormDialog
+          onClose={() => setDialog(null)}
+          onApplied={(info) => {
+            pdf.applyDoc(info);
+            notify(t('form.done'));
+          }}
+        />
+      ) : null}
+      {/* 数字签名对话框。两处挂载细节都是有意为之：
+          - key 按文档路径：对话框把 Certs/Sign 两页常驻挂载以保住输入，不换 key 的话
+            上一份文档的输出文件名与签署人姓名会残留到下一份文档上。
+          - 放置模式用 hidden 收起整块对话框而不是卸载，页面才能被点击，
+            而用户刚选的证书、写的姓名、挑的外观图片都还在。 */}
+      {dialog === 'digital-sign' && doc ? (
+        <div hidden={signPlacementMode}>
+          <SignDialog
+            key={doc.path}
+            doc={doc}
+            tab={signTab}
+            onTab={setSignTab}
+            placement={signPlacement}
+            engineAvailable={signEngine}
+            onRequestPlacement={requestSignPlacement}
+            onSaveFirst={saveBeforeSigning}
+            onSigned={handleSigned}
+            onClose={closeSignDialog}
+          />
+        </div>
+      ) : null}
+      {noteAt ? <NoteDialog onClose={() => setNoteAt(null)} onRun={applyNote} /> : null}
+      {redactConfirm ? (
+        <RedactDialog
+          count={redactRects.length}
+          onClose={() => setRedactConfirm(false)}
+          onConfirm={confirmRedact}
+        />
+      ) : null}
+      {pwPrompt ? (
+        <PasswordDialog
+          incorrect={pwPrompt.incorrect}
+          onClose={() => setPwPrompt(null)}
+          onSubmit={submitPassword}
+        />
+      ) : null}
+      {guard ? (
+        <Modal
+          title={t('dialog.unsaved.title')}
+          onClose={() => setGuard(null)}
+          footer={
+            <>
+              <button type="button" className="btn" onClick={() => setGuard(null)}>
+                {t('dialog.unsaved.cancel')}
+              </button>
+              <button
+                type="button"
+                className="btn btn-danger"
+                onClick={() => void resolveGuard('discard')}
+              >
+                {t('dialog.unsaved.discard')}
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={() => void resolveGuard('save')}
+                disabled={pdf.busy}
+              >
+                {t('dialog.unsaved.save')}
+              </button>
+            </>
+          }
+        >
+          <p>{t('dialog.unsaved.body', { name: pdf.doc?.name ?? '' })}</p>
+        </Modal>
+      ) : null}
+
+      {toast ? (
+        /* sticky = 打开挂起的兜底提示：不自动消失，因为里面装的是要人抄下来的路径。
+           关闭走独立按钮而不是「点整条就消失」—— 选中路径的动作必然伴随一次点击，
+           整条可关会让它在复制的前一瞬丢掉。 */
+        <div
+          className={`toast${toast.error ? ' error' : ''}${toast.sticky ? ' sticky' : ''}`}
+          role={toast.sticky ? 'alert' : 'status'}
+        >
+          <span>{toast.text}</span>
+          {toast.sticky ? (
+            <button type="button" className="toast-dismiss" onClick={() => setToast(null)}>
+              {t('toast.dismiss')}
+            </button>
+          ) : null}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+/** 读存储。旧存 auto（跟随系统）的按读取当时系统值一次性落定并持久化，此后不跟随；
+    从没选过的默认深色（2026-11-15 起取消「跟随系统」）。 */
+function readTheme(): Theme {
+  try {
+    const saved = localStorage.getItem(THEME_KEY) ?? localStorage.getItem(THEME_KEY_LEGACY);
+    if (saved === 'dark' || saved === 'light') return saved;
+    if (saved === 'auto') {
+      const resolved = systemTheme();
+      try {
+        localStorage.setItem(THEME_KEY, resolved);
+      } catch {
+        /* ignore */
+      }
+      return resolved;
+    }
+  } catch {
+    /* ignore */
+  }
+  return 'dark';
+}
+
+function systemTheme(): Resolved {
+  return window.matchMedia?.('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+}
+

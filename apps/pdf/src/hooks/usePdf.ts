@@ -1,0 +1,367 @@
+import { useCallback, useMemo, useState } from 'react';
+import {
+  closeDocument,
+  deletePages,
+  extractPages,
+  mergeDocuments,
+  movePage,
+  openDocument,
+  rotatePages,
+  saveDocument,
+  splitDocument,
+  stampDocument,
+  addMarkup,
+  addNote,
+  addSignature,
+  redactRegions,
+  redo as redoDocument,
+  undo as undoDocument,
+} from '../services/engine';
+import { clearRenderCache } from '../services/renderCache';
+import { fileStem } from '../services/engine';
+import type {
+  DocumentInfo,
+  MarkupKind,
+  MarkupRect,
+  RedactOutcome,
+  RedactRegion,
+  SaveResult,
+  SplitMode,
+  StampKind,
+} from '../types';
+
+/**
+ * Owns the single open document and every mutation that touches it.
+ *
+ * Any operation that changes page content or order must clear the render
+ * cache — otherwise the UI happily shows stale bitmaps for pages that have
+ * moved or been deleted.
+ */
+export function usePdf() {
+  const [doc, setDoc] = useState<DocumentInfo | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [selected, setSelected] = useState<number[]>([]);
+  // Bumped whenever the document changes so render caches and lazy pages know
+  // to re-fetch, even when a page keeps the same index.
+  const [revision, setRevision] = useState(0);
+
+  /**
+   * Wraps an async command with busy + error handling.
+   *
+   * The error message travels with the result instead of being swallowed:
+   * callers that talk to the user (toasts, dialogs) need the *reason*, not
+   * just a null — reporting "deleted N pages" after a failed delete is a lie
+   * (B-7 修复). `error` is also mirrored into the status bar via `setError`.
+   */
+  const run = useCallback(async <T,>(fn: () => Promise<T>): Promise<{ value: T | null; error: string | null }> => {
+    setBusy(true);
+    setError(null);
+    try {
+      return { value: await fn(), error: null };
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      setError(message);
+      return { value: null, error: message };
+    } finally {
+      setBusy(false);
+    }
+  }, []);
+
+  /** Adopt a document returned by a backend mutation. */
+  const applyDoc = useCallback((next: DocumentInfo) => {
+    clearRenderCache();
+    setDoc(next);
+    setSelected([]);
+    setRevision((r) => r + 1);
+  }, []);
+
+  /** Keep the header in sync after the file was written under a new path. */
+  const adoptSaved = useCallback((result: SaveResult) => {
+    setDoc((prev) =>
+      prev
+        ? {
+            ...prev,
+            path: result.path,
+            name: `${fileStem(result.path)}.pdf`,
+            fileSize: result.size,
+            dirty: false,
+            // 另存可编辑副本会剥掉签名，后端据此把只读解除；原地保存保持原状。
+            readOnly: result.readOnly,
+            hasCryptographicSignature: result.readOnly,
+          }
+        : prev
+    );
+  }, []);
+
+  const openPath = useCallback(
+    async (path: string, password?: string) => {
+      const { value: info } = await run(() => openDocument(path, password));
+      if (info) applyDoc(info);
+      return info;
+    },
+    [applyDoc, run]
+  );
+
+  /**
+   * Like [openPath], but returns the error string instead of swallowing it, so
+   * the caller can distinguish a password prompt from a real failure.
+   */
+  const openPathWithResult = useCallback(
+    async (path: string, password?: string) => {
+      setBusy(true);
+      // 与 run() 同口径：入口先清掉上一次的错误 —— 否则成功打开新文档后，
+      // 状态栏还挂着上一次失败的红字（Recent 点击走的就是这条路径）。
+      setError(null);
+      try {
+        const info = await openDocument(path, password);
+        applyDoc(info);
+        return { info, error: null as string | null };
+      } catch (e) {
+        const message = typeof e === 'string' ? e : e instanceof Error ? e.message : String(e);
+        setError(message);
+        return { info: null, error: message };
+      } finally {
+        setBusy(false);
+      }
+    },
+    [applyDoc]
+  );
+
+  const close = useCallback(async () => {
+    await run(() => closeDocument());
+    clearRenderCache();
+    setDoc(null);
+    setSelected([]);
+    setRevision((r) => r + 1);
+  }, [run]);
+
+  const save = useCallback(async () => {
+    const { value: result } = await run(() => saveDocument(null));
+    if (result) adoptSaved(result);
+    return result?.path ?? null;
+  }, [adoptSaved, run]);
+
+  const saveAs = useCallback(
+    async (path: string) => {
+      const { value: result } = await run(() => saveDocument(path));
+      if (result) adoptSaved(result);
+      return result?.path ?? null;
+    },
+    [adoptSaved, run]
+  );
+
+  /**
+   * Deletes the selected pages and reports the outcome, so the UI can tell
+   * "deleted N pages" apart from "the delete failed".
+   */
+  const removePages = useCallback(async (): Promise<{ ok: boolean; error: string | null }> => {
+    if (selected.length === 0) return { ok: false, error: null };
+    const { value: info, error } = await run(() => deletePages(selected));
+    if (info) applyDoc(info);
+    return { ok: info !== null, error };
+  }, [applyDoc, run, selected]);
+
+  /** With nothing selected, rotate the page the user is actually looking at. */
+  const rotate = useCallback(
+    async (degrees: number, fallbackIndex = 0): Promise<{ ok: boolean; error: string | null }> => {
+      const target = selected.length > 0 ? selected : doc ? [fallbackIndex] : [];
+      if (target.length === 0) return { ok: false, error: null };
+      const { value: info, error } = await run(() => rotatePages(target, degrees));
+      if (info) applyDoc(info);
+      return { ok: info !== null, error };
+    },
+    [applyDoc, doc, run, selected]
+  );
+
+  const move = useCallback(
+    async (from: number, to: number) => {
+      const { value: info } = await run(() => movePage(from, to));
+      if (info) applyDoc(info);
+    },
+    [applyDoc, run]
+  );
+
+  const extract = useCallback(
+    async (indices: number[], outputPath: string) => {
+      const { value: result } = await run(() => extractPages(indices, outputPath));
+      return result?.path ?? null;
+    },
+    [run]
+  );
+
+  const merge = useCallback(
+    async (paths: string[], outputPath: string) => {
+      const { value: result } = await run(() => mergeDocuments(paths, outputPath));
+      return result?.path ?? null;
+    },
+    [run]
+  );
+
+  const split = useCallback(
+    async (outputDir: string, mode: SplitMode) => {
+      const { value: result } = await run(() => splitDocument(outputDir, mode));
+      return result?.map((r) => r.path) ?? [];
+    },
+    [run]
+  );
+
+  /**
+   * Applies the stamp and reports the outcome. The dialog that invoked it
+   * surfaces `error` in its own error UI instead of closing silently.
+   */
+  const stamp = useCallback(
+    async (
+      kind: StampKind,
+      text: string,
+      fontSize: number,
+      margin: number,
+      opacity: number
+    ): Promise<{ info: DocumentInfo | null; error: string | null }> => {
+      const { value: info, error } = await run(() => stampDocument(kind, text, fontSize, margin, opacity));
+      if (info) applyDoc(info);
+      return { info, error };
+    },
+    [applyDoc, run]
+  );
+
+  const markup = useCallback(
+    async (kind: MarkupKind, rect: MarkupRect, color: [number, number, number], opacity: number) => {
+      const { value: info } = await run(() => addMarkup(kind, rect, color, opacity));
+      if (info) applyDoc(info);
+      return info;
+    },
+    [applyDoc, run]
+  );
+
+  const note = useCallback(
+    async (page: number, x: number, y: number, text: string, color: [number, number, number]) => {
+      const { value: info } = await run(() => addNote(page, x, y, text, color));
+      if (info) applyDoc(info);
+      return info;
+    },
+    [applyDoc, run]
+  );
+
+  const signature = useCallback(
+    async (page: number, x: number, y: number, width: number, imagePath: string) => {
+      const { value: info } = await run(() => addSignature(page, x, y, width, imagePath));
+      if (info) applyDoc(info);
+      return info;
+    },
+    [applyDoc, run]
+  );
+
+  /**
+   * Applies the redaction and reports the outcome (counts + warnings travel
+   * with the result so the caller can surface them via i18n). Like every
+   * mutation, the returned document is adopted and the render cache cleared.
+   */
+  const redact = useCallback(
+    async (regions: RedactRegion[]): Promise<{ outcome: RedactOutcome | null; error: string | null }> => {
+      const { value: outcome, error } = await run(() => redactRegions(regions));
+      if (outcome) applyDoc(outcome.info);
+      return { outcome, error };
+    },
+    [applyDoc, run]
+  );
+
+  /**
+   * Steps the document history. An empty history is not an error worth
+   * surfacing, so it simply reports `false`.
+   */
+  const stepHistory = useCallback(
+    async (direction: 'undo' | 'redo') => {
+      setBusy(true);
+      setError(null);
+      try {
+        const info = direction === 'undo' ? await undoDocument() : await redoDocument();
+        applyDoc(info);
+        return true;
+      } catch {
+        return false;
+      } finally {
+        setBusy(false);
+      }
+    },
+    [applyDoc]
+  );
+
+  /** Force every lazily rendered page to redraw (e.g. after a form change). */
+  const refresh = useCallback(() => {
+    clearRenderCache();
+    setRevision((r) => r + 1);
+  }, []);
+
+  const clearError = useCallback(() => setError(null), []);
+
+  /* ── 返回对象必须身份稳定（2026-10-25 审计 P0 根因）────────────────────
+     此前这里每次渲染返回一个新对象字面量，而 App.tsx 有 9 处 useCallback 依赖
+     数组直接写了整个 `pdf`。后果：runOpen/requestOpen 身份每帧变化 → 挂在
+     [requestOpen] 上的 initialFile / 拖拽订阅 effect 每帧重跑 → 打开文档 →
+     setBusy 触发下一帧渲染 → 无限循环。实测症状：状态条永远 "Working"、
+     24 个工具栏按钮全部禁用、render 缓存每轮被 applyDoc 清空、渲染结果总是
+     赶不上 effect cleanup（alive=false）被丢弃，正文永远停留在占位符 ——
+     且只在"系统要求打开文件"路径（双击 PDF / 文件关联 / CLI 参数）触发，
+     应用内对话框打开不触发，所以此前手测从未暴露。
+     规则：每个成员都已是 useCallback/useState（身份自带稳定性）；新增成员时
+     必须同时加进 useMemo 的对象与依赖两份清单，漏一边都会变成静默旧值。 */
+  return useMemo(
+    () => ({
+      doc,
+      revision,
+      busy,
+      error,
+      selected,
+      setSelected,
+      openPath,
+      openPathWithResult,
+      close,
+      save,
+      saveAs,
+      removePages,
+      rotate,
+      move,
+      extract,
+      merge,
+      split,
+      stamp,
+      markup,
+      note,
+      signature,
+      redact,
+      stepHistory,
+      refresh,
+      clearError,
+      applyDoc,
+    }),
+    [
+      doc,
+      revision,
+      busy,
+      error,
+      selected,
+      setSelected,
+      openPath,
+      openPathWithResult,
+      close,
+      save,
+      saveAs,
+      removePages,
+      rotate,
+      move,
+      extract,
+      merge,
+      split,
+      stamp,
+      markup,
+      note,
+      signature,
+      redact,
+      stepHistory,
+      refresh,
+      clearError,
+      applyDoc,
+    ]
+  );
+}

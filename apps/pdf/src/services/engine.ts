@@ -1,0 +1,481 @@
+import { invoke } from '@tauri-apps/api/core';
+import { listen } from '@tauri-apps/api/event';
+import { open as openDialog, save as saveDialog } from '@tauri-apps/plugin-dialog';
+import type {
+  DocumentInfo,
+  MarkdownConversion,
+  FormFieldInfo,
+  MarkupKind,
+  MarkupRect,
+  PathResult,
+  RedactOutcome,
+  RedactRegion,
+  RenderedPage,
+  SaveResult,
+  SearchHit,
+  SplitMode,
+  StampKind,
+} from '../types';
+
+/**
+ * Every backend call goes through this module. Components never import
+ * `@tauri-apps/api` directly, so the whole IPC surface stays in one place.
+ *
+ * Tauri v2 converts these camelCase JS arguments to snake_case Rust parameters.
+ */
+
+export async function openDocument(path: string, password?: string): Promise<DocumentInfo> {
+  return invoke<DocumentInfo>('open_document', { path, password: password ?? null });
+}
+
+export async function closeDocument(): Promise<void> {
+  return invoke<void>('close_document');
+}
+
+/** Render a page (or thumbnail) at the requested pixel width. */
+export async function renderPage(index: number, targetWidth: number): Promise<RenderedPage> {
+  return invoke<RenderedPage>('render_page', { index, targetWidth });
+}
+
+export async function deletePages(indices: number[]): Promise<DocumentInfo> {
+  return invoke<DocumentInfo>('delete_pages', { indices });
+}
+
+export async function rotatePages(indices: number[], degrees: number): Promise<DocumentInfo> {
+  return invoke<DocumentInfo>('rotate_pages', { indices, degrees });
+}
+
+/** Move the page at `from` so that it lands at index `to`. */
+export async function movePage(from: number, to: number): Promise<DocumentInfo> {
+  return invoke<DocumentInfo>('move_page', { from, to });
+}
+
+export async function saveDocument(path: string | null): Promise<SaveResult> {
+  return invoke<SaveResult>('save_document', { path });
+}
+
+/** Write the selected pages out as a brand new PDF; leaves the current doc untouched. */
+export async function extractPages(indices: number[], outputPath: string): Promise<PathResult> {
+  return invoke<PathResult>('extract_pages', { indices, outputPath });
+}
+
+export async function mergeDocuments(paths: string[], outputPath: string): Promise<PathResult> {
+  return invoke<PathResult>('merge_documents', { paths, outputPath });
+}
+
+export async function splitDocument(outputDir: string, mode: SplitMode): Promise<PathResult[]> {
+  return invoke<PathResult[]>('split_document', { outputDir, mode });
+}
+
+export async function revealInFinder(path: string): Promise<void> {
+  return invoke<void>('reveal_in_finder', { path });
+}
+
+/* ── Text & search ──────────────────────────────────────────────── */
+
+/** Find every occurrence of `query`, across all pages. */
+export async function searchDocument(
+  query: string,
+  matchCase = false,
+  wholeWord = false
+): Promise<SearchHit[]> {
+  return invoke<SearchHit[]>('search_document', { query, matchCase, wholeWord });
+}
+
+/** Concatenated plain text of the given pages. */
+export async function pageText(indices: number[]): Promise<string> {
+  return invoke<string>('page_text', { indices });
+}
+
+/** Copy text to the OS clipboard via the webview Clipboard API. */
+export async function copyText(text: string): Promise<void> {
+  if (!text) return;
+  await navigator.clipboard.writeText(text);
+}
+
+/* ── Stamping ───────────────────────────────────────────────────── */
+
+/** Add page numbers or a text watermark to every page. */
+export async function stampDocument(
+  kind: StampKind,
+  text: string,
+  fontSize: number,
+  margin: number,
+  opacity: number
+): Promise<DocumentInfo> {
+  return invoke<DocumentInfo>('stamp_document', { kind, text, fontSize, margin, opacity });
+}
+
+/* ── Native menu ────────────────────────────────────────────────── */
+
+/** (Re)builds the native menu for the given UI language. `hasDoc` 决定
+ *  「导出为 Markdown」「查找」是否可用 —— 没有文档时菜单项置灰而不是点了没反应。 */
+export async function buildMenu(lang: string, hasDoc: boolean): Promise<void> {
+  return invoke<void>('build_menu', { lang, hasDoc });
+}
+
+/** Opens a whitelisted external URL (Help menu). */
+export async function openUrl(url: string): Promise<void> {
+  return invoke<void>('open_url', { url });
+}
+
+/** Subscribes to native menu clicks; returns an unsubscribe function. */
+export function onMenuAction(handler: (id: string) => void): Promise<() => void> {
+  return listen<string>('menu-action', (event) => handler(event.payload));
+}
+
+/** Path the OS asked us to open at launch (file association); null when none. */
+export function initialFile(): Promise<string | null> {
+  return invoke<string | null>('initial_file');
+}
+
+/** Subscribes to "the OS wants this file opened while we are running" (macOS RunEvent::Opened). */
+export function onOpenFile(handler: (path: string) => void): Promise<() => void> {
+  return listen<string>('open-file', (event) => handler(event.payload));
+}
+
+/* ── Undo / redo ────────────────────────────────────────────────── */
+
+/** Step the document history back one mutation. */
+export async function undo(): Promise<DocumentInfo> {
+  return invoke<DocumentInfo>('undo');
+}
+
+/** Step the document history forward again. */
+export async function redo(): Promise<DocumentInfo> {
+  return invoke<DocumentInfo>('redo');
+}
+
+/* ── AcroForm fields ────────────────────────────────────────────── */
+
+/** Every fillable form widget in the open document. */
+export async function listFormFields(): Promise<FormFieldInfo[]> {
+  return invoke<FormFieldInfo[]>('list_form_fields');
+}
+
+/** Apply `(field name, value)` pairs to the open document. */
+export async function setFormValues(values: [string, string][]): Promise<DocumentInfo> {
+  return invoke<DocumentInfo>('set_form_values', { values });
+}
+
+/* ── Password protection ────────────────────────────────────────── */
+
+/** Write an AES-128 encrypted copy of `input`. */
+export async function setPassword(
+  input: string,
+  output: string,
+  password: string,
+  ownerPassword?: string
+): Promise<PathResult> {
+  return invoke<PathResult>('set_password', {
+    input,
+    output,
+    password,
+    ownerPassword: ownerPassword ?? null,
+  });
+}
+
+/** Write an unencrypted copy of `input`. */
+export async function removePassword(
+  input: string,
+  output: string,
+  password: string
+): Promise<PathResult> {
+  return invoke<PathResult>('remove_password', { input, output, password });
+}
+  /**
+   * Compress `input` to `output`. Two passes: qpdf normalises structure and
+   * re-compresses the images it can, then our pass handles what qpdf skips
+   * (ICCBased JPEGs). Writes a copy — never touches the original.
+   */
+  export async function compressDocument(
+    input: string,
+    output: string,
+    profile: 'web' | 'balanced' | 'archive'
+  ): Promise<PathResult> {
+    return invoke<PathResult>('compress_document', { input, output, profile });
+  }
+
+/**
+ * Progress reported while a compression runs. `optimize` (qpdf) arrives without
+ * counts — qpdf publishes none — while `images` carries a real done/total pair,
+ * because that pass is ours and it knows how many images it is about to re-encode.
+ */
+export interface CompressProgress {
+  stage: 'optimize' | 'images' | 'write';
+  done: number | null;
+  total: number | null;
+}
+
+/** Subscribe to compression progress. Returns the usual unlisten function. */
+export function onCompressProgress(handler: (p: CompressProgress) => void): Promise<() => void> {
+  return listen<CompressProgress>('compress-progress', (event) => handler(event.payload));
+}
+
+/* ── Licence: trial and activation ──────────────────────────────────── */
+
+/** Mirrors `commands::LicenseInfo`. */
+export interface LicenseInfo {
+  status: 'trial' | 'expired' | 'licensed';
+  daysLeft: number;
+  product: string | null;
+  /** Whether writes are actually blocked right now (channel + key + switch). */
+  enforcing: boolean;
+  /** `direct` for the website build, `store` for the Microsoft Store build. */
+  channel: 'direct' | 'store';
+  /** False when this build has no verification key, i.e. nothing can be activated. */
+  activationConfigured: boolean;
+  /** 仅 licensed 时有值：回执里的交易号（吊销复检凭据）。 */
+  txn: string | null;
+}
+
+/** Current trial / activation state. */
+export async function licenseStatus(): Promise<LicenseInfo> {
+  return invoke<LicenseInfo>('license_status');
+}
+
+/**
+ * Hands the server-signed receipt to Rust, which verifies it against the built-in
+ * public key and stores it. The check has to happen there: the frontend only has
+ * a string, and only the public key can tell whether it means anything.
+ */
+export async function storeReceipt(signed: string): Promise<LicenseInfo> {
+  return invoke<LicenseInfo>('store_receipt', { signed });
+}
+
+/**
+ * Exchanges an activation code for a signed receipt.
+ *
+ * The code itself is checked **on the server**, not here: verifying it locally
+ * would require shipping the signing secret inside the app, which would let
+ * anyone mint their own codes. The frontend only carries the reply to Rust.
+ */
+/**
+ * 吊销复检：用户点击「检查更新」时顺带向服务端核对一次许可状态。
+ * 只在用户点击时联网（与更新检查同一承诺）；请求只携带回执里本就有的交易号。
+ * revoked 时清除本地回执 —— 授权状态回到未激活，写闸门按状态拦截。
+ */
+export async function revalidateLicence(): Promise<'ok' | 'revoked' | 'unknown'> {
+  const info = await licenseStatus();
+  if (!info.txn) return 'unknown';
+  try {
+    /* B4：吊销复检是「顺手而为」的后台校验（挂在检查更新点击上），网络挂死
+       不该拖住整个更新检查 —— 8s 超时后按 unknown 放行（fail-open：宁可漏
+       一次复检，不可让检查更新卡死）。 */
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 8000);
+    try {
+      const res = await fetch(`https://rocktier.com/api/revalidate?txn=${encodeURIComponent(info.txn)}`, { signal: ctrl.signal });
+      if (!res.ok) return 'unknown';
+      const data = (await res.json()) as { revoked?: boolean };
+      /* 响应里没有 revoked 字段 = 服务端 API 形状变了。静默 fail-open 会让
+         吊销永久失效且无人知晓，至少留一条线索给排障。 */
+      if (!('revoked' in data)) {
+        console.warn('license: revalidate response has no "revoked" field — API shape changed?');
+      }
+      if (!data.revoked) return 'ok';
+      await invoke('clear_receipt');
+      return 'revoked';
+    } finally {
+      clearTimeout(timer);
+    }
+  } catch {
+    return 'unknown';
+  }
+}
+
+export async function activate(code: string): Promise<LicenseInfo> {
+  let payload: { receipt?: string; error?: string; devices?: { used: number | null; max: number; counted: boolean } };
+  try {
+    /* 上报机器指纹 —— 服务端据此限制「一张码能激活几台设备」。
+       取不到时是空串，服务端不计数也不拦激活（见 api/devices.js）。
+       指纹只用于设备计数，不含任何硬件序列号原文。 */
+    let fingerprint = '';
+    try {
+      fingerprint = await invoke<string>('report_machine_fingerprint');
+    } catch {
+      // Rust 命令不可用（极旧版本）不该阻断激活。
+    }
+    const res = await fetch('https://rocktier.com/api/activate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code: code.trim(), fingerprint, os: navigator.platform || '' }),
+    });
+    payload = (await res.json()) as { receipt?: string; error?: string };
+    if (!res.ok || !payload.receipt) {
+      /* DEVICE_LIMIT 的下一步与其它错误完全不同：不是重试能解决的，
+         必须去网页解绑一台。把服务端那句话原样透出，别自己编。 */
+      throw new Error(payload.error || `activation failed (${res.status})`);
+    }
+  } catch (e) {
+    // Offline is the common case here — say so instead of showing a fetch error.
+    // WKWebView 把被拦/断网的 fetch 抛成 "Load failed"（不含 "fetch" 字样）：
+    // 只认 "fetch" 会把它当成服务端错误落进 invalid，误导向「码不对」。
+    const raw = e instanceof Error && e.message ? e.message : '';
+    throw new Error(raw && !/fetch|load failed|network/i.test(raw) ? raw : 'offline');
+  }
+  return storeReceipt(payload.receipt);
+}
+
+/** Fires when a write was refused because the trial ran out and nothing is activated. */
+export function onLicenseExpired(handler: () => void): Promise<() => void> {
+  return listen('license-expired', () => handler());
+}
+
+
+/* ── Import / export images ─────────────────────────────────────── */
+
+/** Draw a highlight / underline / strikeout over a dragged rectangle. */
+export async function addMarkup(
+  kind: MarkupKind,
+  rect: MarkupRect,
+  color: [number, number, number],
+  opacity: number
+): Promise<DocumentInfo> {
+  return invoke<DocumentInfo>('add_markup', { kind, rect, color, opacity });
+}
+
+/** Add a sticky note anchored at a point (PDF points, bottom-left origin). */
+export async function addNote(
+  page: number,
+  x: number,
+  y: number,
+  text: string,
+  color: [number, number, number]
+): Promise<DocumentInfo> {
+  return invoke<DocumentInfo>('add_note', { page, x, y, text, color });
+}
+
+/** Place a signature image at a point (PDF points, bottom-left origin). */
+export async function addSignature(
+  page: number,
+  x: number,
+  y: number,
+  width: number,
+  imagePath: string
+): Promise<DocumentInfo> {
+  return invoke<DocumentInfo>('add_signature', { page, x, y, width, imagePath });
+}
+
+/**
+ * Permanently deletes the text objects intersecting the given regions and
+ * paints an opaque black rectangle over each one. Irreversible once saved.
+ */
+export async function redactRegions(regions: RedactRegion[]): Promise<RedactOutcome> {
+  return invoke<RedactOutcome>('redact_regions', { regions });
+}
+
+/** Export the given pages as PNG files into `outputDir`. */
+export async function exportPageImages(
+  indices: number[],
+  outputDir: string,
+  width: number
+): Promise<PathResult[]> {
+  return invoke<PathResult[]>('export_page_images', { indices, outputDir, width });
+}
+
+/** Export the given pages stitched vertically into one long PNG image. */
+export async function exportPageImagesLong(
+  indices: number[],
+  outputPath: string,
+  width: number
+): Promise<PathResult> {
+  return invoke<PathResult>('export_page_images_long', { indices, outputPath, width });
+}
+
+/** Build a PDF (one page per image) from image files. */
+export async function imagesToPdf(paths: string[], outputPath: string): Promise<PathResult> {
+  return invoke<PathResult>('images_to_pdf', { paths, outputPath });
+}
+
+/** Convert the open document into an image-only PDF (text layer removed). */
+export async function pdfToImagePdf(outputPath: string, width: number): Promise<PathResult> {
+  return invoke<PathResult>('pdf_to_image_pdf', { outputPath, width });
+}
+
+/* ── Native dialogs ─────────────────────────────────────────────── */
+
+export async function pickPdf(): Promise<string | null> {
+  const result = await openDialog({
+    multiple: false,
+    directory: false,
+    filters: [{ name: 'PDF', extensions: ['pdf'] }],
+  });
+  return typeof result === 'string' ? result : null;
+}
+
+export async function pickPdfs(): Promise<string[]> {
+  const result = await openDialog({
+    multiple: true,
+    directory: false,
+    filters: [{ name: 'PDF', extensions: ['pdf'] }],
+  });
+  if (!result) return [];
+  return Array.isArray(result) ? result : [result];
+}
+
+export async function pickSavePath(defaultName: string): Promise<string | null> {
+  return saveDialog({
+    defaultPath: defaultName,
+    filters: [{ name: 'PDF', extensions: ['pdf'] }],
+  });
+}
+
+export async function pickPngSavePath(defaultName: string): Promise<string | null> {
+  return saveDialog({
+    defaultPath: defaultName,
+    filters: [{ name: 'PNG', extensions: ['png'] }],
+  });
+}
+
+export async function pickDirectory(): Promise<string | null> {
+  const result = await openDialog({ multiple: false, directory: true });
+  return typeof result === 'string' ? result : null;
+}
+
+export async function pickImages(): Promise<string[]> {
+  const result = await openDialog({
+    multiple: true,
+    directory: false,
+    filters: [{ name: 'Images', extensions: ['png', 'jpg', 'jpeg'] }],
+  });
+  if (!result) return [];
+  return Array.isArray(result) ? result : [result];
+}
+
+/* ── Helpers ────────────────────────────────────────────────────── */
+
+export function formatBytes(bytes: number): string {
+  if (!bytes) return '0 B';
+  const units = ['B', 'KB', 'MB', 'GB'];
+  const i = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
+  const value = bytes / Math.pow(1024, i);
+  return `${value.toFixed(value >= 100 || i === 0 ? 0 : 1)} ${units[i]}`;
+}
+
+/** `C:\docs\Report.pdf` → `Report`. Uses the last separator, so it works on
+ *  both Windows and POSIX paths as they arrive from the native dialogs. */
+export function fileStem(path: string): string {
+  const name = path.split(/[\\/]/).pop() ?? path;
+  return name.replace(/\.pdf$/i, '');
+}
+
+/* ── PDF → Markdown（路线图 R4）──────────────────────────────────────── */
+
+/** 预览转换结果（纯读，不写盘）。 */
+export async function pdfToMarkdown(): Promise<MarkdownConversion> {
+  return invoke<MarkdownConversion>('pdf_to_markdown');
+}
+
+/** 转成 Markdown 并写入 `outputPath`。 */
+export async function saveMarkdown(outputPath: string): Promise<PathResult> {
+  return invoke<PathResult>('pdf_save_markdown', { outputPath });
+}
+
+/** 选一个 `.md` 保存位置（PDF→Markdown 导出用）。 */
+export async function pickMarkdownPath(defaultName: string): Promise<string | null> {
+  return saveDialog({
+    defaultPath: defaultName,
+    filters: [{ name: 'Markdown', extensions: ['md'] }],
+  });
+}

@@ -1,0 +1,343 @@
+import { useEffect, useRef, useState } from 'react';
+import type { KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent } from 'react';
+import { useT } from '../i18n';
+import { getCached, getRender } from '../services/renderCache';
+import type { AnnotTool, MarkupRect, PageInfo, RedactRect, RenderedPage, SearchHit } from '../types';
+import { devicePixelRatioCapped, displayRectToPdf, pdfRectToDisplayFrac, renderWidth } from '../utils';
+import { useInView } from '../hooks/useInView';
+
+interface PageViewerProps {
+  pages: PageInfo[];
+  revision: number;
+  zoom: number;
+  selected: number[];
+  jump: { index: number; token: number } | null;
+  hits: SearchHit[];
+  activeHit: number;
+  markupTool: AnnotTool | null;
+  onMarkup: (rect: MarkupRect) => void;
+  /** Redact mode armed: drags accumulate redaction rectangles instead of markup. */
+  redactMode: boolean;
+  /** Rectangles marked for redaction so far, shown as dashed overlays. */
+  redactRects: RedactRect[];
+  onRedactRect: (rect: RedactRect) => void;
+  onNoteAt: (page: number, x: number, y: number) => void;
+  onSelect: (index: number) => void;
+  onVisible: (index: number) => void;
+  onStep?: (delta: number) => void;
+}
+
+export function PageViewer({
+  pages,
+  revision,
+  zoom,
+  selected,
+  jump,
+  hits,
+  activeHit,
+  markupTool,
+  onMarkup,
+  redactMode,
+  redactRects,
+  onRedactRect,
+  onNoteAt,
+  onSelect,
+  onVisible,
+  onStep,
+}: PageViewerProps) {
+  const t = useT();
+
+  // Page Up/Down stay themselves; plain arrows step one page at a time. Without
+  // this a long document can only be navigated with the wheel or the rail —
+  // the reader region was invisible to both tab and keyboard.
+  const onKeyDown = (e: ReactKeyboardEvent<HTMLDivElement>) => {
+    if (e.key === 'ArrowDown' || e.key === 'ArrowRight' || e.key === 'PageDown') {
+      e.preventDefault();
+      onStep?.(1);
+    } else if (e.key === 'ArrowUp' || e.key === 'ArrowLeft' || e.key === 'PageUp') {
+      e.preventDefault();
+      onStep?.(-1);
+    }
+  };
+
+  return (
+    <div
+      className="viewer"
+      tabIndex={0}
+      role="region"
+      aria-label={t('viewer.label')}
+      onKeyDown={onKeyDown}
+    >
+      <div className="viewer-inner">
+        {pages.map((page, position) => (
+          <Page
+            key={`${revision}:${page.index}`}
+            page={page}
+            position={position}
+            revision={revision}
+            zoom={zoom}
+            selected={selected.includes(position)}
+            jump={jump}
+            hits={hits}
+            activeHit={activeHit}
+            markupTool={markupTool}
+            onMarkup={onMarkup}
+            redactMode={redactMode}
+            redactRects={redactRects}
+            onRedactRect={onRedactRect}
+            onNoteAt={onNoteAt}
+            onSelect={onSelect}
+            onVisible={onVisible}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+interface PageProps {
+  page: PageInfo;
+  position: number;
+  revision: number;
+  zoom: number;
+  selected: boolean;
+  jump: { index: number; token: number } | null;
+  hits: SearchHit[];
+  activeHit: number;
+  markupTool: AnnotTool | null;
+  onMarkup: (rect: MarkupRect) => void;
+  redactMode: boolean;
+  redactRects: RedactRect[];
+  onRedactRect: (rect: RedactRect) => void;
+  onNoteAt: (page: number, x: number, y: number) => void;
+  onSelect: (index: number) => void;
+  onVisible: (index: number) => void;
+}
+
+function Page({
+  page,
+  position,
+  revision,
+  zoom,
+  selected,
+  jump,
+  hits,
+  activeHit,
+  markupTool,
+  onMarkup,
+  redactMode,
+  redactRects,
+  onRedactRect,
+  onNoteAt,
+  onSelect,
+  onVisible,
+}: PageProps) {
+  const { ref, inView } = useInView<HTMLDivElement>('600px');
+  const [rendered, setRendered] = useState<RenderedPage | null>(null);
+  const [drag, setDrag] = useState<{ x0: number; y0: number; x1: number; y1: number } | null>(null);
+  const layerRef = useRef<HTMLDivElement>(null);
+
+  const width = renderWidth(page, zoom);
+
+  useEffect(() => {
+    if (!inView) return;
+
+    const cached = getCached(page.index, width);
+    if (cached) {
+      setRendered(cached);
+      return;
+    }
+
+    let alive = true;
+    getRender(page.index, width)
+      .then((p) => {
+        if (alive) setRendered(p);
+      })
+      .catch((err) => {
+        /* 失败留在占位符上，但绝不允许无声 —— 静默吞掉曾让一次 IPC 循环
+           故障在整版里伪装成"PDF 打不开"。至少留一条可诊断的线索。 */
+        console.error(`render_page failed (page ${page.index}, width ${width})`, err);
+      });
+
+    return () => {
+      alive = false;
+    };
+  }, [inView, page.index, width, revision]);
+
+  // Report the page closest to the top of the viewport as "current".
+  useEffect(() => {
+    if (inView) onVisible(position);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [inView]);
+
+  // Explicit jump from a thumbnail click or a search hit.
+  useEffect(() => {
+    if (jump && jump.index === position) {
+      ref.current?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [jump?.token]);
+
+  const cssWidth = rendered
+    ? Math.round(rendered.width / devicePixelRatioCapped())
+    : Math.round(page.width * zoom * (96 / 72));
+  const cssHeight = rendered
+    ? Math.round(rendered.height / devicePixelRatioCapped())
+    : Math.round(page.height * zoom * (96 / 72));
+
+  // Search hits that belong to this page, keeping their document-wide index so
+  // the "active" one can be emphasised across pages.
+  const pageHits = hits
+    .map((hit, index) => ({ ...hit, index }))
+    .filter((hit) => hit.page === position);
+
+  // Redaction rectangles drawn on this page so far, carrying their global
+  // index so the append-only list gets stable React keys.
+  const pageRedactRects = redactRects
+    .map((rect, index) => ({ rect, index }))
+    .filter(({ rect }) => rect.page === position);
+
+  const localPoint = (e: ReactMouseEvent) => {
+    const el = layerRef.current;
+    if (!el) return { x: 0, y: 0 };
+    const r = el.getBoundingClientRect();
+    return { x: e.clientX - r.left, y: e.clientY - r.top };
+  };
+
+  const endDrag = () => {
+    if (!drag) return;
+    const left = Math.min(drag.x0, drag.x1);
+    const top = Math.min(drag.y0, drag.y1);
+    const w = Math.abs(drag.x1 - drag.x0);
+    const h = Math.abs(drag.y1 - drag.y0);
+    setDrag(null);
+
+    if (markupTool === 'note' || markupTool === 'sign' || markupTool === 'dsign') {
+      // Notes and signatures are placed with a click, not a drag.
+      if (w > 6 || h > 6) return;
+      // Map the click from the rotated display box back to unrotated PDF coords.
+      // `p.x / p.y` 是未旋转的 PDF 点（左下原点），与后端 add_signature / sign_pdf
+      // 用的是同一套映射，所以旋转页不需要再换算 —— 数字签名放置模式复用这一支。
+      const p = displayRectToPdf(left, top, 0, 0, cssWidth, cssHeight, page.rotation, page.width, page.height);
+      onNoteAt(position, p.x, p.y);
+      return;
+    }
+
+    if (w < 4 || h < 4) return;
+    // Map the dragged rect from the rotated display box back to unrotated PDF coords.
+    const r = displayRectToPdf(left, top, w, h, cssWidth, cssHeight, page.rotation, page.width, page.height);
+    if (redactMode) {
+      // Redaction accumulates rectangles; they apply together on confirm.
+      onRedactRect({
+        page: position,
+        x: r.x,
+        y: r.y,
+        width: r.width,
+        height: r.height,
+      });
+      return;
+    }
+    onMarkup({
+      page: position,
+      x: r.x,
+      y: r.y,
+      width: r.width,
+      height: r.height,
+    });
+  };
+
+  return (
+    <div
+      ref={ref}
+      className={`page${selected ? ' selected' : ''}`}
+      style={{ width: cssWidth, height: cssHeight }}
+      onClick={() => onSelect(position)}
+    >
+      {rendered ? (
+        <img
+          className="page-canvas"
+          src={rendered.dataUrl}
+          alt=""
+          style={{ width: cssWidth, height: cssHeight }}
+          draggable={false}
+        />
+      ) : (
+        <div className="page-placeholder" style={{ width: cssWidth, height: cssHeight }}>
+          {position + 1}
+        </div>
+      )}
+
+      {pageHits.map((hit) => {
+        // Search hits are in unrotated PDF coords; rotate them into the
+        // displayed (already-rotated) bitmap's box so the highlight lines up.
+        const f = pdfRectToDisplayFrac(
+          hit.x, hit.y, hit.width, hit.height, page.rotation, page.width, page.height,
+        );
+        return (
+          <span
+            key={hit.index}
+            className={`hit${hit.index === activeHit ? ' active' : ''}`}
+            style={{
+              left: `${f.left * 100}%`,
+              top: `${f.top * 100}%`,
+              width: `${f.width * 100}%`,
+              height: `${f.height * 100}%`,
+            }}
+          />
+        );
+      })}
+
+      {/* Rectangles marked for redaction, in PDF coords like search hits. */}
+      {pageRedactRects.map(({ rect, index }) => {
+        const f = pdfRectToDisplayFrac(
+          rect.x, rect.y, rect.width, rect.height, page.rotation, page.width, page.height,
+        );
+        return (
+          <span
+            key={`redact:${index}`}
+            className="redact-box"
+            style={{
+              left: `${f.left * 100}%`,
+              top: `${f.top * 100}%`,
+              width: `${f.width * 100}%`,
+              height: `${f.height * 100}%`,
+            }}
+          />
+        );
+      })}
+
+      {markupTool || redactMode ? (
+        <div
+          ref={layerRef}
+          className="annot-layer"
+          onClick={(e) => e.stopPropagation()}
+          onMouseDown={(e) => {
+            const p = localPoint(e);
+            setDrag({ x0: p.x, y0: p.y, x1: p.x, y1: p.y });
+          }}
+          onMouseMove={(e) => {
+            if (!drag) return;
+            const p = localPoint(e);
+            setDrag({ ...drag, x1: p.x, y1: p.y });
+          }}
+          onMouseUp={endDrag}
+          onMouseLeave={() => setDrag(null)}
+        >
+          {drag ? (
+            <div
+              className={`annot-preview ${redactMode ? 'redact' : markupTool}`}
+              style={{
+                left: Math.min(drag.x0, drag.x1),
+                top: Math.min(drag.y0, drag.y1),
+                width: Math.abs(drag.x1 - drag.x0),
+                height: Math.abs(drag.y1 - drag.y0),
+              }}
+            />
+          ) : null}
+        </div>
+      ) : null}
+
+      <span className="page-index">{position + 1}</span>
+    </div>
+  );
+}

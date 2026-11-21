@@ -1,0 +1,287 @@
+//! 压缩能力 —— 自 Rocktier PDF Squeeze 合并而来。
+//!
+//! 两步：qpdf 做结构规范化与图像重压（Apache-2.0，只重写图像流与对象结构、
+//! 不动内容流，因此文字层逐字节保留），再用我们自己的 imagepass 补上 qpdf
+//! 跳过的那一类图像（ICCBased JPEG）。详见 `PDF产品线合并方案.md` §11。
+
+use std::path::{Path, PathBuf};
+use std::process::{Command, Stdio};
+
+#[cfg(windows)]
+use std::os::windows::process::CommandExt;
+
+/// Win32 的 `CREATE_NO_WINDOW`。
+///
+/// Windows 会给**控制台子系统**的子进程新开一个控制台窗口。本应用是 GUI 进程、
+/// 自身没有控制台，于是每次调用 `qpdf.exe` 都会弹出一个黑框：它抢焦点、遮住界面，
+/// 用户看到的是"卡了很久"，而实际上是 qpdf 在正常工作。带上这个标志，子进程就
+/// 不再分配控制台。（值出自 Win32 `CreateProcess` 的 creation flags。）
+#[cfg(windows)]
+const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+
+/// 起一个 qpdf 进程。Windows 上不弹控制台窗口，其余平台与从前完全一致。
+fn qpdf_command(qpdf: &Path) -> Command {
+    #[cfg(windows)]
+    {
+        let mut cmd = Command::new(qpdf);
+        cmd.creation_flags(CREATE_NO_WINDOW);
+        cmd
+    }
+    #[cfg(not(windows))]
+    {
+        Command::new(qpdf)
+    }
+}
+
+/// 压缩过程的进度快照。
+///
+/// qpdf **不输出任何进度信息**，所以第一阶段只能报"进行中"；第二阶段是我们自己的
+/// 逐图重编码循环，能给出真实的"已完成／总数"。`done`/`total` 同为 `None` 时表示
+/// 不定进度 —— 宁可画滚动条，也不编一个假的百分比。
+#[derive(Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CompressProgress {
+    pub stage: &'static str,
+    pub done: Option<usize>,
+    pub total: Option<usize>,
+}
+
+impl CompressProgress {
+    fn stage(stage: &'static str) -> Self {
+        Self { stage, done: None, total: None }
+    }
+
+    fn images(done: usize, total: usize) -> Self {
+        Self { stage: "images", done: Some(done), total: Some(total) }
+    }
+}
+
+/// 档位 → qpdf 的 JPEG 质量。与 `imagepass` 的口径必须一致，否则两条路径
+/// 会给出不同观感。
+pub fn qpdf_args(profile: &str) -> Vec<String> {
+    let jpeg_q = match profile {
+        "web" => "40",
+        "archive" => "85",
+        _ => "60",
+    };
+    vec![
+        "--optimize-images".to_string(),
+        format!("--jpeg-quality={jpeg_q}"),
+        "--object-streams=generate".to_string(),
+        "--compress-streams=y".to_string(),
+        "--recompress-flate".to_string(),
+        "--compression-level=9".to_string(),
+    ]
+}
+
+fn find_in_path(name: &str) -> Option<PathBuf> {
+    let path_var = std::env::var_os("PATH")?;
+    for dir in std::env::split_paths(&path_var) {
+        let candidate = dir.join(name);
+        if candidate.is_file() {
+            return Some(candidate);
+        }
+    }
+    None
+}
+
+/// 定位 qpdf。打包后它在 `resources/qpdf/`，开发时可回退到 PATH。
+pub fn find_qpdf() -> Result<PathBuf, String> {
+    let name = if cfg!(windows) { "qpdf.exe" } else { "qpdf" };
+    let mut candidates: Vec<PathBuf> = Vec::new();
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(dir) = exe.parent() {
+            candidates.push(dir.join("qpdf").join(name));
+            candidates.push(dir.join("resources").join("qpdf").join(name));
+            candidates.push(dir.join(name));
+        }
+    }
+    candidates.push(PathBuf::from("src-tauri/resources/qpdf").join(name));
+    if let Some(p) = find_in_path(name) {
+        candidates.push(p);
+    }
+    for c in &candidates {
+        if c.exists() {
+            return Ok(c.clone());
+        }
+    }
+    Err(format!(
+        "qpdf engine not found. Searched: {}",
+        candidates
+            .iter()
+            .map(|p| p.display().to_string())
+            .collect::<Vec<_>>()
+            .join(", ")
+    ))
+}
+
+/// 产物结构自检：非空、`%PDF-` 头、`%%EOF` 尾。
+/// qpdf 退出码为 0 不代表产出可用，压缩器绝不能拿用户原件去赌。
+pub fn verify_pdf(path: &Path) -> Result<(), String> {
+    let data = std::fs::read(path).map_err(|e| e.to_string())?;
+    if data.len() < 64 {
+        return Err(format!("output is only {} bytes", data.len()));
+    }
+    if !data.starts_with(b"%PDF-") {
+        return Err("missing %PDF- header".to_string());
+    }
+    let tail = &data[data.len().saturating_sub(1024)..];
+    if !tail.windows(5).any(|w| w == b"%%EOF") {
+        return Err("missing %%EOF trailer".to_string());
+    }
+    Ok(())
+}
+
+/// 压缩 `input` 到 `output`，返回产物字节数。
+///
+/// 每一步都只在**确实更小**时才采用上一步的产物 —— 图像 pass 用 lopdf 重存
+/// 会丢掉 qpdf 生成的压缩对象流，实测有文件因此变大 1–2%，少了这道判断
+/// 就会把"压缩"做成"变大"。
+pub fn compress(
+    input: &Path,
+    output: &Path,
+    profile: &str,
+    on_progress: &dyn Fn(CompressProgress),
+) -> Result<u64, String> {
+    let qpdf = find_qpdf()?;
+
+    let staged = output.with_extension("qpdf.pdf");
+    let _ = std::fs::remove_file(&staged);
+    on_progress(CompressProgress::stage("optimize"));
+    // stderr 收进管道而不是继承：GUI 进程没有控制台可继承，而且 qpdf 的警告
+    // 正是这一层最有用的诊断信息，丢掉它就只能报一个退出码。
+    let out = qpdf_command(&qpdf)
+        .args(qpdf_args(profile))
+        .arg(input)
+        .arg(&staged)
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::piped())
+        .output()
+        .map_err(|e| format!("Failed to start qpdf: {e}"))?;
+    if !out.status.success() {
+        let _ = std::fs::remove_file(&staged);
+        let err = String::from_utf8_lossy(&out.stderr);
+        let tail = err.lines().rev().take(3).collect::<Vec<_>>().join(" / ");
+        return Err(format!("qpdf exited with {:?}: {tail}", out.status.code()));
+    }
+    verify_pdf(&staged)?;
+
+    let after_images = output.with_extension("imgpass.pdf");
+    let _ = std::fs::remove_file(&after_images);
+    on_progress(CompressProgress::stage("images"));
+    let images_progress = |done: usize, total: usize| on_progress(CompressProgress::images(done, total));
+    if let Ok(r) = crate::imagepass::reencode_images(&staged, &after_images, profile, &images_progress) {
+        if r.recompressed > 0 {
+            let smaller = std::fs::metadata(&after_images)
+                .map(|m| m.len())
+                .unwrap_or(u64::MAX)
+                < std::fs::metadata(&staged).map(|m| m.len()).unwrap_or(0);
+            if smaller && std::fs::rename(&after_images, &staged).is_ok() {
+                verify_pdf(&staged)?;
+            }
+        }
+    }
+    let _ = std::fs::remove_file(&after_images);
+
+    on_progress(CompressProgress::stage("write"));
+    std::fs::rename(&staged, output).map_err(|e| format!("Cannot write output: {e}"))?;
+    Ok(std::fs::metadata(output).map(|m| m.len()).unwrap_or(0))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// 文字层抽出来做逐字节比对。用外部 `pdftotext` 而不是自己解析——抽文本的
+    /// 规则由第三方定，两边用同一个工具才是在比"是否相同"，而不是在比自己怎么读。
+    /// 本机没有 poppler 时跳过这一步，页数与书签断言仍然生效。
+    fn text_layer(path: &Path) -> Option<Vec<u8>> {
+        let out = std::process::Command::new("pdftotext")
+            .args(["-layout"])
+            .arg(path)
+            .arg("-")
+            .output()
+            .ok()?;
+        if !out.status.success() {
+            return None;
+        }
+        Some(out.stdout)
+    }
+
+    /// 合并后的验收：在**真实文档**上跑完整压缩路径（qpdf + 图像 pass），
+    /// 断言页数不变、书签仍在、文字层逐字节未变。环境变量门控，CI 不跑
+    /// （真实文档不入库）。用只放这几份样本的目录跑，别直接指 Downloads——
+    /// 里面混着的 PDF 不一定能通过 poppler 抽取。
+    ///   ROCKTIER_TEST_DIR=<样本目录> cargo test acceptance -- --nocapture
+    #[test]
+    fn acceptance_on_real_documents() {
+        let dir = match std::env::var("ROCKTIER_TEST_DIR") {
+            Ok(d) => d,
+            Err(_) => return,
+        };
+        let out_dir = std::env::temp_dir().join("rt-pdf-acceptance");
+        std::fs::create_dir_all(&out_dir).unwrap();
+
+        let mut files: Vec<_> = std::fs::read_dir(&dir)
+            .unwrap()
+            .filter_map(|e| e.ok())
+            .map(|e| e.path())
+            .filter(|p| p.extension().map(|x| x == "pdf").unwrap_or(false))
+            .collect();
+        files.sort();
+        assert!(!files.is_empty(), "目录里没有 PDF");
+
+        let has_outlines = |d: &lopdf::Document| {
+            d.trailer
+                .get(b"Root")
+                .ok()
+                .and_then(|r| r.as_reference().ok())
+                .and_then(|r| d.get_object(r).ok())
+                .and_then(|o| o.as_dict().ok())
+                .and_then(|dd| dd.get(b"Outlines").ok())
+                .is_some()
+        };
+
+        for src in files {
+            let name = src.file_name().unwrap().to_string_lossy().to_string();
+            let out = out_dir.join(&name);
+            let _ = std::fs::remove_file(&out);
+
+            let before = std::fs::metadata(&src).unwrap().len();
+            match compress(&src, &out, "balanced", &|_| {}) {
+                Ok(after) => {
+                    let src_doc = lopdf::Document::load(&src).ok();
+                    let out_doc = lopdf::Document::load(&out).expect("产物必须可解析");
+                    let pages_before = src_doc.as_ref().map(|d| d.get_pages().len()).unwrap_or(0);
+                    let pages_after = out_doc.get_pages().len();
+                    assert_eq!(pages_before, pages_after, "{name}: 页数变了");
+
+                    // 书签：原文件有，产物就必须还有
+                    if src_doc.as_ref().map(&has_outlines).unwrap_or(false) {
+                        assert!(has_outlines(&out_doc), "{name}: 书签丢了");
+                    }
+
+                    // 文字层：逐字节相同。这是压缩能上"无损"这一说的唯一硬证据——
+                    // 体积和页数都容易骗人，文字抽出来一样才说明内容流没被动过。
+                    let (text_ok, text_checked) = match (text_layer(&src), text_layer(&out)) {
+                        (Some(a), Some(b)) => (a == b, true),
+                        _ => (true, false),
+                    };
+                    assert!(text_ok, "{name}: 文字层被改动了");
+
+                    println!(
+                        "ACCEPT {name}: {before} -> {after} (省 {}%), 页 {pages_before}->{pages_after}, 文字层 {}",
+                        if before > 0 {
+                            100i64 - (after as i64 * 100 / before as i64)
+                        } else {
+                            0
+                        },
+                        if text_checked { "逐字节一致" } else { "未校验（pdftotext 不可用）" }
+                    );
+                }
+                Err(e) => panic!("ACCEPT {name}: 压缩失败 — {e}"),
+            }
+        }
+    }
+}

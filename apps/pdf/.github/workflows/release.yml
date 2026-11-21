@@ -1,0 +1,466 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: Rust checks
+    # macOS, not ubuntu: cargo check/test build the Tauri crate, which on Linux
+    # needs glib/gtk/webkit system libraries a bare runner does not have. The
+    # family already hit this on the Markdown app's checks job.
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # 直链版没有验签公钥 ⇒ **谁都激活不了**：`/api/activate` 签出的回执必须由应用
+      # 用公钥验签，公钥为空时每一份回执都会失败。把这个包发到已经在收钱的店里，是
+      # 最坏的一种安静故障，所以在这里拒绝。
+      #
+      # 两条出路，都要刻意选择：① 在 Vercel 设好 `LICENSE_PRIVATE_KEY`、并把配对的
+      # 公钥粘进 `src-tauri/src/license.rs`；② 如果这一版本就不打算卖，删掉这一步。
+      - name: Refuse to release a build that cannot activate
+        run: |
+          if grep -q 'pub const PUBLIC_KEY_B64: &str = "";' src-tauri/src/license.rs; then
+            echo "::error::PUBLIC_KEY_B64 is empty, so nobody who pays could activate this build. In rocktier.com run 'node tools/license-keygen.mjs', put the private key into Vercel as LICENSE_PRIVATE_KEY, and paste the public key into src-tauri/src/license.rs. If this release is not meant to be sold, delete this step."
+            exit 1
+          fi
+          echo "activation key is configured"
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: sign-engine/go.mod
+          cache-dependency-path: sign-engine/go.sum
+
+      - uses: dtolnay/rust-toolchain@1.98.0
+        with:
+          components: clippy
+      - name: Install qpdf + provision the sidecar
+        run: |
+          brew install qpdf
+          bash scripts/provision-qpdf-macos.sh
+      - name: Go engine tests
+        working-directory: ./sign-engine
+        run: |
+          go vet ./...
+          go test ./...
+      - name: Provision sign-engine sidecar
+        run: bash scripts/provision-sign-engine-macos.sh
+      # tauri_build::build() hard-fails when a path in bundle.resources is missing,
+      # and tauri.conf.json lists resources/qpdf. Without this the workflow dies at
+      # cargo check - which is exactly how the v1.0.0 run failed.
+      - name: Fetch Pdfium
+        run: node scripts/fetch-pdfium.mjs --all
+      - name: cargo check
+        working-directory: src-tauri
+        run: cargo check
+      - name: cargo test
+        working-directory: src-tauri
+        run: cargo test --bin rocktier-pdf-editor
+
+  build-macos:
+    name: macOS (${{ matrix.arch }})
+    needs: test
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-latest
+            arch: aarch64
+            target: aarch64-apple-darwin
+            filearch: arm64
+          - runner: macos-15-intel
+            arch: x64
+            target: x86_64-apple-darwin
+            filearch: x86_64
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - uses: dtolnay/rust-toolchain@1.98.0
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Cache Rust build
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: "src-tauri -> target"
+          key: ${{ matrix.arch }}
+
+      - name: Install frontend deps
+        run: npm ci
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: sign-engine/go.mod
+          cache-dependency-path: sign-engine/go.sum
+
+      # 按 runner 原生架构构建：arm64 runner 出 arm64，Intel runner 出 x86_64。
+      # 不做 universal lipo —— 与主程序的分架构构建保持一致。
+      - name: Provision sign-engine sidecar
+        run: bash scripts/provision-sign-engine-macos.sh
+
+      # Homebrew publishes no Intel bottle for qpdf, so the first Intel run
+      # builds it from source (along with openssl@4 and jpeg-turbo). Cache the
+      # provisioned sidecar; bump the key when qpdf is upgraded.
+      - name: Cache qpdf sidecar (Intel)
+        if: matrix.arch == 'x64'
+        id: qpdf-cache
+        uses: actions/cache@v4
+        with:
+          path: src-tauri/resources/qpdf
+          key: qpdf-x64-v1
+
+      - name: Provision qpdf sidecar
+        if: matrix.arch != 'x64' || steps.qpdf-cache.outputs.cache-hit != 'true'
+        run: |
+          brew install qpdf
+          bash scripts/provision-qpdf-macos.sh
+      # tauri_build::build() hard-fails when a path in bundle.resources is missing,
+      # and tauri.conf.json lists resources/qpdf. Without this the workflow dies at
+      # cargo check - which is exactly how the v1.0.0 run failed.
+      - name: Build
+        run: npm run tauri:build -- --target ${{ matrix.target }}
+
+      # The Intel runner is the only place where the x86_64 runtime path can be
+      # exercised for real, so run the tests there instead of on Apple Silicon.
+      - name: cargo test (Intel)
+        if: matrix.arch == 'x64'
+        working-directory: src-tauri
+        run: cargo test --bin rocktier-pdf-editor
+
+      - name: Verify sidecar architecture
+        if: matrix.arch == 'x64'
+        run: |
+          set -euo pipefail
+          file src-tauri/resources/qpdf/qpdf
+          file src-tauri/resources/pdfium-runtime/libpdfium.dylib
+          src-tauri/resources/qpdf/qpdf --version
+          file src-tauri/resources/qpdf/qpdf | grep -q x86_64
+          file src-tauri/resources/pdfium-runtime/libpdfium.dylib | grep -q x86_64
+
+      - name: Sign the app bundle, notarize it, and repack the DMG
+        env:
+          # Add these five as repository secrets and this step switches from ad-hoc
+          # to a real Developer ID signature plus notarization, with no other change:
+          #   APPLE_CERT_P12       base64 of the Developer ID Application .p12
+          #   APPLE_CERT_PASSWORD  its password
+          #   APPLE_ID             the Apple ID that owns the certificate
+          #   APPLE_TEAM_ID        the 10-character team id
+          #   APPLE_APP_PASSWORD   an app-specific password for that Apple ID
+          # Without them the behaviour is exactly what it was before: ad-hoc, and
+          # Gatekeeper still warns about downloaded copies.
+          APPLE_CERT_P12: ${{ secrets.APPLE_CERT_P12 }}
+          APPLE_CERT_PASSWORD: ${{ secrets.APPLE_CERT_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+        run: |
+          set -euo pipefail
+          # ARM64 macOS refuses to run unadorned binaries, so the linker already
+          # ad-hoc signs the executable. The bundle needs a real seal on top - and
+          # the DMG needs its copy replaced: tauri packs the image from the still
+          # unsigned bundle, so signing the app afterwards cannot reach inside it.
+          # A v1.0.10 downloader hit "damaged" exactly there (release.yml used to
+          # say so). Replace the bundle inside the image, re-compress, then seal the
+          # image itself.
+          app=$(find "src-tauri/target/${{ matrix.target }}/release/bundle/macos" \
+            -maxdepth 1 -name '*.app' | head -1)
+          dmg=$(find "src-tauri/target/${{ matrix.target }}/release/bundle/dmg" \
+            -name '*.dmg' | head -1)
+
+          sign_app=(-s -)
+          if [ -n "${APPLE_CERT_P12:-}" ]; then
+            # Import into a throwaway keychain. `set-key-partition-list` is what
+            # lets codesign use the key without an interactive prompt.
+            keychain="$RUNNER_TEMP/rocktier-signing.keychain-db"
+            echo "$APPLE_CERT_P12" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+            security create-keychain -p "" "$keychain"
+            security set-keychain-settings -lut 900 "$keychain"
+            security unlock-keychain -p "" "$keychain"
+            security import "$RUNNER_TEMP/cert.p12" -k "$keychain" \
+              -P "$APPLE_CERT_PASSWORD" -T /usr/bin/codesign
+            security set-key-partition-list -S apple-tool:,apple: -k "" "$keychain" >/dev/null
+            security list-keychains -d user -s "$keychain" $(security list-keychains -d user | tr -d '"')
+
+            identity=$(security find-identity -v -p codesigning "$keychain" \
+              | awk '/Developer ID Application/ {print $2; exit}')
+            if [ -z "$identity" ]; then
+              echo "::error::APPLE_CERT_P12 is set but contains no Developer ID Application identity."
+              exit 1
+            fi
+            echo "signing as $identity"
+            # Hardened runtime is required for notarization, and the entitlements
+            # file is what lets the bundled Pdfium dylib load at all.
+            sign_app=(-s "$identity" --options runtime --entitlements src-tauri/Entitlements.plist)
+          else
+            echo "::notice::No Developer ID certificate configured - ad-hoc signing. Downloaded copies will still be flagged by Gatekeeper. See PRIVACY.md for the notarization secrets."
+          fi
+
+          # --deep 会连带签 Contents/Resources/resources/sign-engine/sign-engine-macos，
+          # notarytool 提交的又是整个 DMG，嵌套可执行文件随包一起公证。**不要**为
+          # sidecar 单独提交公证 —— 单独提交产生的票据与主包无关，等于白做。
+          codesign "${sign_app[@]}" -fv --deep "$app"
+          codesign -dvvv "$app" 2>&1 | grep 'Signature=' || true
+
+          work=$(mktemp -d)
+          hdiutil convert "$dmg" -format UDRW -o "$work/rw.dmg" -quiet
+          mnt="$work/m"
+          mkdir -p "$mnt"
+          hdiutil attach "$work/rw.dmg" -readwrite -nobrowse -mountpoint "$mnt" -quiet
+          rm -rf "$mnt/$(basename "$app")"
+          cp -R "$app" "$mnt/"
+          hdiutil detach "$mnt" -quiet
+          hdiutil convert "$work/rw.dmg" -format UDZO -o "$work/signed.dmg" -quiet
+          mv "$work/signed.dmg" "$dmg"
+          rm -rf "$work"
+
+          if [ -n "${APPLE_CERT_P12:-}" ]; then
+            # Notarize the image (which covers the app inside it), then staple so
+            # the ticket travels with the file and Gatekeeper can check offline.
+            codesign -s "$identity" -fv "$dmg"
+            xcrun notarytool submit "$dmg" \
+              --apple-id "$APPLE_ID" \
+              --team-id "$APPLE_TEAM_ID" \
+              --password "$APPLE_APP_PASSWORD" \
+              --wait
+            xcrun stapler staple "$dmg"
+            xcrun stapler validate "$dmg"
+          else
+            codesign -s - -fv "$dmg"
+          fi
+          codesign -dvvv "$dmg" 2>&1 | grep 'Signature=' || true
+
+      - name: Package app.zip
+        run: |
+          APP=$(find "src-tauri/target/${{ matrix.target }}/release/bundle/macos" -maxdepth 1 -name '*.app' | head -1)
+          [ -z "$APP" ] && { echo "::error::.app not found"; exit 1; }
+          ditto -c -k --keepParent "$APP" "Rocktier.PDF_${{ matrix.arch }}.app.zip"
+
+      - name: Verify bundle architecture
+        run: |
+          set -euo pipefail
+          APP=$(find "src-tauri/target/${{ matrix.target }}/release/bundle/macos" -maxdepth 1 -name '*.app' | head -1)
+          [ -z "$APP" ] && { echo "::error::.app not found"; exit 1; }
+          # -b 是必须的：file 默认把**路径**一起打出来，而 x86_64 那一路的
+          # target 目录本身就是 x86_64-apple-darwin —— 带上路径时 grep 'x86_64'
+          # 匹配到的是目录名，架构错了也会空过。arm64 那一路恰好不重合，
+          # 所以这个洞只会漏掉 Intel 包。
+          file -b "$APP/Contents/MacOS/"* | tee /dev/stderr | grep -q '${{ matrix.filearch }}'
+          # 每个安装包都在**自己的**原生架构 runner 上出，所以 sidecar 的资源名
+          # 不带架构后缀；架构对不对只能在这里断言，断言失败就是打包矩阵串了。
+          ENGINE=$(find "$APP" -name 'sign-engine-macos' -type f | head -1)
+          [ -z "$ENGINE" ] && { echo "::error::sign-engine-macos missing from the bundle"; exit 1; }
+          file -b "$ENGINE" | tee /dev/stderr | grep -q '${{ matrix.filearch }}'
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos-${{ matrix.arch }}
+          path: |
+            src-tauri/target/${{ matrix.target }}/release/bundle/dmg/*.dmg
+            Rocktier.PDF_${{ matrix.arch }}.app.zip
+
+  build-windows:
+    name: Windows (x64)
+    needs: test
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - uses: dtolnay/rust-toolchain@1.98.0
+        with:
+          # tauri-windows-bundle builds with an explicit --target, so it has to
+          # be present or the MSIX step fails.
+          targets: x86_64-pc-windows-msvc
+
+      - name: Install frontend deps
+        run: npm ci
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: sign-engine/go.mod
+          cache-dependency-path: sign-engine/go.sum
+
+      - name: Provision sign-engine sidecar
+        shell: pwsh
+        run: pwsh -ExecutionPolicy Bypass -File scripts/provision-sign-engine-windows.ps1
+
+      - name: Provision qpdf sidecar
+        # pwsh, not powershell: Windows PowerShell 5.1 reads a BOM-less UTF-8 .ps1
+        # as the system codepage, so the Chinese comments swallow the bytes that
+        # follow them and the script dies on a bogus "missing closing '}'" error.
+        # The script now carries a BOM too, so either caller is safe.
+        shell: pwsh
+        run: pwsh -ExecutionPolicy Bypass -File scripts/provision-qpdf-windows.ps1
+
+      # tauri_build::build() hard-fails when a path in bundle.resources is missing,
+      # and tauri.conf.json lists resources/qpdf. Without this the workflow dies at
+      # cargo check - which is exactly how the v1.0.0 run failed.
+      - name: Build
+        run: npm run tauri:build
+
+      - name: Verify sign-engine sidecar
+        shell: bash
+        run: |
+          set -euo pipefail
+          ENGINE=$(find src-tauri/resources/sign-engine -name 'sign-engine-windows.exe' -type f | head -1)
+          [ -z "$ENGINE" ] && { echo "::error::sign-engine-windows.exe was not built"; exit 1; }
+          # 不能用 `| tee /dev/stderr`：Git Bash（Windows runner）没有 /dev/stderr，
+          # tee 报错叠加 pipefail 会让本该通过的验证判红 —— 2026-10-29 v1.1.0 首次发版就这么栽的。
+          OUTPUT=$(file "$ENGINE")
+          echo "$OUTPUT"
+          printf '%s\n' "$OUTPUT" | grep -q 'PE32+'
+          printf '%s\n' "$OUTPUT" | grep -q 'x86-64'
+
+      # 去掉 MSI 文件名里的 _en-US（Tauri v2 会按 bundle.windows.wix.language 追加）。
+      # 应用本身带语言切换器，文件名宣称单一语言会误导 —— 看起来像存在
+      # 「英文版」和其他本地化安装包，而实际只有一个多语言安装包。
+      # 只改文件名，不动 bundle 配置：WiX 的 language 字段是 MSI 构建必需的
+      # 工具链语言码，改它会让构建失败。
+      - name: Strip _en-US from MSI filename
+        shell: bash
+        run: |
+          shopt -s nullglob
+          found=0
+          for f in src-tauri/target/release/bundle/msi/*_en-US.msi \
+                   src-tauri/target/x86_64-pc-windows-msvc/release/bundle/msi/*_en-US.msi; do
+            nf="${f%_en-US.msi}.msi"
+            mv "$f" "$nf"
+            echo "  $(basename "$f") -> $(basename "$nf")"
+            found=1
+          done
+          if [ "$found" -eq 0 ]; then
+            echo "::error::no *_en-US.msi found - Tauri naming changed, this step needs updating"
+            ls -1 src-tauri/target/release/bundle/msi/ 2>/dev/null || true
+            exit 1
+          fi
+
+      - name: Build MSIX
+        # MSIX 直装走 direct 付费墙（微软商店渠道已弃用，2026-10-05 终裁 C3）。
+        # 若未来恢复商店渠道：本步需加 env ROCKTIER_CHANNEL: store（10.8.2/10.8.4）。
+        run: npm run tauri:windows:build
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-x64
+          path: |
+            src-tauri/target/release/bundle/msi/*.msi
+            src-tauri/target/release/bundle/nsis/*.exe
+            # tauri-windows-bundle writes to src-tauri/target/msix/, NOT to
+            # gen/windows/ — that only holds the inputs. A wrong glob here fails
+            # silently: nothing is uploaded and nobody is told.
+            src-tauri/target/msix/*.msix*
+
+  release:
+    name: Publish release
+    needs: [build-macos, build-windows]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Attach installers to the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REQUIRED_ASSETS: '_aarch64\.dmg$ _x64\.dmg$ _aarch64\.app\.zip$ _x64\.app\.zip$ \.msi$ \.exe$ \.msix$ \.msixbundle$'
+        run: |
+          set -euo pipefail
+          # `gh` resolves which repository to act on from the working directory's git
+          # remote. This job only downloads artifacts, so there was no .git here and it
+          # died with "fatal: not a git repository" - after all three platform builds
+          # had already succeeded. Hence the checkout above; --repo states the target
+          # outright as well, so the intent survives any future reshuffle of steps.
+          REPO="$GITHUB_REPOSITORY"
+          TAG="${GITHUB_REF_NAME}"
+          echo "Publishing $TAG to $REPO"
+          # The product name contains a space ("Rocktier PDF_1.0.7_x64.msix"), so the
+          # list must never be joined into one space-separated string: word splitting
+          # cuts every path at "Rocktier" and the upload then looks for files that do
+          # not exist. Keep it NUL-delimited on disk and let xargs hand paths over.
+          find artifacts -type f \
+            \( -name '*.dmg' -o -name '*.msi' -o -name '*.exe' \
+               -o -name '*.msix' -o -name '*.msixbundle' -o -name '*.zip' \) -print0 > installers.nul
+          count=$(tr -cd '\0' < installers.nul | wc -c)
+          echo "Found $count installer(s)"
+          if [ "$count" -eq 0 ]; then
+            echo "No installers were produced - refusing to publish an empty release." >&2
+            exit 1
+          fi
+          tr '\0' '\n' < installers.nul | sed 's/^/  /'
+
+          if ! gh release view "$TAG" --repo "$REPO" > /dev/null 2>&1; then
+            gh release create "$TAG" --repo "$REPO" --draft --title "$TAG" --notes "Automated build for $TAG"
+          fi
+          # This loop used to swallow its own failure: `cmd && break || sleep` leaves the
+          # exit status at 0 when every attempt fails, so the job would report success
+          # with nothing attached. Track the outcome and fail loudly instead.
+          uploaded=0
+          for i in $(seq 1 10); do
+            if xargs -0 -r gh release upload "$TAG" --repo "$REPO" --clobber < installers.nul; then
+              uploaded=1
+              break
+            fi
+            echo "upload attempt $i failed, retrying"
+            sleep 5
+          done
+          if [ "$uploaded" -ne 1 ]; then
+            echo "Uploading to $TAG failed after 10 attempts." >&2
+            exit 1
+          fi
+          echo "Attached $count file(s) to $TAG."
+          # 发布闸门：校验 5 包齐全才发布为 latest；不齐保留草稿并失败。
+          # GitHub 资产 API 上传后可能延迟可见，轮询最多 ~10 分钟再下结论。
+          sleep 20
+          missing=0
+          for i in $(seq 1 30); do
+            # 保留 || true 仅为让轮询能继续重试（资产 API 确实会 lag），
+            # 但**必须把 stderr 打出来** —— 之前 `2>/dev/null` 把它一并丢掉，
+            # 于是 gh 的真实错误（权限 / 仓库名 / Rate limit）被伪装成
+            # 「资产还没上传」，报错信息完全指错方向，排查方向整个跑偏。
+            # 实测踩过：MD v1.0.7 / CAD v0.2.5 / Journal v0.2.7 三个仓资产其实齐全，
+            # 校验却报「六个包全缺」—— 就是这一行。修复沿用 Write 仓的写法。
+            assets=$(gh release view "$TAG" --repo "$REPO" --json assets --jq '.assets[].name' || true)
+            missing=0
+            for pat in $REQUIRED_ASSETS; do
+              if ! printf '%s\n' "$assets" | grep -Eq "$pat"; then
+                missing=1
+              fi
+            done
+            [ "$missing" -eq 0 ] && break
+            echo "  waiting for uploads ($i/30)..."
+            sleep 20
+          done
+          if [ "$missing" -ne 0 ]; then
+            # 保留 || true 仅为让轮询能继续重试（资产 API 确实会 lag），
+            # 但**必须把 stderr 打出来** —— 之前 `2>/dev/null` 把它一并丢掉，
+            # 于是 gh 的真实错误（权限 / 仓库名 / Rate limit）被伪装成
+            # 「资产还没上传」，报错信息完全指错方向，排查方向整个跑偏。
+            # 实测踩过：MD v1.0.7 / CAD v0.2.5 / Journal v0.2.7 三个仓资产其实齐全，
+            # 校验却报「六个包全缺」—— 就是这一行。修复沿用 Write 仓的写法。
+            assets=$(gh release view "$TAG" --repo "$REPO" --json assets --jq '.assets[].name' || true)
+            for pat in $REQUIRED_ASSETS; do
+              if ! printf '%s\n' "$assets" | grep -Eq "$pat"; then
+                echo "::error::release $TAG missing asset matching $pat"
+              fi
+            done
+            echo "::error::release $TAG is missing required assets — left as DRAFT for manual review"
+            exit 1
+          fi
+          echo "All required assets present; publishing $TAG"
+          gh release edit "$TAG" --repo "$REPO" --draft=false --latest
