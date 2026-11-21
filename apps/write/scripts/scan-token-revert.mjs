@@ -1,0 +1,225 @@
+// 令牌回退扫描器 —— scope-aware
+// 母版 docs/rocktier/tokens.css 是唯一真源。产品 CSS 里在 import 母版之后
+// 又出现 :root / [data-theme="light"] 块并重定义 L0 令牌 = 回退。
+//
+// 与 family-check 的 tokens-snapshot-diff 的区别：
+//   tokens-snapshot-diff  只比 tokens.css 文件字节 -> 看不见产品主样式表里的第二个 :root
+//   本脚本                    比「实际被加载的样式表」里的令牌值-> 能看见回退
+//
+// 用法: node scan-token-revert.mjs <familyRoot>
+// 退出码 0 = 无回退；1 = 有回退
+
+import { readFileSync, readdirSync, statSync, existsSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { join, relative } from "node:path";
+
+const root = process.argv[2] || ".";
+const MASTER = join(root, "docs", "rocktier", "tokens.css");
+
+const REPOS = {
+  pdf: "Rocktier PDF",
+  markdown: "Rocktier MD",
+  write: "Rocktier Write",
+  pic2webp: "Rocktier Pic2Webp",
+  "cad-viewer": "Rocktier CAD Viewer",
+  ocr: "Rocktier OCR",
+  journal: "Rocktier-Journal",
+  compressor: "Rocktier-Compressor",
+  sign: "Rocktier Sign",
+};
+
+/* 与 family-check 同款：兼容平铺 / 嵌套两种检出布局（见母版闸门注释）。
+   外层没有 .git 时下钻一层找带 .git 的子目录，返回相对家族根的路径。 */
+const resolveRepo = (rel) => {
+  const base = join(root, rel);
+  if (!existsSync(base) || existsSync(join(base, ".git"))) return rel;
+  try {
+    for (const e of readdirSync(base, { withFileTypes: true })) {
+      if (!e.isDirectory() || e.name.startsWith(".")) continue;
+      const child = join(rel, e.name);
+      if (existsSync(join(root, child, ".git"))) return child;
+    }
+  } catch { /* 目录不可读：退回原路径 */ }
+  return rel;
+};
+
+const stripComments = (s) => s.replace(/\/\*[\s\S]*?\*\//g, "");
+
+/**
+ * 不参与扫描的路径 —— **设计稿，不是产品代码**。
+ *
+ * `design/toolbar-redesign.html`（Write）是「Toolbar Redesign Proposal」：
+ * 一个 18KB 的独立提案文档，vite 未引用、不进产物。它自带一个完整的
+ * `:root`（浅色主题的演示版），于是 `--bg: #ffffff`、`--accent: #000`
+ * 等4 处被记成「令牌回退」。
+ *
+ * 但那不是回退 —— 它是**提案当时的样子**，是历史记录。把它「修」成母版
+ * 值等于篡改提案本身。所以按路径排除，而不是改它的值。
+ *
+ * 判据：不在构建产物里的独立 HTML 设计稿。
+ */
+const EXCLUDE = [/^design\//, /(^|\/)design\//, /\.mock\.html$/];
+
+// 归一化：抹掉纯排版差异，只留语义差异。
+// rgba(255,255,255,0.03) === rgba(255, 255, 255, 0.03)
+// #fff === #ffffff、#000 === #000000
+// 0.10 === 0.1 === .50 === 0.5（尾零与前导点都属排版差异）
+const norm = (v) => {
+  let s = v.replace(/\s+/g, "").toLowerCase();
+  s = s.replace(/#([0-9a-f])\1([0-9a-f])\2([0-9a-f])\3\b/g, "#$1$2$3");
+  // ⚠️ 小数归一化只去**尾部零**，必须保留有效数字。
+  // 原来写的是 /\.(\d*0+)(?=[,)])/ → ''，它会把 `0.10)` 变成 `010)`
+  // （`\d*` 吃掉 `1`、`0+` 吃掉 `0`，整段被删），于是 `0.10` 与 `0.1`
+  // 被判为不同 → 扫描器一直虚报这类「回退」。
+  s = s.replace(/(^|[^0-9a-z.])(\d+)\.(\d+)(?![0-9a-z])/g, (_, pre, int, frac) => {
+    const t = frac.replace(/0+$/, "");
+    return t ? `${pre}${int}.${t}` : `${pre}${int}`;
+  });
+  return s;
+};
+
+function blocks(css) {
+  // 返回 [{ scope, tokens:Map }]，scope = ":root" | 'light'
+  const out = [];
+  const re = /(:root\s*(?:,\s*\[data-theme="dark"\])?|\[data-theme="light"\])\s*\{/g;
+  let m;
+  while ((m = re.exec(css))) {
+    const scope = m[1].includes("light") ? "light" : "root";
+    // 花括号配平
+    let depth = 1, i = re.lastIndex;
+    while (i < css.length && depth > 0) {
+      if (css[i] === "{") depth++;
+      else if (css[i] === "}") depth--;
+      i++;
+    }
+    const body = css.slice(re.lastIndex, i - 1);
+    const tokens = new Map();
+    for (const t of body.matchAll(/(--[\w-]+)\s*:\s*([^;{}]+);/g)) {
+      tokens.set(t[1], t[2].replace(/\s+/g, " ").trim());
+    }
+    out.push({ scope, tokens, start: m.index });
+  }
+  return out;
+}
+
+const masterCss = stripComments(readFileSync(MASTER, "utf8"));
+const MB = blocks(masterCss);
+const master = {
+  root: new Map((MB.find((b) => b.scope === "root") || { tokens: new Map() }).tokens),
+  light: new Map((MB.find((b) => b.scope === "light") || { tokens: new Map() }).tokens),
+};
+// light 块里缺的令牌继承 :root —— 展开成完整快照
+for (const [k, v] of master.root) if (!master.light.has(k)) master.light.set(k, v);
+
+console.log(
+  `母版 ${MASTER}  :root ${master.root.size} 令牌 / light ${master.light.size} 令牌\n`,
+);
+
+/**
+ * 列出该产品里**被 git 跟踪的**样式文件。
+ *
+ * ## 为什么不用 walk()递归目录
+ *
+ * 原来只排除 node_modules / dist / target / .git 四个目录，其余全扫。
+ * 于是本地会把**gitignore 的未跟踪文件**也算进来，与 CI 报出不同的数字：
+ * 实测本地 72 处、CI 61 处，差额 11 处全部来自 CAD Viewer 里一个遗留的
+ * subagent worktree（`.meituan-catpaw/…/subagent-worktree-aab44c27/src/app.css`，
+ * 508K、已 gitignore、未跟踪）。CI 是 `--depth 1` 浅克隆，看不到它。
+ *
+ * 数字对不上比数字不准更糟 —— 会让人以为是规则或代码变了。
+ * CI 只看得到已跟踪文件，所以**以 git 为准**：本地也只扫已跟踪文件。
+ *
+ * 用 `git ls-files` 而不是解析 .gitignore：ignore 语义复杂（否定规则、
+ * 嵌套 .gitignore、目录级规则），而 ls-files 直接给出「git 实际会交付什么」。
+ *
+ * 不是 git 仓时退回 walk()，并保持旧行为 —— 但会在报告里标出来，
+ * 避免静默地把「扫少了」当成「没回退」。
+ */
+function trackedStyleFiles(dir) {
+  let out;
+  try {
+    out = execFileSync("git", ["-C", dir, "ls-files", "-z"], {
+      encoding: "utf8",
+      maxBuffer: 64 * 1024 * 1024,
+      stdio: ["ignore", "pipe", "ignore"],
+    });
+  } catch {
+    return { files: walk(dir), tracked: false };
+  }
+  const files = out
+    .split("\0")
+    .filter(Boolean)
+    .filter((p) => /\.(css|html|svelte)$/.test(p))
+    .filter((p) => !EXCLUDE.some((re) => re.test(p)))
+    .map((p) => join(dir, p));
+  return { files, tracked: true };
+}
+
+function walk(dir, acc = []) {
+  for (const e of readdirSync(dir)) {
+    if (e === "node_modules" || e === "dist" || e === "target" || e === ".git") continue;
+    const p = join(dir, e);
+    let st;
+    try {
+      st = statSync(p);
+    } catch {
+      continue; // 断链的符号链接等
+    }
+    if (st.isDirectory()) walk(p, acc);
+    else if (/\.(css|html|svelte)$/.test(e)) acc.push(p);
+  }
+  return acc;
+}
+
+let total = 0;
+const report = [];
+
+for (const [id, rel] of Object.entries(REPOS)) {
+  const dir = join(root, resolveRepo(rel));
+  let files;
+  let tracked = true;
+  try {
+    ({ files, tracked } = trackedStyleFiles(dir));
+  } catch {
+    continue;
+  }
+  if (!tracked) {
+    console.log(`  ⚠ ${id.padEnd(11)} 不是 git 仓，已退回目录递归（数字可能与 CI 不一致）`);
+  }
+  for (const f of files) {
+    if (f.endsWith(join("rocktier", "tokens.css")) || f.endsWith("src" + "\\styles\\tokens.css")) continue;
+    if (relative(dir, f).replace(/\\/g, "/").endsWith("rocktier/tokens.css")) continue;
+    if (relative(dir, f).replace(/\\/g, "/").endsWith("styles/tokens.css")) continue;
+
+    const css = stripComments(readFileSync(f, "utf8"));
+    const bs = blocks(css);
+    if (bs.length === 0) continue;
+
+    for (const b of bs) {
+      const ref = master[b.scope];
+      const diffs = [];
+      for (const [k, v] of b.tokens) {
+        if (!ref.has(k)) continue; // 私有令牌，不在本检查范围
+        if (norm(ref.get(k)) === norm(v)) continue;
+        if (/^var\(/.test(v)) continue; // 引用母版，非回退
+        diffs.push({ k, prod: v, master: ref.get(k) });
+      }
+      if (diffs.length === 0) continue;
+      const lines = css.slice(0, b.start).split("\n").length;
+      report.push({ id, file: relative(dir, f).replace(/\\/g, "/"), line: lines, scope: b.scope, diffs });
+      total += diffs.length;
+    }
+  }
+}
+
+for (const r of report) {
+  console.log(`${r.id}  ${r.file}:${r.line}  [${r.scope}]  ${r.diffs.length} 处`);
+  for (const d of r.diffs) {
+    console.log(`    ${d.k}`);
+    console.log(`      产品: ${d.prod}`);
+    console.log(`      母版: ${d.master}`);
+  }
+  console.log("");
+}
+console.log(`\n合计回退 ${total} 处，分布于 ${report.length} 个块`);
+process.exit(total > 0 ? 1 : 0);

@@ -1,0 +1,42 @@
+export interface MarkdownDocument {
+  /** Stable per-document identity. The path could not be used: every untitled
+   *  document shared docId(null), so a second "New" tab collided with the
+   *  first (duplicate React keys, both tabs active, close/switch confusion). */
+  id: string;
+  path: string | null;
+  content: string;
+  modified: boolean;
+}
+
+export const WELCOME_DOCUMENT = `# The Art of Focus
+
+## Why Write?
+
+A blank page, and nothing between you and it. No distractions, no formatting decisions, just your words.
+
+## How to Use This Document
+
+You're in a single focused pane — no preview, no split. Your headings become chapters — navigate them from the sidebar. Type \`# \` for a chapter, \`## \` for a section.
+
+When your draft is ready, export to **DOCX** — a manuscript-formatted file with:
+
+- Times New Roman, 12pt, double-spaced
+- 1-inch margins, A4 page
+- Page numbers bottom-right
+
+## Focus Mode
+
+Toggle focus from the toolbar:
+
+- **Off** — see everything
+- **Paragraph** — dim surrounding paragraphs
+- **Sentence** — dim everything but the current sentence
+
+## Word Goals
+
+Set a daily word count goal from the toolbar. Your progress appears in the status bar.
+
+---
+
+*Rocktier Write — Fast. Private. Focused.*
+`;
