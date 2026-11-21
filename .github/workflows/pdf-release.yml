@@ -43,7 +43,7 @@ jobs:
           brew install qpdf
           bash apps/pdf/scripts/provision-qpdf-macos.sh
       - name: Go engine tests
-        working-directory: ./sign-engine
+        working-directory: apps/pdf/sign-engine
         run: |
           go vet ./...
           go test ./...

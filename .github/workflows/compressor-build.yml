@@ -27,6 +27,7 @@ jobs:
         with:
           node-version: 20
           cache: 'npm'
+          cache-dependency-path: apps/compressor/package-lock.json
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy
@@ -39,6 +40,7 @@ jobs:
       - name: Go engine tests
         # 压缩引擎回归测试（D-73）。发版前必须绿 —— 引擎逻辑错了会直接
         # 产出「压缩后反而变大」的文件给用户。
+        working-directory: apps/compressor
         run: |
           cd compress-engine
           go vet ./...
@@ -47,13 +49,14 @@ jobs:
       - name: Build compress-engine binaries
         # tauri_build::build() (build.rs) hard-fails when a bundle.resources
         # path is missing — clippy needs the engine binaries to exist first.
+        working-directory: apps/compressor
         run: |
           cd compress-engine
-          CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -o ../apps/compressor/src-tauri/compress-engine-windows.exe .
-          CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -o ../apps/compressor/src-tauri/compress-engine-macos .
+          CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -o ../src-tauri/compress-engine-windows.exe .
+          CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -o ../src-tauri/compress-engine-macos .
           cd ..
       - name: Rust clippy
-        run: cargo clippy --manifest-path apps/compressor/apps/compressor/src-tauri/Cargo.toml --all-targets -- -D warnings
+        run: cargo clippy --manifest-path apps/compressor/src-tauri/Cargo.toml --all-targets -- -D warnings
 
   compressor-build-macos:
     name: macOS (${{ matrix.arch }})
@@ -82,6 +85,7 @@ jobs:
         with:
           node-version: 20
           cache: 'npm'
+          cache-dependency-path: apps/compressor/package-lock.json
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
@@ -94,10 +98,11 @@ jobs:
         working-directory: apps/compressor
         run: npm ci
       - name: Build compress-engine (all platforms)
+        working-directory: apps/compressor
         run: |
           cd compress-engine
-          CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -o ../apps/compressor/src-tauri/compress-engine-windows.exe .
-          CGO_ENABLED=0 GOOS=darwin GOARCH=${{ matrix.goarch }} go build -o ../apps/compressor/src-tauri/compress-engine-macos .
+          CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -o ../src-tauri/compress-engine-windows.exe .
+          CGO_ENABLED=0 GOOS=darwin GOARCH=${{ matrix.goarch }} go build -o ../src-tauri/compress-engine-macos .
           cd ..
       - name: Build DMG + app
         env:
@@ -199,6 +204,7 @@ jobs:
         with:
           node-version: 20
           cache: 'npm'
+          cache-dependency-path: apps/compressor/package-lock.json
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: x86_64-pc-windows-msvc
@@ -206,12 +212,13 @@ jobs:
         working-directory: apps/compressor
         run: npm ci
       - name: Build compress-engine (all platforms)
+        working-directory: apps/compressor
         run: |
           cd compress-engine
           $env:CGO_ENABLED='0'; $env:GOOS='windows'; $env:GOARCH='amd64'
-          go build -o ../apps/compressor/src-tauri/compress-engine-windows.exe .
+          go build -o ../src-tauri/compress-engine-windows.exe .
           $env:CGO_ENABLED='0'; $env:GOOS='darwin'; $env:GOARCH='arm64'
-          go build -o ../apps/compressor/src-tauri/compress-engine-macos .
+          go build -o ../src-tauri/compress-engine-macos .
           cd ..
       - name: Build MSI + NSIS
         env:

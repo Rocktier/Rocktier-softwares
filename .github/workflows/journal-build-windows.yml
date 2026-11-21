@@ -19,6 +19,7 @@ jobs:
         with:
           node-version: 22
           cache: "npm"
+          cache-dependency-path: apps/journal/package-lock.json
 
       - uses: dtolnay/rust-toolchain@stable
         with:
@@ -37,7 +38,7 @@ jobs:
         id: tauri_action
         with:
           args: "--bundles msi --target x86_64-pc-windows-msvc"
-          projectPath: "."
+          projectPath: apps/journal
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 

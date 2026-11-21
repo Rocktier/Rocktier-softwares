@@ -82,7 +82,7 @@ jobs:
           APPLE_CERT_P12: ${{ secrets.APPLE_CERT_P12 }}
         run: |
           set -euo pipefail
-          VERSION=$(node -p "require('./package.json').version")
+          VERSION=$(node -p "require('./apps/pic2webp/package.json').version")
           DMG="Pic2WebP_${VERSION}_${{ matrix.arch }}.dmg"
           cp /tmp/pic2webp-signed.dmg "$DMG"
 
@@ -107,7 +107,7 @@ jobs:
           file "$APP/Contents/MacOS/"* | tee /dev/stderr | grep -q '${{ matrix.filearch }}'
 
       - name: Package app.zip (macOS)
-        if: startsWith(github.ref, 'refs/tags/v') && matrix.os == 'macos'
+        if: startsWith(github.ref, 'refs/tags/') && matrix.os == 'macos'
         run: |
           APP=$(find apps/pic2webp/src-tauri/target/release/bundle/macos -maxdepth 1 -name '*.app' | head -1)
           [ -z "$APP" ] && { echo "::error::.app not found"; exit 1; }
@@ -156,7 +156,7 @@ jobs:
       #  GitHub Release (tag 推送时)
       # ──────────────────────────────────────────────
       - name: Release (macOS)
-        if: startsWith(github.ref, 'refs/tags/v') && matrix.os == 'macos'
+        if: startsWith(github.ref, 'refs/tags/') && matrix.os == 'macos'
         uses: softprops/action-gh-release@v2
         with:
           draft: true
@@ -188,7 +188,7 @@ jobs:
           fi
 
       - name: Release (Windows)
-        if: startsWith(github.ref, 'refs/tags/v') && matrix.os == 'windows'
+        if: startsWith(github.ref, 'refs/tags/') && matrix.os == 'windows'
         uses: softprops/action-gh-release@v2
         with:
           draft: true
@@ -203,7 +203,7 @@ jobs:
   # 仅 tag 推送时运行（main 推送不创建 release，跳过）。
   pic2webp-publish:
     name: Verify & Publish Release
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: startsWith(github.ref, 'refs/tags/')
     needs: [pic2webp-build]
     runs-on: ubuntu-latest
     permissions:

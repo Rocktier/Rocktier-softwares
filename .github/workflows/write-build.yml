@@ -9,7 +9,7 @@
 #   ⚠️ 若本仓改回 private：立刻删掉下面的 `branches: [main]`。私有仓 macOS 倍率 10×，
 #   一次全平台构建就能吃掉几天配额，还会挤掉真正的发版。
 #   ⚠️ 分支构建不许产出可下载资产：tauri-action 的 tagName 必须保持
-#   `github.ref_type == 'tag' && 'v__VERSION__' || ''` 这个形状，否则 main 会覆盖线上资产。
+#   `github.ref_type == 'tag' && github.ref_name || ''` 这个形状，否则 main 会覆盖线上资产。
 
 name: Build & Release
 
@@ -88,7 +88,8 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ""
           # Inherit ad-hoc signing env from job level
         with:
-          tagName: ${{ github.ref_type == 'tag' && 'v__VERSION__' || '' }}
+          projectPath: apps/write
+          tagName: ${{ github.ref_type == 'tag' && github.ref_name || '' }}
           releaseName: "Rocktier Write v__VERSION__"
           releaseBody: "Rocktier Write release."
           releaseDraft: true
@@ -130,7 +131,8 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ""
         with:
-          tagName: ${{ github.ref_type == 'tag' && 'v__VERSION__' || '' }}
+          projectPath: apps/write
+          tagName: ${{ github.ref_type == 'tag' && github.ref_name || '' }}
           releaseName: "Rocktier Write v__VERSION__"
           releaseBody: "Rocktier Write release."
           releaseDraft: true
@@ -279,7 +281,7 @@ jobs:
         #（实测 e00dae3 的 build-macos 就是这样失败的）。而它存在的意义仅为
         # tag 发版时把产物搬到工作目录供 attach 用 —— 分支 push 不需要。
         # 必须与下面的 Attach 保持同样的条件，否则就是「一边传一边不传」。
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: startsWith(github.ref, 'refs/tags/')
         run: |
           set -e
           APP=$(find "apps/write/src-tauri/target/${{ matrix.target }}/release/bundle/macos" -name "*.app" -print -quit)
@@ -314,7 +316,7 @@ jobs:
       # Q8（本仓早先定案：暂不做代码签名）本轮按用户要求推翻 —— 证书配齐后
       # 上面那步会走 Developer ID + 公证。
       - name: Attach macOS artifacts to release (tag push)
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}
@@ -331,7 +333,7 @@ jobs:
       # tauri-action 在重签之前就把 ad-hoc dmg 传进了 draft release，
       # 只靠 softprops 同名覆盖的假设，出问题时不留任何痕迹。
       - name: Assert published DMG matches the signed one (tag push)
-        if: startsWith(github.ref, 'refs/tags/v') && env.HAS_CERT == 'true'
+        if: startsWith(github.ref, 'refs/tags/') && env.HAS_CERT == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -377,7 +379,8 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ""
         with:
-          tagName: ${{ github.ref_type == 'tag' && 'v__VERSION__' || '' }}
+          projectPath: apps/write
+          tagName: ${{ github.ref_type == 'tag' && github.ref_name || '' }}
           releaseName: "Rocktier Write v__VERSION__"
           releaseBody: "Rocktier Write release."
           releaseDraft: true
@@ -428,7 +431,7 @@ jobs:
           if-no-files-found: error
 
       - name: Attach MSIX to release (tag push)
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}
@@ -440,7 +443,7 @@ jobs:
   # 不齐就保留草稿并让 job 失败 —— 用户永远不会拿到残缺包。
   write-publish:
     name: Verify & Publish Release
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: startsWith(github.ref, 'refs/tags/')
     needs: [write-build-macos, write-build-windows]
     runs-on: ubuntu-latest
     permissions:

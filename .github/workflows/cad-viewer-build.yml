@@ -108,6 +108,7 @@ jobs:
           fi
 
       - name: Build .app (re-signed, LibreDWG sidecar bundled)
+        working-directory: apps/cad-viewer
         run: ./build_app.sh
 
       # 把公证失败提前到「构建后几秒」：等 notarytool 跑完 10 分钟才报
@@ -133,13 +134,15 @@ jobs:
         continue-on-error: true
         env:
           # CI 不依赖 $HOME/Downloads：直接落到 bundle/dmg
-          CAD_DMG_OUT: apps/cad-viewer/src-tauri/target/release/bundle/dmg/Rocktier CAD Viewer.dmg
+          CAD_DMG_OUT: src-tauri/target/release/bundle/dmg/Rocktier CAD Viewer.dmg
+        working-directory: apps/cad-viewer
         run: ./bundle_dmg.sh
 
       - name: Retry Build DMG (create-dmg flake)
         if: steps.build_dmg.outcome == 'failure'
         env:
-          CAD_DMG_OUT: apps/cad-viewer/src-tauri/target/release/bundle/dmg/Rocktier CAD Viewer.dmg
+          CAD_DMG_OUT: src-tauri/target/release/bundle/dmg/Rocktier CAD Viewer.dmg
+        working-directory: apps/cad-viewer
         run: |
           set -uo pipefail
           # 清掉残留挂载与半成品，否则重试会撞在同一个残留上
@@ -147,8 +150,8 @@ jobs:
             | grep -i rocktier | while read -r m; do
                 echo "detaching $m"; hdiutil detach "$m" -force || true
               done
-          rm -f "apps/cad-viewer/src-tauri/target/release/bundle/dmg/Rocktier CAD Viewer.dmg" \
-                "apps/cad-viewer/src-tauri/target/release/bundle/dmg/Rocktier_CAD_Viewer.tmp.dmg"
+          rm -f "src-tauri/target/release/bundle/dmg/Rocktier CAD Viewer.dmg" \
+                "src-tauri/target/release/bundle/dmg/Rocktier_CAD_Viewer.tmp.dmg"
           ./bundle_dmg.sh
 
       # 公证的对象是整个 DMG；staple 把票据装回 DMG，离线也能验。
@@ -197,7 +200,7 @@ jobs:
 
       - name: Prepare release artifact
         run: |
-          VERSION=$(node -p "require('./package.json').version")
+          VERSION=$(node -p "require('./apps/cad-viewer/package.json').version")
           dmg=$(find apps/cad-viewer/src-tauri/target/release/bundle/dmg -name '*.dmg' ! -name '*.tmp.dmg' -print -quit)
           [ -n "$dmg" ] || { echo "::error::DMG not found"; exit 1; }
           cp "$dmg" "Rocktier-CAD-Viewer_${VERSION}_${{ matrix.arch }}.dmg"
@@ -222,7 +225,7 @@ jobs:
           ditto -c -k --keepParent "$APP" "Rocktier.CAD.Viewer_${{ matrix.arch }}.app.zip"
 
       - name: Release (tag push)
-        if: startsWith(github.ref, 'refs/tags/v') || inputs.release_tag != ''
+        if: startsWith(github.ref, 'refs/tags/') || inputs.release_tag != ''
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ inputs.release_tag || github.ref_name }}
@@ -316,7 +319,7 @@ jobs:
           if-no-files-found: error
 
       - name: Release (tag push)
-        if: startsWith(github.ref, 'refs/tags/v') || inputs.release_tag != ''
+        if: startsWith(github.ref, 'refs/tags/') || inputs.release_tag != ''
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ inputs.release_tag || github.ref_name }}
@@ -389,7 +392,7 @@ jobs:
   # 不齐就保留草稿并让 job 失败 —— 用户永远不会拿到残缺包。
   cad-viewer-publish:
     name: Verify & Publish Release
-    if: startsWith(github.ref, 'refs/tags/v') || inputs.release_tag != ''
+    if: startsWith(github.ref, 'refs/tags/') || inputs.release_tag != ''
     needs: [cad-viewer-build-macos, cad-viewer-build-windows]
     runs-on: ubuntu-latest
     permissions:

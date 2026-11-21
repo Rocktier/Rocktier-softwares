@@ -27,6 +27,7 @@ jobs:
         with:
           node-version: 24
           cache: 'npm'
+          cache-dependency-path: apps/markdown/package-lock.json
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy
@@ -40,8 +41,8 @@ jobs:
           npm test
       - name: Rust tests + clippy
         run: |
-          cargo test --manifest-path apps/markdown/apps/markdown/src-tauri/Cargo.toml
-          cargo clippy --manifest-path apps/markdown/apps/markdown/src-tauri/Cargo.toml --all-targets -- -D warnings
+          cargo test --manifest-path apps/markdown/src-tauri/Cargo.toml
+          cargo clippy --manifest-path apps/markdown/src-tauri/Cargo.toml --all-targets -- -D warnings
 
   markdown-build-macos:
     name: macOS (${{ matrix.arch }})
@@ -63,6 +64,7 @@ jobs:
         with:
           node-version: 24
           cache: 'npm'
+          cache-dependency-path: apps/markdown/package-lock.json
       - uses: dtolnay/rust-toolchain@stable
       - uses: swatinem/rust-cache@v2
         with:
@@ -181,6 +183,7 @@ jobs:
           # checks job needs a newer Node (jsdom), and this one does not run vitest.
           node-version: 20
           cache: 'npm'
+          cache-dependency-path: apps/markdown/package-lock.json
       - uses: dtolnay/rust-toolchain@stable
         with:
           # tauri-windows-bundle builds with an explicit --target, so the target
