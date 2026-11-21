@@ -1,0 +1,40 @@
+[package]
+name = "rocktier-compressor"
+version = "0.1.16"
+description = "Shrink PDFs, Office docs, and images without losing quality. On your machine, not someone else's server."
+authors = ["Rocktier"]
+edition = "2021"
+
+[lib]
+name = "rocktier_compressor_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2.0.0", features = [] }
+
+[dependencies]
+tauri = { version = "2.0", features = [] }
+tauri-plugin-dialog = "2.0"
+tauri-plugin-fs = "2.0"
+tauri-plugin-opener = "2"
+# 没有 tauri-plugin-updater：更新走 services/updates.ts 的手动检查，
+# 插件与 tauri.conf.json 的 plugins.updater 段必须同生同死（见 lib.rs 注释）。
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+chrono = "0.4"
+walkdir = "2"
+url = "=2.5.8"
+# 授权回执的 base64 解码与 Ed25519 离线验签（license.rs，FAMILY-LICENSE.md §2）
+base64 = "0.22"
+ed25519-dalek = "2"
+
+[features]
+default = ["custom-protocol"]
+custom-protocol = ["tauri/custom-protocol"]
+
+[profile.release]
+opt-level = "s"
+lto = true
+codegen-units = 1
+strip = true
+panic = "abort"

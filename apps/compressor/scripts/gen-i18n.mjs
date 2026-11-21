@@ -1,0 +1,183 @@
+#!/usr/bin/env node
+/* Compressor 多语言改写器。
+ *
+ * ── 家族第四种（也是最特殊的一种）i18n 形状 ──
+ *   PDF     嵌套字典，每语言一个对象
+ *   CAD     扁平字典，每语言一个 Record
+ *   Sign    每个键内联所有语言
+ *   **Compressor 完全没有字典** —— 翻译直接写在 JSX 里：
+ *
+ *       const t = (zh: string, en: string) => (lang === "zh" ? zh : en);
+ *       <button>{t("选择文件", "Choose files")}</button>
+ *
+ * 所以这里不是「生成字典」，而是**把内联的双语闭包改成查表**：
+ * `t("选择文件", "Choose files")` → `t("选择文件", "Choose files", "…ja…", …)`
+ *
+ * ── 为什么保留调用点不改成字典 ──
+ * 改成字典是更大的重构（要新增 Dict 类型、把所有 t() 调用换成 key），
+ * 而 Compressor 只有 24 处 —— 内联形态在这里是合理的。
+ * 只需把闭包从二元扩到八元，并让调用点带上其余 6 门。
+ *
+ * ── 一个必须防住的坑 ──
+ * 8 个位置参数时，**把 ja 和 ko 写反也能编译通过**，运行时显示错语言。
+ * 所以译文从 `scripts/i18n/<lang>.mjs` 读，键用**英文原文**，
+ * 生成时按下标展开 —— 顺序由文件里的数组顺序唯一决定，不靠人手对齐。
+ *
+ * 用法：node scripts/gen-i18n.mjs    （--lang 仅接受 LANGS 里的语言 —— 2026-10-13 收敛后为空）
+ */
+
+import { readFileSync, writeFileSync, existsSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+
+const HERE = dirname(fileURLToPath(import.meta.url));
+const REPO = process.env.ROCKTIER_ROOT || join(HERE, "..", "..", "..", "..");
+const GLOSSARY = join(REPO, "docs", "rocktier", "i18n", "glossary.json");
+/* 2026-10-13 家族裁定：语言收敛为 en/zh 两门 —— 非中英语种均为未审校机翻基线
+   （family.json globalRules.$locales_2026_10_13）。生成器不再产出 6 门译文：
+   留着 LANGS 等于留一条复活路径，谁跑一次本脚本，删掉的字典文件全部回来。
+   scripts/i18n/<lang>.mjs 译文物保留作历史档案，不进构建。 */
+const LANGS = [];
+const TARGETS = ["src/App.tsx", "src/components/LicenseDialog.tsx"];
+
+const args = process.argv.slice(2);
+const only = args.includes("--lang") ? args[args.indexOf("--lang") + 1] : null;
+
+/* --lang 只接受 LANGS 里的语言 —— LANGS 是唯一真源（2026-10-13 收敛裁定后为空）。
+   en/zh 由基线数据恒产，不需要指定；基线外语言要重建必须先入 LANGS 并通过审校，
+   不能用 --lang 绕过。没有这道守卫时，`--lang ja` 会去读 scripts/i18n/ja.mjs
+   归档并罗列「缺 N 条译文、补齐后重跑」—— 那段话等于邀请把已删的机翻基线请回来。 */
+if (only && !LANGS.includes(only)) {
+  console.error(`  ❌ --lang "${only}"：不在 LANGS（当前为空 —— 2026-10-13 语言收敛裁定）。`);
+  console.error(`     en/zh 无需指定；基线外语言须先入 LANGS 并通过审校。`);
+  process.exit(2);
+}
+
+if (!existsSync(GLOSSARY)) {
+  console.error(`  ❌ 找不到家族术语表: ${GLOSSARY}\n     设 ROCKTIER_ROOT 指向家族根`);
+  process.exit(2);
+}
+const G = JSON.parse(readFileSync(GLOSSARY, "utf8"));
+const approved = new Map();
+for (const [, loc] of Object.entries(G.terms)) {
+  const en = loc.en?.value;
+  if (!en) continue;
+  const pack = {};
+  for (const l of LANGS) if (loc[l]?.value) pack[l] = loc[l].value;
+  if (Object.keys(pack).length) approved.set(en, pack);
+}
+console.error(`  术语表: ${approved.size} 条英文有家族批准译法`);
+
+/* 扫出全部 `t("中文", "English")` 调用 —— 键用**英文**，
+   因为它是跨语言稳定的标识（中文在非中文界面里毫无意义）。 */
+const CALL = /\bt\(\s*"([^"]*)"\s*,\s*"([^"]*)"\s*\)/g;
+const calls = new Map(); // en -> zh
+for (const rel of TARGETS) {
+  const p = join(HERE, "..", rel);
+  if (!existsSync(p)) continue;
+  const s = readFileSync(p, "utf8");
+  for (const m of s.matchAll(CALL)) calls.set(m[2], m[1]);
+}
+console.error(`  t(zh, en) 调用: ${calls.size} 条`);
+
+let missingTotal = 0;
+const table = {};
+/* 表里**只放基线之外的语言** —— en/zh 内联在调用点（t("中文", "English")），
+   由闭包 `lang === "zh" ? zh : lookup(lang, en)` 分发（2026-10-14 `2802de6`
+   修的就是这个分发：此前 `_zh` 被整个忽略，中文用户永远看到英文）。
+   所以 LANGS 为空时 STRINGS 为空对象是**正常终态**，不是缺数据。
+   档位文案相反：它只走 PROFILE_I18N 查表，没有内联兜底，
+   所以 en/zh 必须由本生成器恒产（见下方 PROFILE_LANGS）。 */
+for (const lang of only ? [only] : LANGS) {
+  let ctx = {};
+  try {
+    ctx = (await import(`./i18n/${lang}.mjs`)).default || {};
+  } catch (e) {
+    if (e && e.code === "ERR_MODULE_NOT_FOUND") {
+      console.error(`     (scripts/i18n/${lang}.mjs 尚未创建)`);
+    } else {
+      /* 不要静默吞：文件存在但坏了，必须报出来 */
+      console.error(`  ❌ scripts/i18n/${lang}.mjs 无法导入: ${String(e.message).split("\n")[0]}`);
+      missingTotal++;
+      continue;
+    }
+  }
+  const out = {};
+  const missing = [];
+  for (const [en] of calls) {
+    const term = approved.get(en)?.[lang];
+    const v = term ?? (typeof ctx[en] === "string" ? ctx[en] : null);
+    if (v === null) { missing.push(en.slice(0, 54)); continue; }
+    const want = [...en.matchAll(/\{(\w+)\}/g)].map((x) => x[1]).sort().join(",");
+    const got = [...v.matchAll(/\{(\w+)\}/g)].map((x) => x[1]).sort().join(",");
+    if (want !== got) { missing.push(`${en.slice(0, 40)} — 占位符不符（源 {${want}} / 译文 {${got}}）`); continue; }
+    out[en] = v;
+  }
+  if (missing.length) {
+    missingTotal += missing.length;
+    console.error(`\n  ⚠️ ${lang}: 缺 ${missing.length} 条`);
+    missing.forEach((m) => console.error(`      ${m}`));
+    continue;
+  }
+  table[lang] = out;
+  console.error(`  ✅ ${lang}: ${Object.keys(out).length} 条齐全`);
+}
+
+if (missingTotal) {
+  console.error(`\n  ❌ 共 ${missingTotal} 条缺译文。补齐后重跑。\n`);
+  process.exit(1);
+}
+
+const q = (s) => JSON.stringify(s);
+
+/* ① 生成查表模块：STRINGS[lang][en] —— 只含基线之外的语言（见上方注释） */
+const tbl = ["/* 由 scripts/gen-i18n.mjs 生成 —— 勿手改。",
+  " * Compressor 的界面文案内联在 JSX 里（t(\"中文\", \"English\")），",
+  " * en/zh 由调用点闭包分发，不进本表；本表只放基线之外的语言，",
+  " * 键用**英文原文** —— 英文是跨语言稳定的标识。",
+  " * 2026-10-13 收敛后无基线外语言，故 STRINGS 为空对象（正常终态）。",
+  " *",
+  " * 术语部分取自 docs/rocktier/i18n/glossary.json（家族唯一真源）。",
+  " *",
+  " * C 方案：机翻基线。接入翻译 API 后重跑生成器覆盖。 */",
+  "",
+  "export const STRINGS: Record<string, Record<string, string>> = {"];
+for (const lang of Object.keys(table)) {
+  tbl.push(`  ${lang}: {`);
+  for (const [en, v] of Object.entries(table[lang])) tbl.push(`    ${q(en)}: ${q(v)},`);
+  tbl.push("  },");
+}
+tbl.push("};", "");
+
+/* 压缩档位文案（[名称, 描述] 二元组）也由本生成器产出。
+ *
+ * 它原本住在 src/App.tsx 里，但那是**组件**——把翻译数据放进组件的后果是
+ * no-literal-user-strings 闸门报假阳性：`印刷` 这种汉字既是合法中文也是
+ * 合法日语，字形判据分不出来，只能靠「它其实是字典」来豁免。
+ * 与其给闸门开特例，不如把数据放回它该在的 i18n 模块。 */
+const PROFILES = ["default", "web", "print", "screen", "maximum"];
+/* 档位文案：en/zh 是家族基线，永远产出；LANGS 是额外语言（当前为空）。
+   中文来自 scripts/i18n-profiles/zh.mjs（手写文案，非机翻）。 */
+const PROFILE_LANGS = ["en", "zh", ...Object.keys(table).filter((l) => l !== "zh")];
+const DESC = {
+  default: "Balanced quality and size",
+  web: "Optimised for web upload",
+  print: "Preserve print quality",
+  screen: "Screen display only",
+  maximum: "Smallest file, lossy",
+};
+for (const lang of PROFILE_LANGS) {
+  const m = (await import(`./i18n-profiles/${lang}.mjs`)).default;
+  tbl.push(`export const PROFILE_${lang.replace("-", "_").toUpperCase()}: Record<string, [string, string]> = {`);
+  for (const p of PROFILES) tbl.push(`  ${q(p)}: [${q(m[p][0])}, ${q(m[p][1])}],`);
+  tbl.push("};", "");
+}
+tbl.push(`/** 档位文案按语言索引。键是档位名，与 TARGETS 里的 profile 对应。 */`);
+tbl.push(`export const PROFILE_I18N: Record<string, Record<string, [string, string]>> = {`);
+for (const lang of PROFILE_LANGS) {
+  tbl.push(`  ${q(lang)}: PROFILE_${lang.replace("-", "_").toUpperCase()},`);
+}
+tbl.push("};", "");
+
+writeFileSync(join(HERE, "..", "src", "i18n-strings.ts"), tbl.join("\n"));
+console.error(`\n  ✅ src/i18n-strings.ts（查表 ${Object.keys(table).length} 门；en/zh 内联在调用点共 ${calls.size} 条；档位 en/zh）\n`);

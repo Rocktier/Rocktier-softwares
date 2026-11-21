@@ -1,0 +1,252 @@
+package main
+
+import (
+	"encoding/json"
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+)
+
+// CompressResult mirrors the JSON returned to the Rust frontend.
+type CompressResult struct {
+	InputPath     string  `json:"inputPath"`
+	OutputPath    string  `json:"outputPath"`
+	OriginalSize  int64   `json:"originalSize"`
+	CompressedSize int64  `json:"compressedSize"`
+	Ratio         float64 `json:"ratio"`
+	Format        string  `json:"format"`
+	Error         string  `json:"error,omitempty"`
+	Note          string  `json:"note,omitempty"`
+}
+
+// Profile represents a named compression preset.
+type Profile struct {
+	Name        string  `json:"name"`
+	Label       string  `json:"label"`
+	Description string  `json:"description"`
+	Quality     string  `json:"quality"`
+}
+
+// detectFormat returns the compression category for a given file path.
+// ".xls" is deliberately NOT folded into "xlsx": legacy .xls is an OLE2 binary
+// compound document, not a ZIP of OOXML parts — the whole xlsx/docx/pptx
+// pipeline (zip.OpenReader …) cannot open it. It gets its own category so the
+// user gets a targeted "save as .xlsx" message instead of "unsupported format".
+func detectFormat(path string) string {
+	ext := strings.ToLower(filepath.Ext(path))
+	switch ext {
+	case ".pdf":
+		return "pdf"
+	case ".docx", ".docm", ".dotx":
+		return "docx"
+	case ".xlsx", ".xlsm", ".xltx":
+		return "xlsx"
+	case ".xls", ".xlt":
+		return "xls-legacy"
+	case ".pptx", ".pptm", ".potx":
+		return "pptx"
+	case ".jpg", ".jpeg":
+		return "jpeg"
+	case ".png":
+		return "png"
+	case ".tiff", ".tif":
+		return "tiff"
+	default:
+		return "unknown"
+	}
+}
+
+// outputFile generates the output path (e.g., "report_compressed.pdf" or "report_compressed.docx").
+func outputFile(input string) string {
+	ext := filepath.Ext(input)
+	base := strings.TrimSuffix(input, ext)
+	return base + "_compressed" + ext
+}
+
+// cmdCompress routes a single file to the correct pipeline based on detected
+// format and returns the result (does not print). `compress` prints it directly;
+// `batch` accumulates several into a single JSON array.
+func cmdCompress(input, profile, quality string, targetBytes int64) CompressResult {
+	info, err := os.Stat(input)
+	if err != nil {
+		return CompressResult{InputPath: input, Error: fmt.Sprintf("cannot stat input: %v", err)}
+	}
+
+	format := detectFormat(input)
+	result := CompressResult{
+		InputPath:    input,
+		OutputPath:   outputFile(input),
+		OriginalSize: info.Size(),
+		Format:       format,
+	}
+
+	// 用户目录零 tmp 垃圾的最后一块（2026-10-24 用户要求「TMP 文件不要
+	// 保存、不要生成」）：正常路径下 tmp 成功即 rename、失败即删除、回退
+	// 随 output 一起删（见 xlsx/pptx/docx 与下方回退段），唯独上次进程被
+	// 强杀/断电会遗留一个孤儿。tmp 命名是确定性的（OutputPath + ".tmp"），
+	// 只可能是引擎自己的半成品——压缩前扫掉，让每次运行自愈。理论上不排除
+	// 用户真有个同名 .tmp 文件，但那是他自己建的引擎产物名，概率可忽略；
+	// 相比之下留着垃圾是必然被看见的。
+	_ = os.Remove(result.OutputPath + ".tmp")
+
+	switch format {
+	case "pdf":
+		result = compressPDF(input, profile, quality, result)
+	case "docx":
+		result = compressDocx(input, profile, quality, result)
+	case "xlsx":
+		result = compressXlsx(input, profile, quality, result)
+	case "pptx":
+		result = compressPptx(input, profile, quality, result)
+	case "jpeg", "png", "tiff":
+		if targetBytes > 0 {
+			if note, err := compressImageToTarget(input, result.OutputPath, profile, quality, targetBytes); err != nil {
+				result.Error = fmt.Sprintf("Image compression failed: %v", err)
+			} else {
+				result.Note = note
+			}
+		} else {
+			result = compressImage(input, profile, quality, result)
+		}
+	case "xls-legacy":
+		// Legacy binary .xls: not a ZIP, so the OOXML re-packaging pipeline
+		// cannot open it. Say so plainly and tell the user the one-step fix —
+		// the generic "unsupported format" message left them with no action
+		// (2026-10-24 user report: dropping an .xls did nothing at all).
+		result.Error = "legacy .xls format is not supported — open the file in Excel or WPS and save it as .xlsx, then compress again"
+	default:
+		result.Error = fmt.Sprintf("unsupported format: %s", format)
+	}
+
+	if targetBytes > 0 && format != "jpeg" && format != "png" && format != "tiff" && result.Error == "" {
+		result.Note = "目标大小暂仅支持图片 / Target size applies to images only"
+	}
+
+	// 失败路径也要清掉可能已创建的半成品输出（pdfcpu / image re-encode 中途
+	// 出错时 output 文件可能已存在），否则用户目录里留一个打不开的残缺文件。
+	// 注：unsupported 类的 format 从未创建 output，remove 不存在文件无害。
+	if result.Error != "" {
+		_ = os.Remove(result.OutputPath)
+		return result
+	}
+
+	// 输出文件 stat 失败说明结果根本没落盘（磁盘满/杀软拦截等），必须按失败
+	// 上报；否则 CompressedSize 停留在 0，会被当成「已是最优」谎报成功（size=0）。
+	if result.Error == "" {
+		outInfo, err := os.Stat(result.OutputPath)
+		if err != nil {
+			result.Error = fmt.Sprintf("cannot stat output: %v", err)
+		} else {
+			result.CompressedSize = outInfo.Size()
+			if result.OriginalSize > 0 {
+				result.Ratio = float64(result.CompressedSize) / float64(result.OriginalSize)
+			}
+			// First-principle honesty: never fake a win. If the "compressed"
+			// output is not actually smaller, discard it and report the file as
+			// already optimal (empty OutputPath, ratio 1.0, no error).
+			if result.CompressedSize >= result.OriginalSize {
+				_ = os.Remove(result.OutputPath)
+				result.OutputPath = ""
+				result.CompressedSize = result.OriginalSize
+				result.Ratio = 1.0
+			}
+		}
+	}
+
+	return result
+}
+
+func outputError(input, msg string) {
+	outputJSON(CompressResult{InputPath: input, Error: msg})
+}
+
+func outputJSON(v interface{}) {
+	enc := json.NewEncoder(os.Stdout)
+	_ = enc.Encode(v)
+}
+
+func main() {
+	if len(os.Args) < 2 {
+		fmt.Fprintln(os.Stderr, "usage: compress-engine <command> [args...]")
+		os.Exit(1)
+	}
+
+	switch os.Args[1] {
+	case "compress":
+		if len(os.Args) < 6 {
+			fmt.Fprintln(os.Stderr, "usage: compress-engine compress --input <path> --profile <name> --quality <q> [--target-bytes <n>]")
+			os.Exit(1)
+		}
+		input, profile, quality, targetBytes := parseFlags(os.Args[2:])
+		outputJSON(cmdCompress(input, profile, quality, targetBytes))
+
+	case "batch":
+		args := os.Args[2:]
+		profile := "default"
+		quality := "medium"
+		var targetBytes int64
+		var paths []string
+		for i := 0; i < len(args); i++ {
+			switch args[i] {
+			case "--profile":
+				profile = args[i+1]
+				i++
+			case "--quality":
+				quality = args[i+1]
+				i++
+			case "--target-bytes":
+				fmt.Sscanf(args[i+1], "%d", &targetBytes)
+				i++
+			default:
+				paths = append(paths, args[i])
+			}
+		}
+		var results []CompressResult
+		for _, p := range paths {
+			results = append(results, cmdCompress(p, profile, quality, targetBytes))
+		}
+		outputJSON(results)
+
+	case "profiles":
+		json.NewEncoder(os.Stdout).Encode(getProfiles())
+
+	default:
+		fmt.Fprintf(os.Stderr, "unknown command: %s\n", os.Args[1])
+		os.Exit(1)
+	}
+}
+
+// parseFlags extracts named flags from argument list.
+func parseFlags(args []string) (input, profile, quality string, targetBytes int64) {
+	profile = "default"
+	quality = "medium"
+	for i := 0; i < len(args); i++ {
+		switch args[i] {
+		case "--input":
+			input = args[i+1]
+			i++
+		case "--profile":
+			profile = args[i+1]
+			i++
+		case "--quality":
+			quality = args[i+1]
+			i++
+		case "--target-bytes":
+			fmt.Sscanf(args[i+1], "%d", &targetBytes)
+			i++
+		}
+	}
+	return
+}
+
+// getProfiles returns the built-in compression profiles.
+func getProfiles() []Profile {
+	return []Profile{
+		{Name: "default", Label: "默认 / Default", Description: "平衡质量与体积 / Balanced quality and size", Quality: "medium"},
+		{Name: "web", Label: "网页 / Web", Description: "优化用于网页上传 / Optimised for web upload", Quality: "low"},
+		{Name: "print", Label: "打印 / Print", Description: "保留打印质量 / Preserve print quality", Quality: "high"},
+		{Name: "screen", Label: "屏幕 / Screen", Description: "屏幕显示即可 / Screen display only", Quality: "low"},
+		{Name: "maximum", Label: "极限 / Maximum", Description: "最小文件，质量可损 / Smallest file, quality lossy", Quality: "low"},
+	}
+}

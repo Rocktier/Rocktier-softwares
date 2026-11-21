@@ -1,0 +1,183 @@
+{
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "beforeBuildCommand": "npm run build",
+    "devUrl": "http://localhost:1420",
+    "frontendDist": "../dist"
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "resources": [],
+    "fileAssociations": [
+      {
+        "ext": [
+          "pdf"
+        ],
+        "name": "Document To Compress",
+        "description": "PDF Document",
+        "role": "Editor",
+        "mimeType": "application/pdf",
+        "exportedType": {
+          "identifier": "com.adobe.pdf",
+          "conformsTo": [
+            "public.data"
+          ]
+        }
+      },
+      {
+        "ext": [
+          "docx"
+        ],
+        "name": "Document To Compress",
+        "description": "Word Document",
+        "role": "Editor",
+        "mimeType": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "exportedType": {
+          "identifier": "org.openxmlformats.wordprocessingml.document",
+          "conformsTo": [
+            "public.data"
+          ]
+        }
+      },
+      {
+        "ext": [
+          "xlsx"
+        ],
+        "name": "Document To Compress",
+        "description": "Excel Spreadsheet",
+        "role": "Editor",
+        "mimeType": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "exportedType": {
+          "identifier": "org.openxmlformats.spreadsheetml.sheet",
+          "conformsTo": [
+            "public.data"
+          ]
+        }
+      },
+      {
+        "ext": [
+          "pptx"
+        ],
+        "name": "Document To Compress",
+        "description": "PowerPoint Presentation",
+        "role": "Editor",
+        "mimeType": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        "exportedType": {
+          "identifier": "org.openxmlformats.presentationml.presentation",
+          "conformsTo": [
+            "public.data"
+          ]
+        }
+      },
+      {
+        "ext": [
+          "jpg",
+          "jpeg"
+        ],
+        "name": "Image To Compress",
+        "description": "JPEG Image",
+        "role": "Editor",
+        "mimeType": "image/jpeg",
+        "exportedType": {
+          "identifier": "public.jpeg",
+          "conformsTo": [
+            "public.image",
+            "public.data"
+          ]
+        }
+      },
+      {
+        "ext": [
+          "png"
+        ],
+        "name": "Image To Compress",
+        "description": "PNG Image",
+        "role": "Editor",
+        "mimeType": "image/png",
+        "exportedType": {
+          "identifier": "public.png",
+          "conformsTo": [
+            "public.image",
+            "public.data"
+          ]
+        }
+      },
+      {
+        "ext": [
+          "tiff",
+          "tif"
+        ],
+        "name": "Image To Compress",
+        "description": "TIFF Image",
+        "role": "Editor",
+        "mimeType": "image/tiff",
+        "exportedType": {
+          "identifier": "public.tiff",
+          "conformsTo": [
+            "public.image",
+            "public.data"
+          ]
+        }
+      }
+    ],
+    "copyright": "Copyright 2026 Rocktier",
+    "category": "Business",
+    "shortDescription": "Offline document and image compressor",
+    "longDescription": "Rocktier Compressor - Shrink PDFs, Office docs, and images without losing quality. On your machine, not someone else's server. Buy once, own forever.",
+    "windows": {
+      "allowDowngrades": true,
+      "digestAlgorithm": "sha256",
+      "webviewInstallMode": {
+        "type": "downloadBootstrapper",
+        "silent": true
+      },
+      "nsis": {
+        "installMode": "currentUser",
+        "languages": [
+          "English"
+        ],
+        "displayLanguageSelector": false
+      },
+      "wix": {
+        "language": "en-US",
+        "upgradeCode": "CE6D9F1D-27BC-5C96-BEE1-BA7299C6C041"
+      }
+    }
+  },
+  "productName": "Rocktier Compressor",
+  "mainBinaryName": "RocktierCompressor",
+  "version": "0.1.16",
+  "identifier": "Rocktier.RocktierCompressor",
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "Rocktier Compressor",
+        "width": 960,
+        "height": 720,
+        "minWidth": 780,
+        "minHeight": 540,
+        "center": true,
+        "decorations": true,
+        "shadow": true,
+        "titleBarStyle": "Overlay",
+        "hiddenTitle": true
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https: http:; font-src 'self' data:; connect-src 'self' ipc: http://ipc.localhost https://api.github.com https://rocktier.com; object-src 'none'; frame-src 'none'; form-action 'none'; base-uri 'self'"
+    }
+  },
+  "plugins": {
+    "dialog": null,
+    "fs": null
+  }
+}
