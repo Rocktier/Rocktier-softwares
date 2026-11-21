@@ -45,9 +45,11 @@ jobs:
           key: ${{ matrix.arch }}
 
       - name: Install frontend deps
+        working-directory: apps/journal
         run: npm install --no-audit --no-fund
 
       - name: Build DMG
+        working-directory: apps/journal
         run: npm run tauri build
 
       - name: Package app.zip
@@ -101,9 +103,11 @@ jobs:
           workspaces: "apps/journal/src-tauri -> target"
 
       - name: Install frontend deps
+        working-directory: apps/journal
         run: npm install --no-audit --no-fund
 
       - name: Build MSI + NSIS installers
+        working-directory: apps/journal
         run: npm run tauri build
 
       # MSIX/MSIXBundle for Microsoft Store：tauri-windows-bundle 写盘到
@@ -112,6 +116,7 @@ jobs:
       # MSIX 直装走 direct 付费墙（微软商店渠道已弃用，2026-10-05 终裁 C3）。
       # 若未来恢复商店渠道：本步需加 env ROCKTIER_CHANNEL: store（10.8.2/10.8.4）。
       - name: Build MSIX
+        working-directory: apps/journal
         run: npm run tauri:windows:build
 
       - name: Strip _en-US from MSI filename

@@ -40,6 +40,7 @@ jobs:
           targets: x86_64-pc-windows-msvc
 
       - name: Install dependencies
+        working-directory: apps/markdown
         run: npm ci
 
       - name: Assert store channel
@@ -63,6 +64,7 @@ jobs:
           done
 
       - name: Build MSIX (store channel)
+        working-directory: apps/markdown
         run: npx tauri-windows-bundle build --runner npm --verbose
 
       - name: Verify store package

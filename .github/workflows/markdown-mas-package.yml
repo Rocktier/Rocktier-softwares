@@ -30,6 +30,7 @@ jobs:
           node-version: 20
 
       - name: Setup npm mirror (China)
+        working-directory: apps/markdown
         run: npm config set registry https://registry.npmmirror.com
 
       # universal = arm64 + x86_64 双架构。App Store 一个 .pkg 对应一个 build，
@@ -46,6 +47,7 @@ jobs:
           key: mas-universal
 
       - name: Install npm dependencies
+        working-directory: apps/markdown
         run: npm install
 
       # 出包前先验渠道接线：这一步红就不该继续产包。商店包一旦带自研付费墙，

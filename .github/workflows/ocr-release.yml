@@ -9,7 +9,7 @@ name: Release
 on:
   push:
     tags:
-      - "v*"
+      - "ocr/v*"
   workflow_dispatch:
 
 jobs:
@@ -49,9 +49,11 @@ jobs:
       # 没有前端要构建：tauri.conf.json 只把 frontendDist 指向静态的 ui/。
       # 装 npm 包只为拿到 tauri 这个命令本身。
       - name: Install Tauri CLI
+        working-directory: apps/ocr
         run: npm install
 
       - name: Build
+        working-directory: apps/ocr
         run: npm run tauri -- build --target ${{ matrix.target }}
 
       - name: Sign and seal
@@ -167,6 +169,7 @@ jobs:
           workspaces: apps/ocr/src-tauri
 
       - name: Install CLI tooling
+        working-directory: apps/ocr
         run: npm install
 
       # 只取 Windows 那份 pdfium（脚本按平台落盘，名字与加载器一致）。
@@ -175,6 +178,7 @@ jobs:
 
       - name: Init store bundle
         # 从仓库根跑：工具自己找 apps/ocr/src-tauri（家族 PDF 亦然），-p 传子目录反而找不到项目根
+        working-directory: apps/ocr
         run: npx tauri-windows-bundle init --scale
 
       # Identity Name 是 Partner Center 2026-09-25 为 OCR 分配的真值
@@ -190,12 +194,14 @@ jobs:
       # 本 job 里 msix 与 msi/nsis 共用同一 target 目录，若在此处直接加
       # store 环境变量，直链包可能复用同一份编译产物被串成无付费墙版本。
       - name: Build msix (direct channel, not for Store)
+        working-directory: apps/ocr
         run: npx tauri-windows-bundle build --runner npm --verbose
 
       # 顺手出一个 msi：未签名也能双击安装，是 Windows 上做功能测试
       # 最省事的载体（msix 未签名侧载要先装证书，太麻烦）。编译产物
       # 与上一步同目录，这一步只做增量编译加打包。
       - name: Build msi
+        working-directory: apps/ocr
         run: npm run tauri -- build --bundles msi,nsis
 
       # 去掉 MSI 文件名里的 _en-US（Tauri v2 会按 bundle.windows.wix.language 追加）。

@@ -31,6 +31,7 @@ jobs:
           node-version: 20
 
       - name: Setup npm mirror (China)
+        working-directory: apps/ocr
         run: npm config set registry https://registry.npmmirror.com
 
       # OCR 特例：ort-sys rc.15 没有 x86_64-apple-darwin 的预编译 ONNX Runtime，
@@ -51,6 +52,7 @@ jobs:
         run: rustup target add aarch64-apple-darwin
 
       - name: Install npm dependencies
+        working-directory: apps/ocr
         run: npm install
 
       - name: MAS entitlements gate

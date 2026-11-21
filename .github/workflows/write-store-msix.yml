@@ -48,6 +48,8 @@ jobs:
           workspaces: 'apps/write/src-tauri -> target'
 
       - run: npm ci
+        working-directory: apps/write
+
 
       - name: Assert store channel
         run: |
@@ -70,6 +72,7 @@ jobs:
           done
 
       - name: Build MSIX (store channel)
+        working-directory: apps/write
         run: npx tauri-windows-bundle build --runner npm --verbose
 
       - name: Verify store package

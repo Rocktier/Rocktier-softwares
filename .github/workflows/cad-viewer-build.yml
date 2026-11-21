@@ -3,7 +3,7 @@ name: Build & Release
 on:
   push:
     branches: [main]
-    tags: ['v*']
+    tags: ['cad-viewer/v*']
   workflow_dispatch:
     inputs:
       release_tag:
@@ -51,6 +51,7 @@ jobs:
         uses: dtolnay/rust-toolchain@1.98.0
 
       - name: Setup npm registry
+        working-directory: apps/cad-viewer
         run: npm config set registry https://registry.npmmirror.com
 
       - name: Cache Rust build
@@ -69,11 +70,13 @@ jobs:
         run: echo "LIBREDWG_DIR=$(brew --prefix libredwg)" >> "$GITHUB_ENV"
 
       - name: Install npm dependencies
+        working-directory: apps/cad-viewer
         run: npm install
 
       # Developer ID 证书可选：导入了就交给 build_app.sh 签 .app，DMG 随后公证；
       # 没导入就退回 ad-hoc（产物与改动前一致），并在 CI 打 notice。
       - name: Import Developer ID certificate (optional)
+        working-directory: apps/cad-viewer
         env:
           APPLE_CERT_P12: ${{ secrets.APPLE_CERT_P12 }}
           APPLE_CERT_PASSWORD: ${{ secrets.APPLE_CERT_PASSWORD }}
@@ -250,6 +253,7 @@ jobs:
 
       - name: Setup npm registry
         shell: pwsh
+        working-directory: apps/cad-viewer
         run: npm config set registry https://registry.npmmirror.com
 
       - name: Cache Rust build
@@ -258,6 +262,7 @@ jobs:
           workspaces: apps/cad-viewer/src-tauri
 
       - name: Install npm dependencies
+        working-directory: apps/cad-viewer
         run: npm install
 
       # DWG 支持靠随包分发的 dwg2dxf.exe；这里下载官方 win64 发行包并复制到
@@ -267,11 +272,13 @@ jobs:
         run: pwsh -ExecutionPolicy Bypass -File apps/cad-viewer/scripts/provision-libredwg-windows.ps1 -Download
 
       - name: Build MSI + NSIS installers
+        working-directory: apps/cad-viewer
         run: npm run tauri build
 
       - name: Build MSIX (Microsoft Store)
         # MSIX 直装走 direct 付费墙（微软商店渠道已弃用，2026-10-05 终裁 C3）。
         # 若未来恢复商店渠道：本步需加 env ROCKTIER_CHANNEL: store（10.8.2/10.8.4）。
+        working-directory: apps/cad-viewer
         run: npm run tauri:windows:build
 
       # 去掉 MSI 文件名里的 _en-US（Tauri v2 按 bundle.windows.wix.language 追加）。
@@ -349,6 +356,7 @@ jobs:
           workspaces: apps/cad-viewer/src-tauri
 
       - name: Install npm dependencies
+        working-directory: apps/cad-viewer
         run: npm ci
 
       # `sync:legal` 必须在这里显式跑，**不能只依赖 beforeBuildCommand**。
@@ -366,9 +374,11 @@ jobs:
       #   清空 legal/ → `glob pattern resources/legal/* path not found` → exit 101
       #   npm run sync:legal → 编译通过
       - name: Sync licence resources (build.rs needs resources/legal/*)
+        working-directory: apps/cad-viewer
         run: npm run sync:legal
 
       - name: Frontend build (dist/ required by tauri::generate_context!)
+        working-directory: apps/cad-viewer
         run: npm run build
 
       - name: Rust tests

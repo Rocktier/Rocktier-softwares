@@ -31,6 +31,7 @@ jobs:
           node-version: 20
 
       - name: Setup npm mirror (China)
+        working-directory: apps/write
         run: npm config set registry https://registry.npmmirror.com
 
       # universal = arm64 + x86_64 双架构。App Store 一个 .pkg 对应一个 build，
@@ -51,6 +52,7 @@ jobs:
         run: rustup target add aarch64-apple-darwin x86_64-apple-darwin
 
       - name: Install npm dependencies
+        working-directory: apps/write
         run: npm install
 
       # BUILD_NUM 进 CFBundleVersion。ASC 要求同一 version 下 build 号严格递增，

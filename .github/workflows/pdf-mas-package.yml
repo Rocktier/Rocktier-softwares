@@ -31,6 +31,7 @@ jobs:
           node-version: 20
 
       - name: Setup npm mirror (China)
+        working-directory: apps/pdf
         run: npm config set registry https://registry.npmmirror.com
 
       # universal = arm64 + x86_64 双架构。App Store 一个 .pkg 对应一个 build，
@@ -70,6 +71,7 @@ jobs:
         run: node apps/pdf/scripts/fetch-pdfium.mjs --all
 
       - name: Install npm dependencies
+        working-directory: apps/pdf
         run: npm install
 
       - name: Build store-channel .app

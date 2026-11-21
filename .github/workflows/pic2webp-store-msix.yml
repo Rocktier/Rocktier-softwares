@@ -39,6 +39,7 @@ jobs:
           node-version: 20
 
       - name: Setup npm mirror (China)
+        working-directory: apps/pic2webp
         run: npm config set registry https://registry.npmmirror.com
 
       - name: Setup Rust
@@ -53,10 +54,12 @@ jobs:
           key: windows-store
 
       - name: Install npm dependencies
+        working-directory: apps/pic2webp
         run: npm install
 
       # 判据必须在 CI 里也跑：本机 npm test 全绿说明不了 CI 有这道闸（D-90 同型）。
       - name: Frontend contract tests
+        working-directory: apps/pic2webp
         run: npm test
 
       - name: Assert store channel
@@ -80,6 +83,7 @@ jobs:
           done
 
       - name: Build MSIX (store channel)
+        working-directory: apps/pic2webp
         run: npx tauri-windows-bundle build --runner npm --verbose
 
       - name: Verify store package

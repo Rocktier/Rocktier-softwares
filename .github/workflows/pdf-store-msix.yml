@@ -47,6 +47,7 @@ jobs:
       # System32 的 bsdtar，与 release.yml 行为一致。
       - name: Install frontend deps
         shell: pwsh
+        working-directory: apps/pdf
         run: npm ci
 
       - uses: actions/setup-go@v5
@@ -97,6 +98,7 @@ jobs:
           done
 
       - name: Build MSIX (store channel)
+        working-directory: apps/pdf
         run: npx tauri-windows-bundle build --runner npm --verbose
 
       - name: Verify store package

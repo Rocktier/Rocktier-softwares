@@ -95,6 +95,7 @@ jobs:
           key: ${{ matrix.arch }}
 
       - name: Install frontend deps
+        working-directory: apps/pdf
         run: npm ci
 
       - uses: actions/setup-go@v5
@@ -127,6 +128,7 @@ jobs:
       # and tauri.conf.json lists resources/qpdf. Without this the workflow dies at
       # cargo check - which is exactly how the v1.0.0 run failed.
       - name: Build
+        working-directory: apps/pdf
         run: npm run tauri:build -- --target ${{ matrix.target }}
 
       # The Intel runner is the only place where the x86_64 runtime path can be
@@ -285,6 +287,7 @@ jobs:
           targets: x86_64-pc-windows-msvc
 
       - name: Install frontend deps
+        working-directory: apps/pdf
         run: npm ci
 
       - uses: actions/setup-go@v5
@@ -308,6 +311,7 @@ jobs:
       # and tauri.conf.json lists resources/qpdf. Without this the workflow dies at
       # cargo check - which is exactly how the v1.0.0 run failed.
       - name: Build
+        working-directory: apps/pdf
         run: npm run tauri:build
 
       - name: Verify sign-engine sidecar
@@ -349,6 +353,7 @@ jobs:
       - name: Build MSIX
         # MSIX 直装走 direct 付费墙（微软商店渠道已弃用，2026-10-05 终裁 C3）。
         # 若未来恢复商店渠道：本步需加 env ROCKTIER_CHANNEL: store（10.8.2/10.8.4）。
+        working-directory: apps/pdf
         run: npm run tauri:windows:build
 
       - uses: actions/upload-artifact@v4

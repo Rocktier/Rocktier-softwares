@@ -42,6 +42,7 @@ jobs:
 
       - name: Setup npm registry
         shell: pwsh
+        working-directory: apps/cad-viewer
         run: npm config set registry https://registry.npmmirror.com
 
       - name: Cache Rust build
@@ -50,6 +51,7 @@ jobs:
           workspaces: apps/cad-viewer/src-tauri
 
       - name: Install npm dependencies
+        working-directory: apps/cad-viewer
         run: npm install
 
       # DWG 支持靠随包分发的 dwg2dxf.exe；tauri.conf.json 已声明该目录为
@@ -79,6 +81,7 @@ jobs:
           done
 
       - name: Build MSIX (store channel)
+        working-directory: apps/cad-viewer
         run: npx tauri-windows-bundle build --runner npm --verbose
 
       - name: Verify store package

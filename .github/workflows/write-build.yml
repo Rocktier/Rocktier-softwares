@@ -16,7 +16,7 @@ name: Build & Release
 on:
   push:
     branches: [main]
-    tags: ["v*"]
+    tags: ["write/v*"]
   workflow_dispatch:
 
 permissions:
@@ -66,6 +66,7 @@ jobs:
           key: ${{ matrix.arch }}
 
       - run: npm ci
+        working-directory: apps/write
 
       # bundle_dmg.sh 是 **flaky** 的：v1.4.10 的 x64 腿首次构建挂在
       # `failed to run bundle_dmg.sh`，同一提交什么都不改、直接重跑 job 即过
@@ -367,6 +368,7 @@ jobs:
           workspaces: "apps/write/src-tauri -> target"
 
       - run: npm ci
+        working-directory: apps/write
 
       - name: Build (Tauri Windows MSI)
         uses: tauri-apps/tauri-action@v0
@@ -391,6 +393,7 @@ jobs:
       - name: Build MSIX (Microsoft Store)
         # MSIX 直装走 direct 付费墙（微软商店渠道已弃用，2026-10-05 终裁 C3）。
         # 若未来恢复商店渠道：本步需加 env ROCKTIER_CHANNEL: store（10.8.2/10.8.4）。
+        working-directory: apps/write
         run: npm run tauri:windows:build
 
       # 去掉 MSI 文件名里的 _en-US（Tauri v2 会按 bundle.windows.wix.language 追加）。

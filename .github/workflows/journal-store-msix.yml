@@ -44,6 +44,7 @@ jobs:
           workspaces: 'apps/journal/src-tauri -> target'
 
       - name: Install frontend deps
+        working-directory: apps/journal
         run: npm install --no-audit --no-fund
 
       - name: Assert store channel
@@ -67,6 +68,7 @@ jobs:
           done
 
       - name: Build MSIX (store channel)
+        working-directory: apps/journal
         run: npx tauri-windows-bundle build --runner npm --verbose
 
       - name: Verify store package

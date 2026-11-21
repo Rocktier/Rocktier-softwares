@@ -53,6 +53,7 @@ jobs:
           echo "ROCKTIER_CHANNEL=${ROCKTIER_CHANNEL}"
 
       - name: Install CLI tooling
+        working-directory: apps/ocr
         run: npm install
 
       # 只取 Windows 那份 pdfium（脚本按平台落盘，名字与加载器一致）。
@@ -60,6 +61,7 @@ jobs:
         run: node apps/ocr/scripts/fetch-pdfium.mjs windows-x64
 
       - name: Init store bundle
+        working-directory: apps/ocr
         run: npx tauri-windows-bundle init --scale
 
       # Wide310x150Logo 不在打包工具的 TAURI_ICON_MAP 里（只映射 StoreLogo/
@@ -81,6 +83,7 @@ jobs:
         run: node apps/ocr/scripts/configure-store-identity.mjs Rocktier.RocktierOCR
 
       - name: Build MSIX (store channel)
+        working-directory: apps/ocr
         run: npx tauri-windows-bundle build --runner npm --verbose
 
       - name: Verify store package

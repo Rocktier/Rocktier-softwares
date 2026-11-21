@@ -102,6 +102,7 @@ jobs:
       - name: Ensure clippy component
         run: rustup component add clippy
       - name: Install dependencies
+        working-directory: apps/markdown
         run: npm ci
       - name: Type check + unit tests
         working-directory: apps/markdown
@@ -168,6 +169,7 @@ jobs:
       - name: Ensure clippy component
         run: rustup component add clippy
       - name: Install dependencies
+        working-directory: apps/write
         run: npm ci
       - name: Type check + unit tests
         working-directory: apps/write
@@ -200,6 +202,7 @@ jobs:
       - name: Ensure clippy component
         run: rustup component add clippy
       - name: Install dependencies
+        working-directory: apps/pic2webp
         run: npm ci
       - name: Type check + build
         working-directory: apps/pic2webp
@@ -227,6 +230,7 @@ jobs:
       - name: Ensure clippy component
         run: rustup component add clippy
       - name: Install dependencies
+        working-directory: apps/cad-viewer
         run: npm ci
       - name: Sync legal resources
         working-directory: apps/cad-viewer
@@ -253,6 +257,7 @@ jobs:
       - uses: actions/setup-node@v4
       - uses: dtolnay/rust-toolchain@stable
       - name: Install dependencies
+        working-directory: apps/compressor
         run: npm ci
       - name: Type check & build
         working-directory: apps/compressor

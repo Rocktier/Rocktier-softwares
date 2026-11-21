@@ -31,15 +31,17 @@ jobs:
         with:
           components: clippy
       - name: Install dependencies
+        working-directory: apps/markdown
         run: npm ci
       - name: Type check + unit tests
+        working-directory: apps/markdown
         run: |
           npm run build
           npm test
       - name: Rust tests + clippy
         run: |
-          cargo test --manifest-path apps/markdown/src-tauri/Cargo.toml
-          cargo clippy --manifest-path apps/markdown/src-tauri/Cargo.toml --all-targets -- -D warnings
+          cargo test --manifest-path apps/markdown/apps/markdown/src-tauri/Cargo.toml
+          cargo clippy --manifest-path apps/markdown/apps/markdown/src-tauri/Cargo.toml --all-targets -- -D warnings
 
   markdown-build-macos:
     name: macOS (${{ matrix.arch }})
@@ -67,6 +69,7 @@ jobs:
           workspaces: "apps/markdown/src-tauri -> target"
           key: ${{ matrix.arch }}
       - name: Build DMG
+        working-directory: apps/markdown
         run: |
           npm ci
           npm run tauri build
@@ -184,12 +187,15 @@ jobs:
           # has to be present.
           targets: x86_64-pc-windows-msvc
       - name: Install dependencies
+        working-directory: apps/markdown
         run: npm ci
       - name: Build MSI + NSIS installers
+        working-directory: apps/markdown
         run: npm run tauri build
       - name: Build MSIX
         # MSIX 直装走 direct 付费墙（微软商店渠道已弃用，2026-10-05 终裁 C3）。
         # 若未来恢复商店渠道：本步需加 env ROCKTIER_CHANNEL: store（10.8.2/10.8.4）。
+        working-directory: apps/markdown
         run: npm run tauri:windows:build
       # The macOS job usually wins the race, but a Windows-only re-run would
       # otherwise have nothing to upload to.
