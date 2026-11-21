@@ -6,7 +6,7 @@ name: Build & Release
 on:
   push:
     branches: [main, master]
-    tags: ["v*"]
+    tags: ["journal/v*"]
   workflow_dispatch:
 
 concurrency:
