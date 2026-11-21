@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/png" sizes="256x256" href="/favicon.png" />
+    <link rel="icon" type="image/x-icon" href="/favicon.ico" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Rocktier Journal</title>
+    <script>
+      // 主题首帧防闪烁：与 useTheme 的初始决策保持一致
+      // （本地已选 > 系统偏好 > 深色）。React 挂载前先落 data-theme，
+      // 否则浅色偏好用户会看到一帧深色。
+      (function () {
+        try {
+          var saved = localStorage.getItem("rocktier.theme") || localStorage.getItem("rocktier.journal.theme");
+          var theme;
+          if (saved === "light" || saved === "dark") {
+            theme = saved;
+          } else {
+            // 2026-11-15 取消「跟随系统」：旧存 auto 的按当时系统值一次性落定；
+            // 从没选过的默认深色。落定后持久化，此后不再跟随系统。
+            theme = window.matchMedia("(prefers-color-scheme: light)").matches
+              ? "light"
+              : "dark";
+            try { localStorage.setItem("rocktier.theme", theme); } catch (e2) {}
+          }
+          document.documentElement.setAttribute("data-theme", theme);
+        } catch (e) {
+          /* localStorage may be unavailable */
+        }
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
