@@ -1,0 +1,64 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+node_modules
+dist
+dist-ssr
+*.local
+
+# Rust build artifacts
+/target
+src-tauri/target
+# src-tauri/Cargo.lock 不再忽略：不锁定 Rust 依赖会让 cargo 侧静默升级到
+# 新版 tauri，npm lock 还是旧版，MSIX 预检“版本不匹配”直接失败（v0.2.1 事故）。
+
+# Temp files produced by dwg2dxf conversion (never commit)
+rcv_dwg_*.dxf
+
+# Provisioned LibreDWG sidecar for the Windows bundle — binaries only, the
+# directory itself is tracked (via .gitkeep) so macOS builds keep working.
+# See scripts/provision-libredwg-windows.ps1
+src-tauri/resources/libredwg/*
+!src-tauri/resources/libredwg/.gitkeep
+
+# Licence copies that ship as resources — generated from the repo root by
+# `npm run sync:legal` (scripts/sync-legal.mjs), so the root files stay the
+# single source of truth.
+src-tauri/resources/legal/*
+
+# Real drawings used for local regression — customer files, never commit
+testdata/real/*.dwg
+testdata/real/*.dxf
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+HANDOFF.md
+
+# CatPaw session context
+.zcode/
+
+# Editor-session worktrees. Currently only ignored by a global gitignore on this
+# machine, which means a fresh clone shows them as untracked noise.
+.meituan-catpaw/
+
+# 家族契约由台账仓 rocktier-docs 单一维护，本地开发用符号链接挂过来。
+# 绝不能提交副本 —— 9 份手工同步的副本曾全部漂移。
+docs/rocktier
+
+# MAS 打包产物（scripts/build-appstore.sh 输出到 build/appstore/）
+*.pkg
+build/

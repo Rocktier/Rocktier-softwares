@@ -1,0 +1,52 @@
+[package]
+name = "rocktier-cad-viewer"
+version = "0.2.18"
+description = "Fast, private CAD viewer. No internet needed."
+authors = ["Rocktier"]
+license = "MIT"
+edition = "2021"
+default-run = "rocktier-cad-viewer"
+
+[lib]
+name = "rocktier_cad_viewer_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[[bin]]
+name = "test_e2e"
+path = "src/bin/test_e2e.rs"
+required-features = ["e2e-test"]
+
+# Entity-coverage diagnostic / scene dump (see src/bin/coverage.rs).
+[[bin]]
+name = "coverage"
+path = "src/bin/coverage.rs"
+required-features = ["tools"]
+
+[features]
+e2e-test = []
+tools = []
+
+[dependencies]
+# PNG/PDF 导出：把前端渲染的位图经 IPC 送进来（tauri 已传递依赖同一版本）
+base64 = "0.22"
+tauri = { version = "2", features = [] }
+tauri-plugin-dialog = "2"
+tauri-plugin-opener = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+# DXF files exported from Chinese AutoCAD are usually ANSI/GBK, not UTF-8.
+encoding_rs = "0.8"
+tauri-plugin-single-instance = "2.4.4"
+# 授权回执的 Ed25519 离线验签（license.rs，FAMILY-LICENSE.md §2）
+ed25519-dalek = "2"
+
+# Read the optimization guideline for more details: https://tauri.app/concept/size/#cargo-configuration
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = 3
+panic = "abort"
+strip = true

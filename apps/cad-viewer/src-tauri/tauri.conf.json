@@ -1,0 +1,98 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Rocktier CAD Viewer",
+  "version": "0.2.18",
+  "identifier": "Rocktier.RocktierCADViewer",
+  "mainBinaryName": "RocktierCADViewer",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "devUrl": "http://localhost:1420",
+    "beforeBuildCommand": "npm run sync:legal && npm run build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "Rocktier CAD Viewer",
+        "width": 1280,
+        "height": 800,
+        "minWidth": 960,
+        "minHeight": 600,
+        "dragDropEnabled": true
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: asset: http://asset.localhost; font-src 'self' data:; connect-src 'self' ipc: http://ipc.localhost https://rocktier.com https://api.github.com; object-src 'none'; frame-src 'none'; form-action 'none'; base-uri 'self'"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "resources": [
+      "resources/libredwg/*",
+      "resources/legal/*"
+    ],
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "fileAssociations": [
+      {
+        "ext": [
+          "dwg"
+        ],
+        "name": "CAD Drawing",
+        "description": "DWG drawing",
+        "mimeType": "image/vnd.dwg",
+        "role": "Viewer",
+        "exportedType": {
+          "identifier": "Rocktier.RocktierCADViewer.dwg",
+          "conformsTo": [
+            "public.data"
+          ]
+        }
+      },
+      {
+        "ext": [
+          "dxf"
+        ],
+        "name": "CAD Drawing Exchange Format",
+        "description": "DXF drawing",
+        "mimeType": "image/vnd.dxf",
+        "role": "Viewer",
+        "exportedType": {
+          "identifier": "Rocktier.RocktierCADViewer.dxf",
+          "conformsTo": [
+            "public.data"
+          ]
+        }
+      }
+    ],
+    "macOS": {
+      "entitlements": "Entitlements.plist",
+      "minimumSystemVersion": "10.15"
+    },
+    "windows": {
+      "allowDowngrades": true,
+      "digestAlgorithm": "sha256",
+      "webviewInstallMode": {
+        "type": "downloadBootstrapper",
+        "silent": true
+      },
+      "nsis": {
+        "installMode": "currentUser",
+        "languages": [
+          "English"
+        ],
+        "displayLanguageSelector": false
+      },
+      "wix": {
+        "language": "en-US",
+        "upgradeCode": "28867E7E-AB0B-54C3-8D63-E1CEF23F31CF"
+      }
+    }
+  }
+}

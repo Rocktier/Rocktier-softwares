@@ -1,0 +1,263 @@
+import { SvelteSet } from "svelte/reactivity";
+import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
+import type { Scene } from "./scene";
+import { parseBlob } from "./scene";
+import { t } from "./i18n.svelte";
+import type { LicenseInfo } from "./license";
+
+export type Tool = "pan" | "measure";
+
+/** localStorage throws when cookies/site data are blocked — never let that
+ *  take the whole app down at module load. */
+function stored(key: string): string | null {
+  try {
+    return localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+/* 语言集合的单一真源。2026-10-13 家族收敛裁定后为 en/zh 两门
+   （family.json globalRules.$locales_2026_10_13），与 PDF 的
+   src/i18n/locales.ts 同构，两边保持一致。
+   注意：这里不用 `as const` —— .svelte.ts 里 svelte-check 不接受它
+   （"const assertion can only be applied to…"），改成显式类型。 */
+type LangCode = "en" | "zh";
+export type { LangCode };
+export const LOCALES: ReadonlyArray<{ code: LangCode; endonym: string }> = [
+    { code: "en", endonym: "English" },
+    { code: "zh", endonym: "中文" },
+  ];
+
+const CODES: readonly string[] = LOCALES.map((l) => l.code);
+
+function isLang(v: unknown): v is LangCode {
+  return typeof v === "string" && CODES.includes(v);
+}
+
+/* English is the family default (family.json `defaultLanguage: "en"`), and the
+   family deliberately does NOT follow the system locale — the user's manual
+   choice is the only thing remembered. Previously this returned "zh" for any
+   zh-* system locale, which is backwards for a product aimed overseas. */
+function initialLang(): LangCode {
+  /* 读 rocktier.lang，回落旧键 rcv.lang —— 61a4ef5 时代的构建把偏好写在
+     rcv.* 下，那次用户的数据还在。语言是用户感知最强的偏好，
+     重置一次就等于「中文用户变英文界面」（MD 同款改名也是留旧键回落）。 */
+  /* 2026-11-18 起与 PDF 仓同构：每应用命名空间 rocktier.cad.lang；
+     旧键 rocktier.lang / rcv.lang 仅作读取回落，一次迁移后不再使用。 */
+  const saved = stored("rocktier.cad.lang") ?? stored("rocktier.lang") ?? stored("rcv.lang");
+  if (isLang(saved)) return saved;
+  return "en";
+}
+
+export const app = $state({
+  lang: initialLang(),
+  /** Turn upside-down text upright for readability ("按图纸原样" turns it off). */
+  uprightText: (stored("rocktier.upright") ?? stored("rcv.upright")) !== "0",
+  loading: false,
+  loadingMsg: "",
+  /** Live load progress from the Rust side: `pct` < 0 means indeterminate. */
+  progress: { pct: -1, phase: "", detail: "" },
+  error: "",
+  /** Last path handed to `openFile` — lets the error card offer a retry. */
+  lastPath: "",
+  fileName: "",
+  filePath: "",
+  scene: null as Scene | null,
+  activeLayout: 0,
+  hidden: new SvelteSet<number>(),
+  tool: "pan" as Tool,
+  /** `snapped` = both ends landed on real geometry (endpoint/midpoint), so the
+   *  measurement tag may honestly say so.  Absent while nothing is measured. */
+  measureResult: null as null | { x1: number; y1: number; x2: number; y2: number; dist: number; snapped?: boolean },
+  /** Cursor position in world units; `null` while the pointer is off-canvas. */
+  coords: null as null | { x: number; y: number },
+  zoomPct: 100,
+  aboutOpen: false,
+  exportOpen: false,
+  /** 检查更新对话框开关。只由菜单「检查更新…」打开 —— footer 常驻入口已移除
+      （用户要求入口全部收进菜单；右下角悬浮入口实测还会盖住底部内容）。 */
+  updateOpen: false,
+  /** 家族 L6 授权：当前状态（null = 尚未取到，或浏览器 dev）+ 对话框开关。 */
+  license: null as LicenseInfo | null,
+  licenseOpen: false,
+  /** B1：吊销复检判定 revoked 时置位，激活框顶部显示「许可已被吊销」专属通告 ——
+     回执已清、info 与试用到期无从区分，verdict 是唯一可靠的传递点。 */
+  licenseRevoked: false,
+  panelOpen: true,
+  /** Live camera snapshot — the exporter reproduces the current view from it. */
+  camera: { cx: 0, cy: 0, scale: 0, vw: 1, vh: 1 },
+  dragging: false,
+  /** Bumped to request "fit the whole drawing" (includes stray geometry). */
+  fitTick: 0,
+  /** Bumped to request "fit the content" (trims far-flung outliers). */
+  fitCoreTick: 0,
+  status: "",
+  recents: [] as RecentFile[],
+});
+
+export function setLang(lang: LangCode) {
+  app.lang = lang;
+  try {
+    /* 键名必须与 initialLang() 读的一致，且落在家族命名空间 rocktier. 下
+       （family.json storageKeyNamespace，storage-key-namespace 闸门守着）。
+       1a93a60 归一时只改了写、漏了读，从那时起语言偏好就再也存不住；
+       e158b95 发现后把写改回了 rcv.lang —— 修好了功能、违反了契约。
+       2026-11-18 起按用户令全家对齐 PDF 的每应用命名空间：
+       读写都用 rocktier.cad.lang，旧键只在读时回落。 */
+    localStorage.setItem("rocktier.cad.lang", lang);
+  } catch {
+    /* storage unavailable */
+  }
+  document.documentElement.lang = lang;
+}
+
+export function setUprightText(on: boolean) {
+  app.uprightText = on;
+  try {
+    /* 同 setLang：写 rocktier.upright（命名空间契约），读时回落旧键 rcv.upright。 */
+    localStorage.setItem("rocktier.upright", on ? "1" : "0");
+  } catch {
+    /* storage unavailable */
+  }
+}
+
+// ---------------------------------------------------------------- recents
+
+export interface RecentFile {
+  path: string;
+  name: string;
+  ts: number;
+}
+
+export function getRecent(): RecentFile[] {
+  /* 读 rocktier.recent，回落旧键 rcv.recent（61a4ef5 时代的存量数据）。 */
+  const raw = stored("rocktier.recent") ?? stored("rcv.recent");
+  if (!raw) return [];
+  try {
+    return JSON.parse(raw) as RecentFile[];
+  } catch {
+    return [];
+  }
+}
+
+export function addRecent(path: string) {
+  const name = path.split(/[\\/]/).pop() ?? path;
+  const list = [{ path, name, ts: Date.now() }, ...getRecent().filter((r) => r.path !== path)];
+  const kept = list.slice(0, 6);
+  try {
+    /* 同前：写 rocktier.recent，与 getRecent() 读的键一致（1a93a60 漏了读那侧，
+       导致「最近打开」每次启动都是空的；e158b95 把写改回 rcv.recent 修好了
+       功能却违反命名空间契约 —— 正解是读写都回 rocktier.recent）。 */
+    localStorage.setItem("rocktier.recent", JSON.stringify(kept));
+  } catch {
+    /* storage unavailable */
+  }
+  // Mirror into state: the empty-state list is rendered from here, so it can
+  // no longer go stale after opening a file.
+  app.recents = kept;
+}
+
+app.recents = getRecent();
+
+// ---------------------------------------------------------------- open
+
+/** Loads a drawing file through the Rust backend (auto-converts DWG via dwg2dxf). */
+let statusTimer: ReturnType<typeof setTimeout> | undefined;
+export function setStatus(msg: string) {
+  app.status = msg;
+  clearTimeout(statusTimer);
+  statusTimer = setTimeout(() => (app.status = ""), 3000);
+}
+
+/* 打开请求的兜底时限（毫秒）。open_drawing 永不返回（后端 IPC 挂住）时 app.loading
+   会永远为真，而 openFile 开头那句 `if (app.loading)` 从此把每一次重试都挡回来说
+   「已有图纸正在打开」—— 除了重启没有第二个出口。时限刻意给得很长：进度事件后端只在
+   一处 emit（src-tauri/src/commands.rs:194），大图纸某个阶段合法地能静默几十秒，
+   所以「没消息」不能当成「卡住」报，只有彻底不返回才够格。 */
+const OPEN_STALL_MS = 60_000;
+
+/* 第几次加载。兜底把 loading 锁放开之后，同一组 app.* 状态可能有两个加载在写
+   （旧的迟迟返回 + 用户点重试后的新的）；以最后一次点击为准，迟到者的结果丢弃。 */
+let loadSeq = 0;
+
+export async function openFile(path: string) {
+  // One load at a time: a second drop while a big drawing is parsing would
+  // race the first, and whichever finished last would win.  Say so instead of
+  // swallowing the request — a silent no-op reads as a broken button.
+  if (app.loading) {
+    setStatus(t("busyOpening"));
+    return;
+  }
+  const lower = path.toLowerCase();
+  if (!lower.endsWith(".dxf") && !lower.endsWith(".dwg")) {
+    app.error = t("unsupportedFmt");
+    return;
+  }
+  const wasDwg = lower.endsWith(".dwg");
+  app.error = "";
+  app.loading = true;
+  const seq = ++loadSeq;
+  app.loadingMsg = wasDwg ? t("converting") : t("parsing");
+  app.progress = { pct: 0, phase: wasDwg ? "convert" : "parse", detail: "" };
+  app.fileName = path.split(/[\\/]/).pop() ?? path;
+  app.filePath = path;
+  app.lastPath = path;
+  /* 兜底，理由见 OPEN_STALL_MS：到点把进行中状态交还给用户。错误卡自带「重试」
+     （走 app.lastPath）和「打开其他图纸」，挂住从此不再是死路。 */
+  let stalled = false;
+  const watchdog = setTimeout(() => {
+    if (seq !== loadSeq) return; // 后面已经有一次新请求，不该由这次去改界面
+    stalled = true;
+    app.loading = false;
+    app.error = `${t("errStalled")} — ${path}`;
+  }, OPEN_STALL_MS);
+  // Subscribe before invoking: the backend emits phases from a worker thread.
+  const unlisten = await listen<{ pct: number; phase: string; detail: string }>(
+    "load-progress",
+    (e) => {
+      if (seq !== loadSeq) return; // 迟到事件：别覆盖更新那一次的进度
+      app.progress = e.payload;
+      app.loadingMsg =
+        e.payload.phase === "convert"
+          ? t("converting")
+          : e.payload.phase === "build"
+            ? t("building")
+            : t("parsing");
+    },
+  );
+  try {
+    const res = await invoke("open_drawing", { path });
+    if (seq !== loadSeq) return; // 被更新的请求取代：这次的结果整个丢弃，包括错误
+    // 兜底报过「没有返回」、结果它后来还是开成功了：那句话此刻已经不成立，
+    // 撤回来，否则图纸都画在屏幕上、错误卡还挂着说它没开成。
+    if (stalled) app.error = "";
+    app.loadingMsg = t("building");
+    app.progress = { pct: 97, phase: "build", detail: "" };
+    const scene = parseBlob(res as ArrayBuffer);
+    app.scene = scene;
+    app.activeLayout = 0;
+    app.hidden.clear();
+    // Layers switched off inside the drawing start hidden ("Show all" reveals).
+    scene.meta.layers.forEach((l, i) => {
+      if (l.off) app.hidden.add(i);
+    });
+    app.measureResult = null;
+    app.tool = "pan";
+    addRecent(path);
+  } catch (e) {
+    if (seq !== loadSeq) return; // 迟到者报错也不该打断更新的那一次
+    app.scene = null;
+    app.error = `${t("errTitle")}: ${e}`;
+  } finally {
+    clearTimeout(watchdog);
+    unlisten();
+    if (seq === loadSeq) app.loading = false;
+  }
+}
+
+/** Re-open the drawing that just failed (error card "retry" action). */
+export function retryOpen() {
+  if (app.lastPath) void openFile(app.lastPath);
+}

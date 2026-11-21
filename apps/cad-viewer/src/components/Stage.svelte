@@ -1,0 +1,85 @@
+<script lang="ts">
+  import Viewer from "./Viewer.svelte";
+  import EmptyState from "./EmptyState.svelte";
+  import { app, retryOpen } from "../lib/state.svelte";
+  import { t } from "../lib/i18n.svelte";
+  import { formatDist, unitLabel } from "../lib/format";
+
+  type Props = { onOpen: () => void };
+  let { onOpen }: Props = $props();
+</script>
+
+<div class="stage">
+  <div class="canvas-wrap" class:measuring={app.tool === "measure"}>
+    <Viewer />
+
+    {#if !app.scene && !app.loading}
+      <EmptyState onOpen={onOpen} />
+    {/if}
+
+    {#if app.dragging}
+      <div class="drop-hint"><span style="font-family:var(--mono);font-size:0.85rem;color:var(--text2)">{t("dropHere")}</span></div>
+    {/if}
+
+    {#if app.loading && !app.scene}
+      <div class="load-hint">
+        <div class="overlay-card">
+          {#if app.progress.pct >= 0}
+            <div
+              class="progress"
+              role="progressbar"
+              aria-valuenow={Math.round(app.progress.pct)}
+              aria-valuemin="0"
+              aria-valuemax="100"
+            >
+              <div class="progress-fill" style="width:{app.progress.pct}%"></div>
+            </div>
+          {:else}
+            <div class="spinner"></div>
+          {/if}
+          <div class="overlay-title">{app.fileName || "…"}</div>
+          <div class="overlay-msg">
+            {app.loadingMsg}{#if app.progress.detail}<span class="overlay-detail"> · {app.progress.detail}</span>{/if}
+          </div>
+          {#if app.progress.pct >= 0}
+            <div class="overlay-pct">{Math.round(app.progress.pct)}%</div>
+          {/if}
+        </div>
+      </div>
+    {/if}
+
+    {#if app.scene && app.tool === "measure"}
+      <div class="measure-banner">
+        <span>{t("measuring")}</span>
+        {#if app.measureResult}
+          <b>{t("measured")} {formatDist(app.measureResult.dist, unitLabel(app.scene?.meta.insunits))}</b>
+          <!-- 诚实标注（05-cad 设计稿 .measure-tag 的「两端点已吸附」）：
+               只有两端都吸附到真实几何（端点/中点，Viewer 写入 snapped）才出现，
+               Shift 关闭吸附的测量保持沉默。 -->
+          {#if app.measureResult.snapped}
+            <span class="measure-note">{t("measureSnapped")}</span>
+          {/if}
+        {/if}
+      </div>
+    {/if}
+
+    {#if app.error}
+      <!-- An error card, not a one-line toast: backend remedies (install
+           LibreDWG, reinstall the app, file too large) are full sentences and
+           the user needs a way forward, so carry retry/open actions. -->
+      <div class="toast error" role="alert">
+        <i></i>
+        <div class="toast-body">
+          <span class="toast-msg">{app.error}</span>
+          <div class="toast-actions">
+            {#if app.lastPath}
+              <button class="toast-btn" onclick={retryOpen}>{t("retry")}</button>
+            {/if}
+            <button class="toast-btn primary" onclick={onOpen}>{t("openAnother")}</button>
+          </div>
+        </div>
+        <button class="ghost toast-close" onclick={() => (app.error = "")} aria-label={t("close")}>✕</button>
+      </div>
+    {/if}
+  </div>
+</div>
