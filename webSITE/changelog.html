@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="en" data-page="changelog" data-layout="doc">
+<head>
+
+    <link rel="icon" type="image/svg+xml" href="/assets/favicons/family/favicon.svg">
+    <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicons/family/favicon-32.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="/assets/favicons/family/apple-touch-icon.png">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="What changed in every Rocktier app, in plain language. Updates are listed here because our apps never phone home.">
+<title>Changelog | Rocktier</title>
+  <meta property="og:image" content="https://rocktier.com/assets/og/index.png">
+
+<meta name="google-site-verification" content="9JRvmDgeEQUDA84q812hWXg2eU5zJxbF7caCklZi6mw" />
+<link rel="canonical" href="https://rocktier.com/changelog">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Rocktier">
+<meta property="og:title" content="Changelog | Rocktier">
+<meta property="og:description" content="What changed in every Rocktier app, in plain language. Updates are listed here because our apps never phone home.">
+<meta property="og:url" content="https://rocktier.com/changelog">
+<meta name="twitter:card" content="summary">
+<link rel="stylesheet" href="css/styles.css">
+<noscript><style>#themeBtn{display:none}</style></noscript>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+
+<header class="site-head">
+  <div class="wrap head-row">
+    <a class="brand" href="/" aria-label="Rocktier home">
+      <svg class="brand-mark" viewBox="0 0 40 40" fill="none" aria-hidden="true">
+        <circle cx="20" cy="20" r="17" stroke="currentColor" stroke-width="1.8" fill="none"/>
+        <path d="M12.5 21.5l5.2 5.3L29 14.8" stroke="currentColor" stroke-width="2.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      <span class="brand-word">Rock<span>tier</span><i></i></span>
+    </a>
+    <nav class="links" aria-label="Primary">
+      <a href="/#products" data-i18n="nav.products">Products</a>
+      <a href="/pricing" data-i18n="nav.pricing">Pricing</a>
+      <a href="/vs-online-tools" data-i18n="nav.why">Why offline</a>
+      <a href="/about" data-i18n="nav.about">About</a>
+      <a href="/#philosophy" data-i18n="nav.philosophy">Philosophy</a>
+      <a href="/changelog" data-i18n="nav.changelog">Changelog</a>
+    </nav>
+    <div class="head-actions">
+      <div class="lang-switch" id="langSwitch"></div>
+      <button class="menu-btn" id="menuBtn" type="button" aria-label="Menu" aria-expanded="false" aria-controls="menuPanel">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+      </button>
+      <button class="ghost" id="themeBtn" type="button" aria-label="Toggle light or dark theme">
+        <svg class="sun" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+        <svg class="moon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3 7 7 0 0 0 21 12.8z"/></svg>
+      </button>
+      <a class="btn-head" href="/download" data-i18n="nav.download">Download</a>
+    </div>
+  </div>
+  <nav class="menu-panel" id="menuPanel" aria-label="Mobile">
+    <a href="/#products" data-i18n="nav.products">Products</a>
+    <a href="/pricing" data-i18n="nav.pricing">Pricing</a>
+    <a href="/download" data-i18n="nav.download">Download</a>
+    <a href="/vs-online-tools" data-i18n="nav.why">Why offline</a>
+    <a href="/about" data-i18n="nav.about">About</a>
+    <a href="/#philosophy" data-i18n="nav.philosophy">Philosophy</a>
+    <a href="/changelog" data-i18n="nav.changelog">Changelog</a>
+    <div class="lang-switch lang-switch-mobile" id="langSwitchMobile"></div>
+  </nav>
+</header>
+
+<main id="main">
+  <section class="hero" id="top">
+    <div class="wrap hero-in">
+      <h1 class="display" data-i18n="changelog.h1.display"> What changed. In plain words.</h1>
+      <p class="lead" data-i18n="changelog.lead">Our apps never phone home, so they cannot announce their own updates. The latest releases add a manual update check (Help → Check for updates): one request, only when you click. This page is where to look, and your app's About or Settings screen shows the version you are on.</p>
+    </div>
+  </section>
+
+  <section class="section" id="releases" lang="en">
+    <div class="wrap prose">
+
+      <h2 id="write" data-i18n="changelog.h2.1"> Rocktier Write</h2>
+      <p class="card-note">2026-11-15 · v1.4.19</p>
+      <ul>
+        <li>New: compare the open draft with the file on disk, line by line, without leaving the app.</li>
+        <li>Interface: a soft light background with a translucent title bar, chapter list, floating menus and dialogs, in both themes. Text stays on solid surfaces.</li>
+        <li>Fixed: in Rich mode the find bar could land at the bottom of the window. It now sits at the top.</li>
+        <li>Fixed: Ctrl+F opened a second, browser style find bar on Windows. It now opens the app's own.</li>
+        <li>Fixed: the chapter selection box is a quiet neutral box instead of a white strip with a coloured edge.</li>
+        <li>Fixed: the link dialog announces itself to screen readers, and the language icon now matches the theme icon in size.</li>
+      </ul>
+      <p class="card-note">2026-11-13 · v1.4.16</p>
+      <ul>
+        <li>Fixed: the "file changed on disk" warning during draft recovery never appeared, because the app could not read file timestamps. It works now.</li>
+      </ul>
+      <p class="card-note">2026-11-05 · v1.4.15</p>
+      <ul>
+        <li>Fixed: while a document had unsaved edits, the word "Unsaved" in the top bar could be painted on top of the New button and swallow your click on it. It now keeps its own space.</li>
+        <li>Fixed: the chapter list no longer draws over the document tabs where the sidebar meets the tab strip.</li>
+        <li>Interface: the ✕ that closes a tab is easier to hit. The mark stays small, but the area that responds to a click is now at least 24×24.</li>
+        <li>Interface: inserting a link uses the app's own dialog. A system prompt used to open behind the window, which made the link button look like it did nothing.</li>
+        <li>Interface: the find-and-replace bar's match counter and "match case" option now follow the app's styles instead of the browser's defaults, and the previous and next buttons announce themselves to screen readers.</li>
+      </ul>
+      <p class="card-note">2026-11-03 · v1.4.14</p>
+      <ul>
+        <li data-i18n="changelog.write.note">Housekeeping: a type error in the editor's test harness was fixed. No user-facing change is recorded for this release.</li>
+      </ul>
+      <p class="card-note">2026-10-25 · v1.4.11</p>
+      <ul>
+        <li>Fixed: Rich mode stopped drawing a thick red frame around the whole page whenever the editor had focus.</li>
+        <li>Keyboard focus rings stay put on buttons, fields and menus, so shortcuts still show where you are.</li>
+      </ul>
+
+      <h2 id="pdf" data-i18n="changelog.h2.2"> Rocktier PDF</h2>
+      <p class="card-note">2026-11-15 · v1.2.2</p>
+      <ul>
+        <li>Fixed: after a file opened successfully from Recent, the status bar could keep showing an error message left over from the previous attempt. It clears now.</li>
+        <li>Interface: dialogs take keyboard focus as soon as they open, so Escape and Tab work without clicking first.</li>
+        <li>Interface: the toast close button is now at least 24×24.</li>
+      </ul>
+      <p class="card-note">2026-11-15 · v1.2.1</p>
+      <ul>
+        <li>Interface: the selected page thumbnail is marked with a quiet neutral box and an 8px corner, in place of the white card with a red edge.</li>
+      </ul>
+      <p class="card-note">2026-11-15 · v1.2.0</p>
+      <ul>
+        <li>New: export selected pages as one long PNG image. The pages are stacked top to bottom in the order you pick, with a height cap that keeps the request from using all of your memory.</li>
+        <li>Interface: the eight task icons that were hard to tell apart now carry a small label under the icon, and the toolbar groups related tools so scanning is faster.</li>
+        <li>Interface: a new soft-light background with a translucent header, toolbar and status bar, in both light and dark themes. Text stays on solid surfaces, never on the glass.</li>
+        <li>Interface: the theme and language buttons are now the same size, and the language glyph was enlarged so it reads as clearly as the sun and moon icons.</li>
+      </ul>
+      <p class="card-note">2026-11-05 · v1.1.3</p>
+      <ul>
+        <li>Fixed: opening a file from Recent gave no sign of life for several seconds, so it was easy to click it again. The row now shows that it is working, the other rows go dim until it finishes, and if an open is still running after 8 seconds the app releases the marker and shows the full path it was opening, in selectable text you can copy.</li>
+        <li>Interface: confirmations such as delete or clear now appear inside the app. A system prompt could open behind the window on Mac, which made the app look frozen.</li>
+        <li>Interface: "Clear recent files" is easier to click. Its clickable area is now at least 24×24. The text and colour are unchanged.</li>
+        <li>Interface: the status bar uses the same 28px height as the rest of the family, and menu items that need an open document are greyed out when there isn't one.</li>
+      </ul>
+      <p class="card-note">2026-11-03 · v1.1.2</p>
+      <p class="card-note">2026-10-29 · v1.1.1</p>
+      <p class="card-note">2026-10-29 · v1.1.0</p>
+      <ul>
+        <li data-i18n="changelog.pdf.sign">New: digital signing now lives inside PDF. Fill in a signature, place it on the page and verify signatures already in a document; certificates and licences from the old Sign app migrate automatically on first launch.</li>
+        <li data-i18n="changelog.pdf.signNote">Rocktier Sign is no longer a separate download. See the note under Sign below.</li>
+      </ul>
+      <p class="card-note">2026-10-24 · v1.0.30</p>
+      <ul>
+        <li>New: Intel Mac builds, so the app now runs on older Macs as well as Apple Silicon.</li>
+        <li>Interface depth reworked: cards, buttons and dialogs now sit at clearly separated levels.</li>
+        <li>Internal cleanup: one shared style source for the whole family instead of per-app copies.</li>
+      </ul>
+
+      <h2 id="cad-viewer" data-i18n="changelog.h2.3"> Rocktier CAD Viewer</h2>
+      <p class="card-note">2026-11-15 · v0.2.18</p>
+      <ul>
+        <li>Fixed: the error card could cover the Recent chips and swallow clicks. It now sits above the status bar, and only its buttons take clicks.</li>
+        <li>Interface: a soft light background with a translucent title bar, toolbar and status bar. The drawing area stays fully opaque so line work keeps its contrast.</li>
+      </ul>
+      <p class="card-note">2026-11-04 · v0.2.16</p>
+      <ul>
+        <li>Fixed: opening a drawing could hang indefinitely. The spinner stayed up, and every further attempt was refused with "a drawing is already opening", so the only way out was to restart. After 60 seconds the app now stops waiting, shows the path it was opening and offers retry or open another drawing.</li>
+        <li>Fixed: a failed open drew two error surfaces on top of each other. There is now a single message.</li>
+        <li>Interface: the status bar keeps one shared 28px height, and short confirmations such as export or settings saved use the family snackbar style.</li>
+        <li>Windows: the installers build again. A third-party package mirror that answered requests with an error page has been dropped in favour of the default registry.</li>
+      </ul>
+      <p class="card-note">2026-11-03 · v0.2.15</p>
+      <p class="card-note">2026-10-24 · v0.2.13</p>
+      <ul>
+        <li>New: Intel Mac builds, so the app now runs on older Macs as well as Apple Silicon.</li>
+        <li>Interface depth reworked: cards, buttons and dialogs now sit at clearly separated levels.</li>
+        <li>Internal cleanup: one shared style source for the whole family instead of per-app copies.</li>
+      </ul>
+
+      <h2 id="ocr" data-i18n="changelog.h2.4"> Rocktier OCR</h2>
+      <p class="card-note">2026-11-16 · v0.2.15</p>
+      <ul>
+        <li>Interface: glass top and status bars over a softer background, matching the rest of the family.</li>
+        <li>The theme button now switches directly between light and dark.</li>
+        <li>Languages: one globe button toggles English and Chinese.</li>
+        <li>Fixed: Windows builds stopped coming out after an upstream OCR library change. This release restores the Windows installer; recognition itself is unchanged.</li>
+      </ul>
+      <p class="card-note">2026-11-03 · v0.2.13</p>
+      <p class="card-note">2026-10-25 · v0.2.11</p>
+      <ul>
+        <li>Fixed: the app opened to a blank window. An earlier update removed the interface itself by mistake, so there was nothing on screen at all. This release puts it back.</li>
+        <li>If your copy was downloaded on or after 21 October, it shows that same blank window. Updating to this release fixes it.</li>
+        <li>New: Intel Mac builds, so the app now runs on older Macs as well as Apple Silicon.</li>
+        <li>Interface depth reworked: cards, buttons and dialogs now sit at clearly separated levels.</li>
+        <li>Internal cleanup: one shared style source for the whole family instead of per-app copies.</li>
+      </ul>
+
+      <h2 id="journal" data-i18n="changelog.h2.5"> Rocktier Journal</h2>
+      <p class="card-note">2026-11-15 · v0.2.17</p>
+      <ul>
+        <li>Security: the answer to your password hint is now stored with a salted, deliberately slow hash. Existing vaults upgrade on the next unlock; nothing to do.</li>
+        <li>Fixed: the editor marked a note as saved before the write reached disk. It now waits for the write.</li>
+        <li>Interface: glass sidebar and dialogs over a softer background than the rest of the family. The selected entry is a quiet neutral box, and the trailing red dot is gone.</li>
+      </ul>
+      <p class="card-note">2026-10-24 · v0.2.16</p>
+      <ul>
+        <li>New: recovery codes. If you forget your password you can now reset it with a recovery code, and your entries are not lost. Existing vaults migrate automatically the first time you unlock; nothing to do.</li>
+        <li>Fixed: the reset path had a flaw that made recovery impossible in practice. This release is the first where it actually works.</li>
+        <li>New: Intel Mac builds, so the app now runs on older Macs as well as Apple Silicon.</li>
+        <li>Interface depth reworked: cards, buttons and dialogs now sit at clearly separated levels.</li>
+      </ul>
+
+      <h2 id="sign" data-i18n="changelog.h2.6"> Rocktier Sign</h2>
+      <p class="card-note">2026-10-24 · v0.1.14</p>
+      <ul>
+        <li>New: Intel Mac builds, so the app now runs on older Macs as well as Apple Silicon.</li>
+        <li>Interface depth reworked: cards, buttons and dialogs now sit at clearly separated levels.</li>
+        <li>Internal cleanup: one shared style source for the whole family instead of per-app copies.</li>
+      </ul>
+      <p class="card-note" data-i18n="changelog.sign.note">Note, 2026-10-28: Rocktier Sign is no longer offered as a separate download. Digital signing now ships inside Rocktier PDF, released as 1.1.0 on 2026-10-29, and certificates and licences migrate automatically on first launch. The log above stays as history.</p>
+
+      <h2 id="markdown" data-i18n="changelog.h2.7"> Rocktier Markdown</h2>
+      <p class="card-note">2026-11-15 · v1.0.26</p>
+      <ul>
+        <li>Interface: the sidebar selection box matches the family's quiet neutral box. Theme is a two state sun and moon toggle, and the language control is a single A with a globe.</li>
+        <li>Fixed: the language icon sat smaller than the theme icon next to it. They now match.</li>
+      </ul>
+      <p class="card-note">2026-11-13 · v1.0.23</p>
+      <ul>
+        <li>New: tabs, so several documents stay open at once without losing your place.</li>
+        <li>New: export a single, self contained HTML file. Local images are embedded in it.</li>
+        <li>Interface: glass title bar, tab strip and sidebar, in both themes, with contrast checks in the build.</li>
+        <li>Fixed: export could report success when the file was not written, and by default left local images out of the result.</li>
+        <li>Fixed: closing a file asks inside the app instead of a system prompt that could open behind the window.</li>
+        <li>Fixed: a Recent entry whose file has moved now says so instead of failing silently.</li>
+        <li>Fixed: the macOS download was blocked by Gatekeeper as suspected malware. Releases are signed and notarized now.</li>
+      </ul>
+      <p class="card-note">2026-11-03 · v1.0.20</p>
+      <ul>
+        <li data-i18n="changelog.md.sync">Fixed: the preview panel's "synced" indicator could stay dark even when the two panes were in sync, because the state was never read on the preview side. The build's CI type error came from the same change.</li>
+      </ul>
+      <p class="card-note">2026-10-24 · v1.0.17</p>
+      <ul>
+        <li>New: Intel Mac builds, so the app now runs on older Macs as well as Apple Silicon.</li>
+        <li>Interface depth reworked: cards, buttons and dialogs now sit at clearly separated levels.</li>
+      </ul>
+
+      <h2 id="pic2webp" data-i18n="changelog.h2.8"> Rocktier Pic2WebP</h2>
+      <p class="card-note">2026-11-15 · v1.10.2</p>
+      <ul>
+        <li>Interface: glass title bar, status bar, right panel and floating menus, over the soft light background introduced in 1.10.0.</li>
+        <li>Fixed: the main area is marked up so screen readers land on it.</li>
+      </ul>
+      <p class="card-note">2026-11-14 · v1.10.0</p>
+      <ul>
+        <li>New: the interface is rebuilt to Apple's desktop conventions. The window is calmer, the controls share one shape, and the main action keeps its place.</li>
+        <li>Interface: the interface language now follows your system setting. The toolbar language selector is gone.</li>
+        <li>Fixed: .tif files were rejected in the file dialog and again by the import check. They open now.</li>
+        <li>Fixed: the progress bar stayed full after a conversion finished.</li>
+        <li>Fixed: on some Windows setups the window could not be dragged by its title bar.</li>
+      </ul>
+      <p class="card-note">2026-11-04 · v1.9.20</p>
+      <ul>
+        <li>Fixed: in the default window the convert button could sit below the visible area, with nothing on screen hinting that the panel scrolled. The button now stays visible while only the settings area scrolls.</li>
+        <li>Interface: the status bar uses the same 28px height and screen-reader markup as the rest of the family.</li>
+        <li>Windows: the installers build again. A third-party package mirror that answered requests with an error page has been dropped in favour of the default registry.</li>
+      </ul>
+      <p class="card-note">2026-11-03 · v1.9.19</p>
+      <p class="card-note">2026-10-25 · v1.9.16</p>
+      <ul>
+        <li>Fixed: the app opened to a blank window. An earlier update removed the interface itself by mistake, so there was nothing on screen at all. This release puts it back.</li>
+        <li>If your copy was downloaded on or after 21 October, it shows that same blank window. Updating to this release fixes it.</li>
+        <li>New: Intel Mac builds, so the app now runs on older Macs as well as Apple Silicon.</li>
+        <li>Interface depth reworked: cards, buttons and dialogs now sit at clearly separated levels.</li>
+        <li>Internal cleanup: one shared style source for the whole family instead of per-app copies.</li>
+      </ul>
+
+      <h2 id="compressor" data-i18n="changelog.h2.9"> Rocktier Compressor</h2>
+      <p class="card-note">2026-11-15 · v0.1.16</p>
+      <ul>
+        <li>Interface: glass title bar, status bar, right panel and licence dialog over a soft light background, in both themes. Confirmations appear inside the app instead of a system prompt.</li>
+      </ul>
+      <p class="card-note">2026-11-03 · v0.1.15</p>
+      <p class="card-note">2026-10-24 · v0.1.13</p>
+      <ul>
+        <li>Fixed: compressing an Excel or Word file could produce nothing at all, because the engine was re-storing images in a way that made the output larger than the original, so it correctly backed out. It now compares every entry and keeps whichever is smaller, so the result is never bigger than what you started with.</li>
+        <li>New: PNG images inside documents are stored without their invisible transparency channel when nothing is actually transparent: identical pixels, roughly a third less data.</li>
+        <li>Fixed: no more temporary files left behind after a batch. A note now says the original is still on disk if you want to delete it.</li>
+        <li>Fixed: the quality-profile controls were pushed to one side; they now span the full width.</li>
+        <li>New: Intel Mac builds, so the app now runs on older Macs as well as Apple Silicon.</li>
+      </ul>
+
+      <p class="note loose">Full technical histories live in each repository's releases page. Questions about anything on this page: <a href="mailto:hello@rocktier.com">hello@rocktier.com</a>, answered within 48 hours.</p>
+    </div>
+  </section>
+</main>
+
+<footer class="foot">
+  <div class="wrap foot-row">
+    <div class="foot-brand">
+      <a class="brand" href="/">
+        <svg class="brand-mark sm" viewBox="0 0 40 40" fill="none" aria-hidden="true">
+          <circle cx="20" cy="20" r="17" stroke="currentColor" stroke-width="1.8" fill="none"/>
+          <path d="M12.5 21.5l5.2 5.3L29 14.8" stroke="currentColor" stroke-width="2.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        <span class="brand-word">Rock<span>tier</span><i></i></span>
+      </a>
+      <p class="copy" data-i18n="footer.copy">© 2026 Rocktier · Operated by Wuhan Hanyang Rock Network Technology Studio.</p>
+    </div>
+    <nav class="legal-links" aria-label="Legal">
+      <a href="/privacy" data-i18n="nav.privacy">Privacy</a>
+      <a href="/terms" data-i18n="nav.terms">Terms</a>
+      <a href="/refund-policy" data-i18n="nav.refunds">Refunds</a>
+      <a href="/license" data-i18n="nav.licences">Licence</a>
+      <a href="/contact" data-i18n="nav.contact">Contact</a>
+    </nav>
+  </div>
+</footer>
+
+<div class="consent" id="consent" role="region" aria-live="polite" aria-label="Storage consent">
+  <p class="consent-text" data-i18n="consent.text">We only store your theme preference on this device. No tracking, no analytics.</p>
+  <div class="consent-actions">
+    <a class="consent-link" href="/privacy" data-i18n="consent.learn">Privacy</a>
+    <button class="btn" id="consentAccept" type="button" data-i18n="consent.accept">Accept</button>
+    <button class="btn ghost" id="consentDecline" type="button" data-i18n="consent.decline">Decline</button>
+  </div>
+</div>
+
+<script src="js/main.js"></script>
+<script src="js/i18n.js"></script>
+</body>
+</html>

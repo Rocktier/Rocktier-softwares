@@ -1,0 +1,33 @@
+name: Checks
+
+# 官网仓此前没有任何 GitHub Actions —— Vercel 自动部署意味着坏改动直接上线。
+# 2026-10-16（task_plan P0''，用户拍板）：把本机手动跑的检查挂进 CI。
+# 命令逐字复用 package.json 既有脚本（无 npm 依赖，纯 node stdlib）。
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  checks:
+    name: Site checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: 四闸门（占位符 / 内容 / 站点 / 密钥）
+        run: npm run check
+      - name: 资产存在性判据自检（该报的报、不该报的不报）
+        run: npm run check:site:selftest
+      - name: 单测（audit-diff / consent / revocation）
+        run: npm test
+      - name: 哈希墙判据自检（三条必红一绿）
+        run: npm run verify:checksums:selftest
+      - name: 哈希墙与 latest 对账（墙上版本 ≠ 下载包 = 用户校验必失败）
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npm run verify:checksums

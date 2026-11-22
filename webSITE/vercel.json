@@ -1,0 +1,196 @@
+{
+  "rewrites": [
+    {
+      "source": "/pdf",
+      "destination": "/pdf.html"
+    },
+    {
+      "source": "/privacy",
+      "destination": "/privacy.html"
+    },
+    {
+      "source": "/pricing",
+      "destination": "/pricing.html"
+    },
+    {
+      "source": "/terms",
+      "destination": "/terms.html"
+    },
+    {
+      "source": "/pic2webp",
+      "destination": "/pic2webp.html"
+    },
+    {
+      "source": "/markdown",
+      "destination": "/markdown.html"
+    },
+    {
+      "source": "/cad-viewer",
+      "destination": "/cad-viewer.html"
+    },
+    {
+      "source": "/about",
+      "destination": "/about.html"
+    },
+    {
+      "source": "/contact",
+      "destination": "/contact.html"
+    },
+    {
+      "source": "/vs-online-tools",
+      "destination": "/vs-online-tools.html"
+    },
+    {
+      "source": "/download",
+      "destination": "/download.html"
+    },
+    {
+      "source": "/license",
+      "destination": "/license.html"
+    },
+    {
+      "source": "/refund-policy",
+      "destination": "/refund-policy.html"
+    },
+    {
+      "source": "/ocr",
+      "destination": "/ocr.html"
+    },
+    {
+      "source": "/write",
+      "destination": "/write.html"
+    },
+    {
+      "source": "/journal",
+      "destination": "/journal.html"
+    },
+    {
+      "source": "/compressor",
+      "destination": "/compressor.html"
+    },
+    {
+      "source": "/changelog",
+      "destination": "/changelog.html"
+    },
+    {
+      "source": "/open-md",
+      "destination": "/open-md.html"
+    },
+    {
+      "source": "/feedback",
+      "destination": "/feedback.html"
+    }
+  ],
+  "redirects": [
+    {
+      "source": "/index.html",
+      "destination": "/",
+      "permanent": true
+    },
+    {
+      "source": "/about.html",
+      "destination": "/about",
+      "permanent": true
+    },
+    {
+      "source": "/privacy.html",
+      "destination": "/privacy",
+      "permanent": true
+    },
+    {
+      "source": "/contact.html",
+      "destination": "/contact",
+      "permanent": true
+    },
+    {
+      "source": "/pricing.html",
+      "destination": "/pricing",
+      "permanent": true
+    },
+    {
+      "source": "/terms.html",
+      "destination": "/terms",
+      "permanent": true
+    },
+    {
+      "source": "/pdf-squeeze",
+      "destination": "/download",
+      "permanent": true
+    },
+    {
+      "source": "/pdf-squeeze.html",
+      "destination": "/download",
+      "permanent": true
+    },
+    {
+      "source": "/pic2webp.html",
+      "destination": "/pic2webp",
+      "permanent": true
+    },
+    {
+      "source": "/markdown.html",
+      "destination": "/markdown",
+      "permanent": true
+    },
+    {
+      "source": "/cad-viewer.html",
+      "destination": "/cad-viewer",
+      "permanent": true
+    },
+    {
+      "source": "/vs-online-tools.html",
+      "destination": "/vs-online-tools",
+      "permanent": true
+    },
+    {
+      "source": "/download.html",
+      "destination": "/download",
+      "permanent": true
+    },
+    {
+      "source": "/license.html",
+      "destination": "/license",
+      "permanent": true
+    },
+    {
+      "source": "/refund-policy.html",
+      "destination": "/refund-policy",
+      "permanent": true
+    },
+    {
+      "source": "/write.html",
+      "destination": "/write",
+      "permanent": true
+    },
+    {
+      "source": "/ocr.html",
+      "destination": "/ocr",
+      "permanent": true
+    },
+    {
+      "source": "/journal.html",
+      "destination": "/journal",
+      "permanent": true
+    },
+    {
+      "source": "/sign",
+      "destination": "/pdf#sign",
+      "permanent": true
+    },
+    {
+      "source": "/sign.html",
+      "destination": "/pdf#sign",
+      "permanent": true
+    },
+    {
+      "source": "/compressor.html",
+      "destination": "/compressor",
+      "permanent": true
+    },
+    {
+      "source": "/changelog.html",
+      "destination": "/changelog",
+      "permanent": true
+    }
+  ]
+}

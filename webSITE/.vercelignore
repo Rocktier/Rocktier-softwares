@@ -1,0 +1,6 @@
+# 内部文件，不随站点发布（Vercel 默认会把仓库里的一切当静态资源托管）
+# 这些脚本会暴露授权体系的结构与运维入口，不该出现在公开站点上。
+tools/
+README.md
+.gitignore
+.vercelignore
