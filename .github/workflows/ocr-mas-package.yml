@@ -12,6 +12,11 @@ name: MAS Package (Mac App Store)
 
 on:
   workflow_dispatch:
+    inputs:
+      build_num:
+        description: 'CFBundleVersion（同版本下须严格递增；1.0.0 已有 build 5 被拒，重提传 6 起）'
+        required: false
+        type: string
 
 concurrency:
   group: ocr-mas-package
@@ -62,7 +67,7 @@ jobs:
       # 用 run_number 天然满足；重跑也一样增长，不会撞号。
       - name: Build store-channel .app
         env:
-          BUILD_NUM: ${{ github.run_number }}
+          BUILD_NUM: ${{ github.event.inputs.build_num || github.run_number }}
         run: bash apps/ocr/scripts/build-appstore.sh pack
 
       - name: Upload .app artifact
