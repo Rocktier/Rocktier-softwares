@@ -200,7 +200,7 @@ function renderDialog() {
     const releasesBtn = document.createElement("button");
     releasesBtn.type = "button";
     releasesBtn.textContent = t("update.openReleases");
-    releasesBtn.addEventListener("click", () => openUrl("https://github.com/Rocktier/pic2webp/releases/latest"));
+    releasesBtn.addEventListener("click", () => openUrl("https://github.com/Rocktier/Rocktier-softwares/releases"));
     footer.appendChild(releasesBtn);
   }
   if (state === "available" && result) {
