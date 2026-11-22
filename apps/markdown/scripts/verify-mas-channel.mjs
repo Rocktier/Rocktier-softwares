@@ -27,7 +27,7 @@ import { tmpdir } from "node:os";
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 
 const FILES = [
-  ".github/workflows/mas-package.yml",
+  "../../.github/workflows/markdown-mas-package.yml",
   "scripts/build-appstore.sh",
   "src-tauri/tauri.appstore.conf.json",
   "src-tauri/Entitlements.appstore.plist",
@@ -47,7 +47,7 @@ function check(root) {
   const out = [];
   const add = (id, ok, detail) => out.push({ id, ok, detail });
 
-  const wf = read(root, ".github/workflows/mas-package.yml");
+  const wf = read(root, "../../.github/workflows/markdown-mas-package.yml");
   add(
     "workflow",
     /workflow_dispatch/.test(wf) && /build-appstore\.sh pack/.test(wf) && /macos-latest/.test(wf),
@@ -125,7 +125,7 @@ function check(root) {
 
 /* 每条判据都要有「修复前应红」的对照：一次只破坏一处，且只允许那一处红。 */
 const CASES = [
-  { id: "workflow", file: ".github/workflows/mas-package.yml", from: "build-appstore.sh pack", to: "npm run build" },
+  { id: "workflow", file: "../../.github/workflows/markdown-mas-package.yml", from: "build-appstore.sh pack", to: "npm run build" },
   { id: "channel-env", file: "scripts/build-appstore.sh", from: "export ROCKTIER_CHANNEL=store", to: "export ROCKTIER_CHANNEL=direct" },
   { id: "appstore-conf", file: "src-tauri/tauri.appstore.conf.json", from: '"hardenedRuntime": false', to: '"hardenedRuntime": true' },
   { id: "sandbox", file: "src-tauri/Entitlements.appstore.plist", from: "com.apple.security.app-sandbox", to: "com.apple.security.cs.allow-jit" },

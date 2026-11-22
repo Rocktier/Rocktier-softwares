@@ -125,8 +125,8 @@ jobs:
       - name: Rust tests + clippy
         working-directory: apps/markdown/src-tauri
         run: |
-          cargo test --manifest-path src-tauri/Cargo.toml
-          cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
+          cargo test --all-targets
+          cargo clippy --all-targets -- -D warnings
 
   ocr:
     name: Tests & Lints (OCR)
@@ -184,8 +184,8 @@ jobs:
       - name: Rust tests + clippy
         working-directory: apps/write/src-tauri
         run: |
-          cargo test --manifest-path src-tauri/Cargo.toml
-          cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
+          cargo test --all-targets
+          cargo clippy --all-targets -- -D warnings
 
   pic2webp:
     name: Tests & Lints (Pic2WebP)
@@ -216,8 +216,8 @@ jobs:
       - name: Rust tests + clippy
         working-directory: apps/pic2webp/src-tauri
         run: |
-          cargo test --manifest-path src-tauri/Cargo.toml
-          cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
+          cargo test --all-targets
+          cargo clippy --all-targets -- -D warnings
 
   cad-viewer:
     name: Tests & Lints (CAD Viewer)
@@ -244,8 +244,8 @@ jobs:
       - name: Rust tests + clippy
         working-directory: apps/cad-viewer/src-tauri
         run: |
-          cargo test --manifest-path src-tauri/Cargo.toml
-          cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
+          cargo test --all-targets
+          cargo clippy --all-targets -- -D warnings
 
   compressor:
     name: Tests & Lints (Compressor)
@@ -277,7 +277,7 @@ jobs:
           CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -o ../src-tauri/compress-engine-darwin-arm64 .
       - name: Rust clippy
         working-directory: apps/compressor/src-tauri
-        run: cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
+        run: cargo clippy --all-targets -- -D warnings
 
   journal:
     name: Tests & Lints (Journal)

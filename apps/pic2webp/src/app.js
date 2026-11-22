@@ -1,7 +1,7 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { open, ask } from "@tauri-apps/plugin-dialog";
-import { initLang, getLang, t, toggleLang, translateBackendMessage } from "./i18n.js";
+import { initLang, getLang, t, translateBackendMessage } from "./i18n.js";
 import { runUpdateCheck } from "./updates.js";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import {
@@ -1275,11 +1275,6 @@ if (themeToggle) {
 
   // 语言切换后重算 title / aria-label
   window.addEventListener("lang-changed", () => syncButton(readMode()));
-}
-
-const langToggle = $("#lang-toggle");
-if (langToggle) {
-  langToggle.addEventListener("click", () => toggleLang());
 }
 
 // 选择文件夹（部分平台拖不进目录，给一个显式入口）
