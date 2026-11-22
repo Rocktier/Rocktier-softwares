@@ -224,22 +224,45 @@ body{font-family:var(--font);color:var(--text);line-height:var(--lh);-webkit-fon
 .hero-facts{display:flex;flex-wrap:wrap;gap:var(--s4);margin-top:var(--s5)}
 .hero-facts span{font-size:.8125rem;color:var(--text3);border-inline-end:1px solid var(--border);padding-inline-end:var(--s4)}
 .hero-facts span:last-child{border-inline-end:0;padding-inline-end:0}
+/* 窄屏这条 facts 会折行，而竖分隔线是按「每项右侧一条」画的 —— 一折行就会
+   出现半截悬在行尾的竖线（实测 390 下「无账号 |」后面什么都没有）。
+   手机上直接去掉竖线，靠间距分组。 */
+@media (max-width:560px){
+  .hero-facts{gap:var(--s2) var(--s4)}
+  .hero-facts span{border-inline-end:0;padding-inline-end:0}
+}
 /* 2026-11-21 修：原为 margin-top:calc(-1 * var(--gap-block))，负值直接吃掉了
    上一个兄弟元素（.hero-in）的 144px 内容区 —— 实测首页把副标题从中间截断、
    主副按钮与 facts 行整个压在截图下面，产品页同理。负边距不会与 .hero 的
    padding-block-end 相抵（那是 section 的，不在这两者之间），所以「借一段
    段距」的意图从来没成立过，只有遮挡。改成正常流式间距。 */
-.hero-shot{position:relative;z-index:2;margin-top:var(--s4)}
-.hero-shot img{width:100%;height:auto;border-radius:var(--radius-md) var(--radius-md) 0 0;border:1px solid var(--border);border-bottom:0;box-shadow:0 -24px 80px -24px oklch(0% 0 0 / 0.55)}
+/* 首屏视觉条：三格局部取景，1.6 比例。
+   为什么不放整窗图：整窗 2560 压进 1440 是 0.56 倍，界面里 12px 的字落到
+   屏幕只剩 6.7px —— 那不是说明，是装饰；而且整窗带红绿灯，违反家族
+   「只拍软件本体」的取景纪律。这里用 2 倍抓屏切出的局部（源 904~1700px），
+   在 373px 的格子里是 2.4~4.5 倍下采样，界面字保持原大小。
+   格高按 (1152 - 2×12) / 3 / 1.6 ≈ 235px 反推，首屏总高压在 830 以内。 */
+.hero-strip{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:var(--s3);
+  margin-top:var(--s5);position:relative;z-index:2}
+.hero-strip figure{margin:0;border-radius:var(--radius-sm);overflow:hidden;
+  border:1px solid var(--border);background:var(--bg2)}
+.hero-strip img{display:block;width:100%;height:auto;aspect-ratio:1.6;object-fit:cover;object-position:top center}
+@media (max-width:640px){
+  .hero-strip{grid-template-columns:minmax(0,1fr);gap:var(--s2)}
+  .hero-strip figure:nth-child(n+2){display:none}
+}
 .hero-in > :last-child{margin-block-end:0}
 .hero-in{text-align:center;position:relative;z-index:2}
 /* 打字动画会把标题从 1 行「长」到 2 行，结束时把 .lead 与按钮整体下推。
-   只有首页英文标题在 561px 左列真的会换行，其余 22 页全程一行，
-   所以只在 en 的首页预留两行，不全局留死气。
+   这条预留是给旧的 561px 左列写的（英文标题在那里会折成两行）。
+   2026-11-22 首页改居中通栏后，标题栏宽 1104，英文标题也是一行，
+   预留就成了标题与副标题之间一个 80px 的空洞 —— 删掉。
    注意：这里不能加 text-wrap，runType() 每 34ms 改一次文本，balance 会逐帧重排。 */
 .display{font-size:var(--h1);line-height:1.05;letter-spacing:-.025em;font-weight:800;margin:0 0 var(--s4)}
-html[data-page="index"]:lang(en) .hero-copy .display{min-height:calc(2 * 1.05em)}
-.lead{font-size:clamp(1.05rem,2.4vw,1.125rem);line-height:1.6;color:var(--text2);max-width:var(--col);margin:0 auto var(--s5);text-wrap:pretty;line-break:strict}
+/* 副标题与 76px 的标题之间原来只差 3.5 倍（18px），读起来像「标题 + 正文」，
+   缺一个中间层。抬到 22px / 1.55，并把读数轴收到 34rem(544px)：
+   21.6px 的字在 544px 里约 25 个汉字一行，是中文最舒服的行长。 */
+.lead{font-size:clamp(1.15rem,1.7vw,1.375rem);line-height:1.55;color:var(--text2);max-width:34rem;margin:0 auto var(--s5);text-wrap:pretty;line-break:strict}
 /* 小号脚注：下载按钮下面的补充说明、维护通告、试用提示（全站 10 处）。
    这些位置此前一律借用 class="lead"（hero 副标题：1.125rem / 640px 居中），
    再用内联 font-size:13px 压下去 —— 语义和尺度都是错位的，
@@ -805,7 +828,12 @@ body:has(#consent:not(.hidden)){padding-block-end:8rem}
    three-equal-cards grid on the home page, which the taste skill bans and which
    was also identical to the about page's layout. */
 .rows{display:grid;margin-top:var(--s5)}
-.row{display:grid;grid-template-columns:3rem minmax(9rem,15rem) 1fr;gap:var(--s4);align-items:baseline;padding:var(--s4) 0;border-top:1px solid var(--border)}
+/* 两条轨：左侧小标题、右侧一句话。2026-11-22 修：原来是三条轨
+   (3rem / 9~15rem / 1fr)，那是给「序号 + 名称 + 说明」的价目行写的；
+   而 .row 在首页承诺区与定价页都只有两个子元素，于是小标题被塞进 3rem
+   的序号槽、正文被塞进 9~15rem 那条 —— 一个四字标题会竖排成两行，
+   正文挤成 200px 宽。一个类服务两种结构，就必须按元素最少的那个定轨。 */
+.row{display:grid;grid-template-columns:12rem minmax(0,1fr);gap:var(--s5);align-items:baseline;padding:var(--s4) 0;border-top:1px solid var(--border)}
 .row:last-child{border-bottom:1px solid var(--border)}
 .row h3,.row h4{margin:0;font-size:1.05rem;font-weight:600}
 /* 说明文字与全站正文同轴（--col 640px）。原来写的是 62ch：16px 下 657.7px，
@@ -974,8 +1002,13 @@ body:has(#consent:not(.hidden)){padding-block-end:8rem}
 @media (prefers-reduced-motion: reduce){.caret{animation:none}}
 
 /* ── 定价页：每款价格明细表 ── */
+/* 2026-11-22：原来是 max-width:--col(640)，一张只有「名字 / 价格」两列的
+   表格被塞进 640 里，右侧空出 464px，整页一半是黑的。价格表是「账目」，
+   不是阅读段落 —— 阅读轴管的是连续文字，账目该铺满内容轨。
+   铺满之后价格右沿落在 1272（与首页下载按钮的右沿同一条线），
+   两页的价格列形成同一条竖轴。 */
 .price-table {
-  max-width: var(--col);
+  max-width: none;
   margin: 0;
 }
 /* #apps 没有 .sec-head：标题与注脚是 .wrap 的直接子元素。
@@ -990,7 +1023,7 @@ body:has(#consent:not(.hidden)){padding-block-end:8rem}
   justify-content: space-between;
   align-items: center;
   gap: 16px;
-  padding: 10px 4px;
+  padding: 14px 4px;
   border-bottom: 1px solid var(--line, rgba(128, 128, 128, 0.22));
 }
 .pt-row:last-child {
@@ -1016,11 +1049,10 @@ a.pt-row:hover,a.pt-row:focus-visible{color:var(--accent)}
    右边那张整窗截图原本占掉半个屏，却把 12px 的界面文字压到 6px，
    既讲不清功能，也挤掉了本页真正该说的话（八个工具各自做什么、
    这个家族守什么规矩）。 */
-[data-page="index"] .hero-in{text-align:start}
-/* 首页标题不再自带字号：全站只有一个 --h1，覆盖一次就会和其余 22 页错开。 */
+/* 2026-11-22：首页原先单独左对齐，而 7 个产品页居中 —— 同一站两套对齐，
+   滚动两屏就能看出来「不成一套」。首页不再覆盖 .hero-in 的居中。
+   标题字号仍只有 --h1 一个来源，23 个页面保持一致。 */
 .hero-copy .display{margin:0 0 var(--s4)}
-[data-page="index"] .hero-copy .lead{margin:0 0 var(--s5)}
-[data-page="index"] .hero-copy .cta-row{justify-content:flex-start}
 /* 规格条：四格数字，等宽字标签 + 大号数字。数字用 tabular-nums，
    否则 08 / 00 / 07 三个值在不同分辨率下宽度会差一像素，四格的
    分隔线就跟着抖。 */
@@ -1054,9 +1086,15 @@ a.pt-row:hover,a.pt-row:focus-visible{color:var(--accent)}
    末轨固定 12rem(192px)：实测 Windows 84 + macOS 72 + gap 8 = 164，
    余 28px。曾写成 minmax(0,auto)，OCR 那行（多一条 Intel 子链接）会把
    整轨撑宽，于是只有那一行的价格/平台/下载一起右移 160px。
-   行高用 min-height 统一到 108px：8 行里最高的内容 104px，都装得下。 */
+   行高用 min-height 统一到 108px：8 行里最高的内容 104px，都装得下。
+
+   2026-11-22 修：首轨原先留着 2.75rem 给「序号」，可标记里从来没有序号元素，
+   于是四个元素挤进五条轨 —— 名字落进 44px 的序号槽，描述被压成 44px 宽、
+   一行一个汉字，还压到价格上。删掉这条空轨，四元素对四轨。
+   （别再靠「内容数对不上就自动流」的样子判断对错：grid 的自动放置不会报错，
+   只会把每个元素塞进下一格。） */
 .idx{list-style:none;margin:var(--s4) 0 0;padding:0;border-top:1px solid var(--border-hover)}
-.idx-row{display:grid;grid-template-columns:2.75rem minmax(0,1fr) 5.5rem 7rem 12rem;
+.idx-row{display:grid;grid-template-columns:minmax(0,1fr) 5.5rem 7rem 12rem;
   column-gap:var(--s4);align-items:center;min-height:6.75rem;padding:0 .375rem;
   border-bottom:1px solid var(--border);transition:background-color .15s}
 .idx-row:hover{background:var(--accent-muted)}
@@ -1099,17 +1137,23 @@ a.pt-row:hover,a.pt-row:focus-visible{color:var(--accent)}
 [data-page="index"] .idx-note{margin:.5rem 0 0;font-family:var(--mono);font-size:.75rem;letter-spacing:.04em;color:var(--text3)}
 
 @media (max-width:960px){
-  [data-page="index"] .hero-in{grid-template-columns:minmax(0,1fr);gap:2rem}
-  .idx-row{grid-template-columns:2rem minmax(0,1fr) auto;column-gap:.75rem;row-gap:.35rem;min-height:0;padding:.9rem .375rem}
+  .idx-row{grid-template-columns:minmax(0,1fr) 5.5rem 10rem;column-gap:.75rem;row-gap:.35rem;min-height:0;padding:.9rem .375rem}
   .idx-plat{display:none}
   /* 描述句不再单行截断：390 下原样式把「整个文件夹」这类差异点切掉，
      而只有 en/zh 两门，放开换行最多多一行，不值得为此丢信息。 */
   .idx-desc{margin:.15rem 0 0;font-size:.9rem;white-space:normal;text-overflow:clip}
   .idx-name{overflow:visible;text-overflow:clip;white-space:normal}
-  .idx-price{grid-column:3}
-  .idx-dl{grid-column:2 / 4;justify-content:start;justify-items:start}
-  .idx-dl .dl-intel{justify-self:start}
+  .idx-price{grid-column:2;text-align:right}
+  .idx-dl{grid-column:3;justify-content:end;justify-items:end}
   [data-page="index"] .buy-band{grid-template-columns:minmax(0,1fr)}
+}
+/* 640 以下一行放不下「名字 / 价格 / 下载」，改成两行：名字独占一行，
+   第二行价格靠左、按钮靠右。此时 12rem 的下载轨也收不住了，交给内容自己撑。 */
+@media (max-width:640px){
+  .idx-row{grid-template-columns:minmax(0,1fr) auto;row-gap:.6rem}
+  .idx-main{grid-column:1 / -1}
+  .idx-price{grid-column:1;text-align:start}
+  .idx-dl{grid-column:2;justify-content:end;justify-items:end}
 }
 .idx-main{min-width:0}
 
