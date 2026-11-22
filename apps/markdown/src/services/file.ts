@@ -2,7 +2,7 @@
 
 import { invoke } from "@tauri-apps/api/core";
 import { open as dialogOpen, save as dialogSave } from "@tauri-apps/plugin-dialog";
-import { readTextFile, writeTextFile, exists } from "@tauri-apps/plugin-fs";
+import { writeTextFile } from "@tauri-apps/plugin-fs";
 
 const isTauri = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 
@@ -53,10 +53,10 @@ export async function openFile(): Promise<{ path: string; content: string; eol: 
 
     if (!path || Array.isArray(path)) return null;
 
-    const fileExists = await exists(path);
-    if (!fileExists) return null;
-
-    const { content, eol } = normalizeEol(await readTextFile(path));
+    // 沙盒（MAS）下面板路径的读取走 Rust 侧安全作用域命令（lib.rs with_scoped）；
+    // 插件的 readTextFile 在沙盒里对容器外路径会 EPERM（2.1(a) 被拒根因）。
+    const raw = await invoke<string>("read_document", { path });
+    const { content, eol } = normalizeEol(raw);
     return { path, content, eol };
   } catch (err) {
     console.error("Failed to open file:", err);

@@ -1,6 +1,6 @@
 [package]
 name = "rocktier-markdown"
-version = "1.0.26"
+version = "1.0.27"
 description = "Fast, elegant Markdown reader and editor"
 authors = ["Rocktier"]
 edition = "2021"
@@ -24,6 +24,10 @@ serde_json = "1.0"
 base64 = "0.22"
 # 授权回执的 Ed25519 离线验签（license.rs，FAMILY-LICENSE.md §2）
 ed25519-dalek = "2"
+
+# macOS App Store（沙盒）构建：面板选中路径的读写需安全作用域访问（lib.rs with_scoped）
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2-foundation = { version = "0.3", features = ["NSURL", "NSString"] }
 
 [features]
 default = ["custom-protocol"]

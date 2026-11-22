@@ -28,7 +28,7 @@ import {
   MAX_TABS, activeTabOf, closeTab, createTab, openTab, tabLabel, updateTabDoc,
   type DocumentTab,
 } from "./services/tabs";
-import { exists, readTextFile, stat } from "@tauri-apps/plugin-fs";
+import { stat } from "@tauri-apps/plugin-fs";
 
 /** toast 语气。error 必须同时改变配色、存活时长与 aria role（家族铁律 7）。 */
 type ToastTone = "info" | "success" | "error";
@@ -408,11 +408,12 @@ export default function App() {
       for (const raw of candidates) {
         if (!raw) continue;
         try {
-          if (await exists(raw)) {
-            const { content, eol } = normalizeEol(await readTextFile(raw));
+          const rawContent = await invoke<string>("read_document", { path: raw }).catch(() => null);
+          if (rawContent !== null) {
+            const { eol } = normalizeEol(rawContent);
             if (!cancelled) {
               eolRef.current = eol;
-              restored = { path: raw, content, modified: false };
+              restored = { path: raw, content: rawContent, modified: false };
             }
             break;
           }
@@ -808,11 +809,20 @@ export default function App() {
       // 沙箱（MAS）下对未授权路径的探测，究竟返回 false 还是直接抛错，
       // 没有在商店包上实测过（D-152 未验项），所以两种结局都收进同一个 try：
       // 无论哪种都归为「访问不到」，不再细分「不存在」与「没权限」。
-      if (!(await exists(path))) {
+      // 沙盒（MAS）下未授权路径读不到：NOT_FOUND 与其他错误都归为「访问不到」，
+      // 不再细分「不存在」与「没权限」。
+      const raw = await invoke<string>("read_document", { path }).catch((e: unknown) =>
+        String(e) === "NOT_FOUND" ? "__NOT_FOUND__" : null,
+      );
+      if (raw === "__NOT_FOUND__") {
         report(t("toast.fileNotExists"));
         return "unavailable";
       }
-      loaded = normalizeEol(await readTextFile(path));
+      if (raw === null) {
+        report(t("toast.cannotReadFile"));
+        return "unavailable";
+      }
+      loaded = normalizeEol(raw);
     } catch {
       report(t("toast.cannotReadFile"));
       return "unavailable";
@@ -950,9 +960,10 @@ export default function App() {
     if (!path || !isTauri) return;
     checkingRef.current = true;
     try {
-      if (!(await exists(path))) return;
+      const diskRaw = await invoke<string>("read_document", { path }).catch(() => null);
+      if (diskRaw === null) return;
       // 先归一化再比较：基线是 LF，CRLF 文件不归一会被每轮轮询误判成"外部修改"
-      const { content: diskContent, eol } = normalizeEol(await readTextFile(path));
+      const { content: diskContent, eol } = normalizeEol(diskRaw);
       // 文档刚被切换/载入过：基线还停留在上一个文件，先以磁盘内容重建基线再比较。
       if (lastPathRef.current !== path) {
         lastPathRef.current = path;
@@ -1045,7 +1056,7 @@ export default function App() {
     const ts = Date.now();
     let name = `paste-${ts}.${ext}`;
     try {
-      for (let i = 1; await exists(`${dir}assets/${name}`); i++) {
+      for (let i = 1; await invoke<boolean>("path_exists", { path: `${dir}assets/${name}` }); i++) {
         name = `paste-${ts}-${i}.${ext}`;
       }
       await invoke("save_paste_image", { path: `${dir}assets/${name}`, data: m[2] });

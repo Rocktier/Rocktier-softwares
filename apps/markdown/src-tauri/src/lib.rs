@@ -290,11 +290,13 @@ fn close_ack(state: tauri::State<CloseWatch>) {
 /// Lightweight: runs `git rev-parse --abbrev-ref HEAD` without extra deps.
 #[tauri::command]
 fn git_branch(dir: String) -> Option<String> {
-    let output = Command::new("git")
-        .args(["rev-parse", "--abbrev-ref", "HEAD"])
-        .current_dir(&dir)
-        .output()
-        .ok()?;
+    let output = with_scoped(std::path::Path::new(&dir), || {
+        Command::new("git")
+            .args(["rev-parse", "--abbrev-ref", "HEAD"])
+            .current_dir(&dir)
+            .output()
+            .ok()
+    })?;
     if output.status.success() {
         Some(String::from_utf8_lossy(&output.stdout).trim().to_string())
     } else {
@@ -435,6 +437,33 @@ where
 
 #[tauri::command]
 #[cfg(desktop)]
+/// App Store（沙盒）构建里，打开/保存面板选中的路径在沙盒容器之外，直接
+/// std::fs 读写会 EPERM——Apple 审核复现的 2.1(a)「Save 报错」即此。面板授予
+/// 的是安全作用域资源，读写前后必须 start/stopAccessingSecurityScopedResource；
+/// 对非面板路径（应用容器内等）该调用返回 false，是无害的空操作。
+#[cfg(target_os = "macos")]
+fn with_scoped<T>(path: &std::path::Path, f: impl FnOnce() -> T) -> T {
+    use objc2_foundation::{NSURL, NSString};
+    let url = NSURL::fileURLWithPath_isDirectory_relativeToURL(
+        &NSString::from_str(&path.to_string_lossy()),
+        false,
+        None,
+    );
+    // SAFETY: 仅影响本进程对沙盒扩展的持有状态，无内存安全问题。
+    let scoped = unsafe { url.startAccessingSecurityScopedResource() };
+    let out = f();
+    if scoped {
+        unsafe { url.stopAccessingSecurityScopedResource() };
+    }
+    out
+}
+
+#[cfg(not(target_os = "macos"))]
+fn with_scoped<T>(path: &std::path::Path, f: impl FnOnce() -> T) -> T {
+    let _ = path;
+    f()
+}
+
 fn save_document(path: String, content: String) -> Result<(), String> {
     // 保存是本应用最核心的写操作：受授权闸门保护（FAMILY-LICENSE.md §2）。
     ensure_write_allowed()?;
@@ -442,8 +471,31 @@ fn save_document(path: String, content: String) -> Result<(), String> {
     // 错误带上目标路径与 errno：前端原来把任何失败都显示成一句「无法写入文件」，
     // 审核员与用户都拿不到线索，我们也没法从截图里判断是权限、是只读盘还是别
     // 的什么。
-    write_with_fallback(&target, &content, write_atomic)
+    with_scoped(&target, || write_with_fallback(&target, &content, write_atomic))
         .map_err(|e| format!("{}: {}", target.display(), e))
+}
+
+/// 打开面板选中文件的读取（沙盒下需安全作用域，见 with_scoped）。
+/// NOT_FOUND 单独返回，前端据以区分「文件不存在」与「读不了」。
+#[tauri::command]
+#[cfg(desktop)]
+fn read_document(path: String) -> Result<String, String> {
+    let target = std::path::PathBuf::from(&path);
+    with_scoped(&target, || std::fs::read_to_string(&target)).map_err(|e| {
+        if e.kind() == std::io::ErrorKind::NotFound {
+            "NOT_FOUND".to_string()
+        } else {
+            format!("{}: {}", target.display(), e)
+        }
+    })
+}
+
+/// 面板路径的存在性探测（沙盒下 JS 侧 exists() 会因无权限误报 false）。
+#[tauri::command]
+#[cfg(desktop)]
+fn path_exists(path: String) -> bool {
+    let target = std::path::PathBuf::from(&path);
+    with_scoped(&target, || target.exists())
 }
 
 /// Makes each concurrent save write to its own temp file. See `save_document`.
@@ -810,10 +862,12 @@ fn save_paste_image(path: String, data: String) -> Result<(), String> {
     let bytes = base64::engine::general_purpose::STANDARD
         .decode(data.as_bytes())
         .map_err(|e| e.to_string())?;
-    if let Some(parent) = std::path::Path::new(&path).parent() {
-        std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
-    }
-    std::fs::write(&path, bytes).map_err(|e| e.to_string())
+    with_scoped(std::path::Path::new(&path), || -> Result<(), String> {
+        if let Some(parent) = std::path::Path::new(&path).parent() {
+            std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+        }
+        std::fs::write(&path, bytes).map_err(|e| e.to_string())
+    })
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -876,6 +930,8 @@ pub fn run() {
             git_branch,
             save_recovery,
             save_document,
+            read_document,
+            path_exists,
             list_recovery,
             clear_recovery,
             initial_file,
