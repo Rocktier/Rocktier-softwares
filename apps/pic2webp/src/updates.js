@@ -23,10 +23,11 @@ import pkg from "../package.json";
 import { t } from "./i18n.js";
 import { revalidateLicence, refreshLicenseStatus, openLicenseDialog } from "./license.js";
 
-const REPO = "Rocktier/pic2webp";
+const REPO = "Rocktier/Rocktier-softwares";
+const TAG_PREFIX = "pic2webp/";
 
-const API = `https://api.github.com/repos/${REPO}/releases/latest`;
-const FALLBACK_URL = `https://github.com/${REPO}/releases/latest`;
+const API = `https://api.github.com/repos/${REPO}/releases?per_page=100`;
+const FALLBACK_URL = `https://github.com/${REPO}/releases`;
 
 let state = "idle"; // idle | checking | uptodate | available | failed
 let result = null;
@@ -58,8 +59,14 @@ function isNewer(a, b) {
 async function checkForUpdates() {
   const res = await fetch(API, { headers: { Accept: "application/vnd.github+json" } });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  const data = await res.json();
-  const latest = String(data.tag_name || "").replace(/^v/i, "");
+  const list = await res.json();
+  let mine = null;
+  for (const r of list) {
+    if (!r.draft && !r.prerelease && String(r.tag_name || "").startsWith(TAG_PREFIX)) { mine = r; break; }
+  }
+  if (!mine) throw new Error("no release for this app");
+  const data = mine;
+  const latest = String(data.tag_name || "").slice(TAG_PREFIX.length).replace(/^v/i, "");
   if (!latest) throw new Error("release has no tag_name");
   return {
     latest,

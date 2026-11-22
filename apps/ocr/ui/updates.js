@@ -30,9 +30,10 @@
 (function () {
   "use strict";
 
-  var REPO = "Rocktier/Rocktier-OCR";
-  var API = "https://api.github.com/repos/" + REPO + "/releases/latest";
-  var FALLBACK_URL = "https://github.com/" + REPO + "/releases/latest";
+  var REPO = "Rocktier/Rocktier-softwares";
+  var TAG_PREFIX = "ocr/";
+  var API = "https://api.github.com/repos/" + REPO + "/releases?per_page=100";
+  var FALLBACK_URL = "https://github.com/" + REPO + "/releases";
 
   var state = "idle"; // idle | checking | uptodate | available | failed
   var result = null;
@@ -79,8 +80,15 @@
   async function checkForUpdates() {
     var res = await fetch(API, { headers: { Accept: "application/vnd.github+json" } });
     if (!res.ok) throw new Error("HTTP " + res.status);
-    var data = await res.json();
-    var latest = String(data.tag_name || "").replace(/^v/i, "");
+    var list = await res.json();
+    var mine = null;
+    for (var i = 0; i < list.length; i++) {
+      var r = list[i];
+      if (!r.draft && !r.prerelease && String(r.tag_name || "").indexOf(TAG_PREFIX) === 0) { mine = r; break; }
+    }
+    if (!mine) throw new Error("no release for this app");
+    var data = mine;
+    var latest = String(data.tag_name || "").slice(TAG_PREFIX.length).replace(/^v/i, "");
     if (!latest) throw new Error("release has no tag_name");
     return {
       latest: latest,

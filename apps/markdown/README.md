@@ -23,8 +23,9 @@ A **fast**, elegant Markdown reader and editor. Part of the [Rocktier](https://r
   exactly three **user-initiated** requests, none at startup or in the background:
   - `POST https://rocktier.com/api/activate` — when you enter a license code
     (sends the code, a device fingerprint for the activation limit, and the OS name)
-  - `GET https://api.github.com/repos/Rocktier/RocktierMD/releases/latest` —
-    when you click "Check for updates" (a plain GET; no body, query or custom fields)
+  - `GET https://api.github.com/repos/Rocktier/Rocktier-softwares/releases` —
+    when you click "Check for updates" (a plain GET; no body, query or custom fields;
+    the app picks its own `markdown/v*` release from the monorepo's release list)
   - `GET https://rocktier.com/api/revalidate?txn=...` — on that same click, only
     if a receipt exists; sends only its transaction id, so a refunded licence
     can be deactivated locally

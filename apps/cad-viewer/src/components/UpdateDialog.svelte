@@ -88,7 +88,7 @@
         <button class="ghost" onclick={() => (app.updateOpen = false)}>{t("updateClose")}</button>
         <span class="update-spacer"></span>
         {#if state === "failed"}
-          <button class="ghost" onclick={() => open("https://github.com/Rocktier/Rocktier-CAD-Viewer/releases/latest")}>
+          <button class="ghost" onclick={() => open("https://github.com/Rocktier/Rocktier-softwares/releases")}>
             {t("updateOpenReleases")}
           </button>
         {/if}

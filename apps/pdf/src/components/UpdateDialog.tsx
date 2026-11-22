@@ -32,7 +32,7 @@ export function UpdateDialog({ state, result, currentVersion, onClose }: UpdateD
         <button className="btn" onClick={onClose}>{t('update.close')}</button>
         <span style={{ flex: 1 }} />
         {state === 'failed' && (
-          <button className="btn" onClick={() => open('https://github.com/Rocktier/Rocktier-PDF/releases/latest')}>
+          <button className="btn" onClick={() => open('https://github.com/Rocktier/Rocktier-softwares/releases')}>
             {t('update.openReleases')}
           </button>
         )}

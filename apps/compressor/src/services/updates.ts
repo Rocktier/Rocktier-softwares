@@ -22,10 +22,11 @@
 import pkg from "../../package.json";
 
 /** GitHub 仓库（形如 "Owner/Repo"）—— 各产品不同，复制时改这一行。 */
-const REPO = "Rocktier/Rocktier-Compressor";
+const REPO = "Rocktier/Rocktier-softwares";
+const TAG_PREFIX = "compressor/";
 
-const API = `https://api.github.com/repos/${REPO}/releases/latest`;
-const FALLBACK_URL = `https://github.com/${REPO}/releases/latest`;
+const API = `https://api.github.com/repos/${REPO}/releases?per_page=100`;
+const FALLBACK_URL = `https://github.com/${REPO}/releases`;
 
 /** 检查状态机：idle 未检查 / checking 进行中 / uptodate 已是最新 / available 有新版 / failed 失败。 */
 export type UpdateState = "idle" | "checking" | "uptodate" | "available" | "failed";
@@ -76,8 +77,26 @@ export async function checkForUpdates(): Promise<UpdateResult> {
   });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
-  const data = (await res.json()) as { tag_name?: string; html_url?: string };
-  const latest = String(data.tag_name ?? "").replace(/^v/i, "");
+  // 总仓里八款产品的 Release 混在一起，标签形如 `<slug>/v1.0.26`；
+  // 取本产品前缀下最新的非草稿、非预发布版本。
+  const list = (await res.json()) as Array<{
+    tag_name?: string;
+    html_url?: string;
+    draft?: boolean;
+    prerelease?: boolean;
+  }>;
+  const mine = list.find(
+    (r) =>
+      !r.draft &&
+      !r.prerelease &&
+      String(r.tag_name ?? "").startsWith(TAG_PREFIX),
+  );
+  if (!mine) throw new Error("no release for this app");
+
+  const data = mine;
+  const latest = String(data.tag_name ?? "")
+    .slice(TAG_PREFIX.length)
+    .replace(/^v/i, "");
   if (!latest) throw new Error("release has no tag_name");
 
   return {

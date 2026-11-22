@@ -102,7 +102,7 @@ export function UpdateDialog({ state, result, currentVersion, lang, onClose }: U
           </button>
           <span className="update-footer-spacer" />
           {state === "failed" ? (
-            <button type="button" onClick={() => open("https://github.com/Rocktier/Rocktier-Compressor/releases/latest")}>
+            <button type="button" onClick={() => open("https://github.com/Rocktier/Rocktier-softwares/releases")}>
               {t("打开发布页", "Open releases")}
             </button>
           ) : null}

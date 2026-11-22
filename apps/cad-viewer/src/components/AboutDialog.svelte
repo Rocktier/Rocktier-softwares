@@ -8,7 +8,7 @@
   const FEEDBACK = "mailto:hello@rocktier.com";
   /* GPL-3.0 requires the corresponding source to be offered, and the trademark
      notice belongs where a user can actually read it. */
-  const SOURCE = "https://github.com/Rocktier/Rocktier-CAD-Viewer";
+  const SOURCE = "https://github.com/Rocktier/Rocktier-softwares";
   const NOTICES = `${SOURCE}/blob/main/THIRD-PARTY-NOTICES.md`;
 
   /** Set when the OS (or the allow-list) refuses, so the failure is visible. */

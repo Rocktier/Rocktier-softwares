@@ -99,7 +99,7 @@ registry = "sparse+https://rsproxy.cn/index/"
 |---|---|---|
 | `POST https://rocktier.com/api/activate` | 输入激活码 | `code`、用于设备数限制的指纹、`os` |
 | `GET https://rocktier.com/api/revalidate?txn=...` | 已有回执时点「检查更新」 | 回执里本就有的交易号 |
-| `GET https://api.github.com/repos/Rocktier/pic2webp/releases/latest` | 点「检查更新」 | 无自定义字段，公开 API，不带 body 或 query |
+| `GET https://api.github.com/repos/Rocktier/Rocktier-softwares/releases` | 点「检查更新」 | 无自定义字段，公开 API，不带 body 或 query；应用自行选取 `pic2webp/v*` 前缀的最新版本 |
 
 三个请求都不含图片数据、文件名或路径，也不会在启动或后台自动发生。全家族口径见[隐私政策](https://rocktier.com/privacy)。
 
@@ -187,7 +187,7 @@ All conversion happens on your device. Your images, file names and paths are nev
 |---|---|---|
 | `POST https://rocktier.com/api/activate` | You enter a license code | `code`, a device fingerprint for the activation limit, `os` |
 | `GET https://rocktier.com/api/revalidate?txn=...` | You click "Check for updates" while a receipt exists | The transaction id already in that receipt |
-| `GET https://api.github.com/repos/Rocktier/pic2webp/releases/latest` | You click "Check for updates" | Nothing custom - a public API with no body or query |
+| `GET https://api.github.com/repos/Rocktier/Rocktier-softwares/releases` | You click "Check for updates" | Nothing custom - a public API with no body or query; the app picks the latest `pic2webp/v*` release from the monorepo's list |
 
 None of these carries image data, file names or paths, and none runs at startup or in the background. See the [privacy policy](https://rocktier.com/privacy) for the family-wide wording.
 
