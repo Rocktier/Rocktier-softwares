@@ -1,5 +1,5 @@
 {
-  "generated": "2026-11-22T02:11:42.520Z",
+  "generated": "2026-11-22T09:13:19.401Z",
   "note": "SHA-256 digests as published by GitHub for each release asset. Verify with: Get-FileHash <file> -Algorithm SHA256  |  shasum -a 256 <file>",
   "products": {
     "pdf": {
@@ -91,19 +91,19 @@
       }
     },
     "ocr": {
-      "repo": "Rocktier/Rocktier-OCR",
-      "version": "v0.2.15",
-      "published": "2026-11-15T17:23:25Z",
+      "repo": "Rocktier/Rocktier-softwares",
+      "version": "ocr/v1.0.0",
+      "published": "2026-11-22T04:28:44Z",
       "windows": {
-        "name": "Rocktier.OCR_0.2.15_x64-setup.exe",
-        "url": "https://github.com/Rocktier/Rocktier-OCR/releases/download/v0.2.15/Rocktier.OCR_0.2.15_x64-setup.exe",
-        "sha256": "576374a921ef6e02126ca2da8da644fe64b8728a905155b9cc4534e3ad437478"
+        "name": "Rocktier.OCR_1.0.0_x64-setup.exe",
+        "url": "https://github.com/Rocktier/Rocktier-softwares/releases/download/ocr/v1.0.0/Rocktier.OCR_1.0.0_x64-setup.exe",
+        "sha256": "864b6c93aded0abd0278a5d5924f218114110805e203999691bf844a35051680"
       },
       "macos": {
         "aarch64": {
-          "name": "Rocktier.OCR_0.2.15_aarch64.dmg",
-          "url": "https://github.com/Rocktier/Rocktier-OCR/releases/download/v0.2.15/Rocktier.OCR_0.2.15_aarch64.dmg",
-          "sha256": "fb829ae16ed5f192ed704093b1cb4875d5d7b5b22aac00bcc7f974e4ab84712b"
+          "name": "Rocktier.OCR_1.0.0_aarch64.dmg",
+          "url": "https://github.com/Rocktier/Rocktier-softwares/releases/download/ocr/v1.0.0/Rocktier.OCR_1.0.0_aarch64.dmg",
+          "sha256": "d71ef347446767305c517968b8357ef049772323712ccc4550660713167c9a92"
         },
         "x64": {}
       }
