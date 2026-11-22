@@ -158,6 +158,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # ort-sys 的 copy_dylibs 在 Windows 上先试 symlink_file，失败则 fs::copy 兜底；
+      # symlink 需要 Developer Mode（或提权），兜底 copy 又会因 examples/deps 目录
+      # 不存在而 NotFound 崩溃（dynamic_link.rs:42）。两件事都在构建前备好。
+      - name: Enable Developer Mode + pre-create target dirs (ort-sys dylib copy)
+        shell: pwsh
+        run: |
+          reg add "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\AppModelUnlock" /t REG_DWORD /f /v "AllowDevelopmentWithoutDevLicense" /d "1" | Out-Null
+          New-Item -ItemType Directory -Force -Path `
+            "apps/ocr/src-tauri/target/release/examples", `
+            "apps/ocr/src-tauri/target/release/deps" | Out-Null
+
       - uses: dtolnay/rust-toolchain@stable
 
       - uses: actions/setup-node@v4
