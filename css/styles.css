@@ -1,0 +1,1133 @@
+/* ROCKTIER — Nothing OS-inspired tokens */
+
+/* Geist — family brand typeface (self-hosted, SIL OFL 1.1; see /fonts/OFL.txt) */
+@font-face{font-family:"Geist";src:url("../fonts/Geist-Variable.woff2") format("woff2");font-weight:100 900;font-style:normal;font-display:swap}
+@font-face{font-family:"Geist Mono";src:url("../fonts/GeistMono-Variable.woff2") format("woff2");font-weight:100 900;font-style:normal;font-display:swap}
+
+:root{
+  --bg:#000000;
+  --bg2:#0a0a0a;
+  --card:rgba(255,255,255,0.03);
+  --card-hover:rgba(255,255,255,0.06);
+  --border:rgba(255,255,255,0.08);
+  --border-hover:rgba(255,255,255,0.15);
+  /* 输入框等功能性边界：WCAG 1.4.11 要求识别控件达 3:1，实测 0.41→3.80:1。
+     装饰性分隔线/卡片描边仍用 --border，不改，以免破坏极弱边框的设计语言。 */
+  --border-input:rgba(255,255,255,0.41);
+  /* 下拉箭头：data URI 里的 SVG 是独立文档，继承不到外部的 currentColor，
+     所以只能按主题各给一份，而不是假装它能自动跟随文字色。 */
+  --arrow-svg:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M2 4l4 4 4-4' fill='none' stroke='%23aaaaaa' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E");
+  --text:rgba(255,255,255,0.95);
+  --text2:rgba(255,255,255,0.55);
+  --text3:rgba(255,255,255,0.5);
+  --accent:#ffffff;
+  --on-accent:#000000;
+  --accent-glow:rgba(255,255,255,0.15);
+  --red:#FF4A3D;
+  --svg-hi:#ffffff;
+  --svg-lo:#000000;
+  --dot:rgba(255,255,255,0.55);
+  --head-bg:rgba(0,0,0,0.8);
+  --radius-sm:12px;
+  --radius-md:20px;
+  --radius-lg:28px;
+  --maxw:72rem;
+  --s2:.75rem;--s3:1rem;--s4:1.5rem;--s5:2.5rem;--s6:4rem;--s7:6rem;
+  /* 缓动曲线：与 8 个产品仓 tokens.css 的 --ease 同值（cubic-bezier(.25,.1,.25,1)）。
+     此前 .card 写 var(--ease,ease) 但本站从未定义该令牌，一直静默退化成 ease。 */
+  --ease:cubic-bezier(.25,.1,.25,1);
+  --font:"Geist",-apple-system,BlinkMacSystemFont,"SF Pro Display","Segoe UI",Roboto,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",Helvetica,Arial,sans-serif;
+  --mono:"Geist Mono","SF Mono","JetBrains Mono","Fira Code",ui-monospace,monospace;
+  /* ── Lenso 玻璃材质（站点副本，母版：docs/rocktier/tokens/glass.css，D-158）
+     站点是静态消费方，不与 8 个产品仓做 md5 同步；改这里之前先看母版。 ── */
+  --glass-chrome-a:#1c1c1f;
+  --glass-chrome-b:#1a1a1d;
+  --glass-panel-a:rgba(34,34,40,.78);
+  --glass-panel-b:rgba(28,28,34,.76);
+  --glass-float-a:rgba(28,28,32,.95);
+  --glass-float-b:rgba(24,24,28,.93);
+  --glass-pill-a:rgba(255,255,255,.10);
+  --glass-pill-b:rgba(255,255,255,.05);
+  --glass-hairline:rgba(255,255,255,.10);
+  --glass-hairline-strong:rgba(255,255,255,.18);
+  --glass-top-sheen:rgba(255,255,255,0);
+  --glass-blur:0px;
+  --glass-saturate:100%;
+  --glass-radius:18px;
+  --glass-shadow:0 10px 30px rgba(0,0,0,.68);
+  --glass-shadow-pill:0 2px 8px rgba(0,0,0,.40);
+  /* 中性 hover / 选中底：与家族 --accent-muted 同义（文字保持 --text） */
+  --accent-muted:rgba(255,255,255,.08);
+  /* 柔光底：玻璃要有东西可折射（D-158 §2） */
+  --canvas:#000000;
+  --canvas-2:#050507;
+  --canvas-3:#0a0a0c;
+  --wash-1:#000000;
+  --wash-2:#000000;
+  --wash-3:#000000;
+  --pane-bg:#17171b;
+  /* 版式尺度：页面标题只允许两档
+     hero 档 --h1（首页 / 定价 / 下载 / 8 个产品页 / about / contact / license）
+     文档档 --h2（更新日志 / 隐私 / 条款 / 退款 / 对比 / 打开 md / 反馈 / 404 / sign）
+     两个档位由页面类型决定，不由单页覆盖。 */
+  --h1:clamp(2.5rem,6vw,4.75rem);   /* 40 / 76 */
+  --h2:clamp(1.7rem,3.4vw,2.6rem);  /* 27 / 41.6 */
+  --h3:1.4rem;
+  /* 内容列：正文 / facts / faq / 价目表 / 段落共用 */
+  --col:40rem;
+  /* 相邻区块之间的空隙（section 各承担一半）
+     clamp(64, 12.5vw, 144)：≤512px 恒 64，768 时 96，≥1152 恒 144 */
+  --gap-block:clamp(4rem,12.5vw,9rem);
+  /* 首屏顶部呼吸：有 hero 页与无 hero 页共用同一个值，
+     否则两种页面在第一屏的起点会差 48px（96 对 144）。
+     clamp(48, 8vw, 96)：≤600px 恒 48，768 时 61，≥1200 恒 96 */
+  --pad-top:clamp(3rem,8vw,6rem);
+  /* 正文行高：中文更松 */
+  --lh:1.7;
+  /* 分隔线（原本从未定义，.pt-row 一直靠 fallback） */
+  --line:rgba(255,255,255,.14);
+  color-scheme:dark;
+}
+/* Day / light theme (monochrome inversion of the dark default) */
+[data-theme="light"]{
+  --bg:#ffffff;
+  --bg2:#f5f5f5;
+  --card:rgba(0,0,0,0.03);
+  --card-hover:rgba(0,0,0,0.06);
+  --border:rgba(0,0,0,0.1);
+  --border-hover:rgba(0,0,0,0.2);
+  --border-input:rgba(0,0,0,0.48);
+  --arrow-svg:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M2 4l4 4 4-4' fill='none' stroke='%23666666' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E");
+  --text:rgba(0,0,0,0.92);
+  --text2:rgba(0,0,0,0.6);
+  --text3:rgba(0,0,0,0.55);
+  --accent:#000000;
+  --on-accent:#ffffff;
+  --accent-glow:rgba(0,0,0,0.12);
+  --red:#E64537;
+  --svg-hi:#000000;
+  --svg-lo:#ffffff;
+  --dot:rgba(0,0,0,0.55);
+  --head-bg:rgba(255,255,255,0.85);
+  --glass-chrome-a:#ffffff;
+  --glass-chrome-b:#fbfbfc;
+  --glass-panel-a:rgba(255,255,255,.80);
+  --glass-panel-b:rgba(250,250,252,.78);
+  --glass-float-a:rgba(255,255,255,.96);
+  --glass-float-b:rgba(250,250,252,.94);
+  --glass-pill-a:rgba(255,255,255,.86);
+  --glass-pill-b:rgba(255,255,255,.66);
+  --glass-hairline:rgba(0,0,0,.10);
+  --glass-hairline-strong:rgba(0,0,0,.16);
+  --glass-top-sheen:rgba(255,255,255,0);
+  --glass-blur:0px;
+  --glass-saturate:100%;
+  --glass-shadow:0 10px 30px rgba(0,0,0,.20);
+  --glass-shadow-pill:0 2px 8px rgba(0,0,0,.10);
+  --accent-muted:rgba(0,0,0,.06);
+  --canvas:#f7f7f8;
+  --canvas-2:#f2f2f4;
+  --canvas-3:#ededf0;
+  --wash-1:#f7f7f8;
+  --wash-2:#f7f7f8;
+  --wash-3:#f7f7f8;
+  --pane-bg:#ffffff;
+  /* 浅色下同一根分隔线要反过来，否则在白底上看不见 */
+  --line:rgba(0,0,0,.14);
+  color-scheme:light;
+}
+/* 中文正文行高比拉丁文更松，读起来才不挤 */
+:lang(zh){--lh:1.8}
+*{box-sizing:border-box;margin:0;padding:0}
+/* `hidden` 属性必须永远能藏住元素 —— 它是 JS 状态机的开关，
+   静默失效会让「未就绪/出错时不显示按钮」这类逻辑形同虚设。
+
+   踩过的坑：.cta-row{display:flex} 与 UA 的 [hidden]{display:none}
+   **特异性相同**（都是 0,1,0），author 样式赢 —— 于是
+   license.html 里 `actionsEl.hidden = true` 完全没作用，
+   出错时「Copy code」照样显示，而码是空的，点了静默无反应。
+
+   用 !important 而不是靠「写在 .cta-row 之后」：这样无论将来
+   谁给哪个类加 display，都不会再次击穿 hidden。 */
+[hidden]{display:none!important}
+html{scroll-behavior:smooth}
+/* P1: compensate for the 64px sticky header when jumping to anchors */
+[id]{scroll-margin-top:80px}
+/* 柔光底（D-158 §2）：三团 radial 在前、160° 线性底垫底。
+   玻璃要折射的是「应用自己的画面」—— 站点同理，墨黑底上先铺一层很淡的彩光。
+   不用 background-attachment:fixed：iOS Safari 对 fixed 背景的缩放行为不可靠。 */
+body{font-family:var(--font);color:var(--text);line-height:var(--lh);-webkit-font-smoothing:antialiased;
+  background-color:var(--canvas);
+  background-image:
+    radial-gradient(85% 60% at 6% -6%,color-mix(in srgb,var(--wash-1) 60%,transparent),transparent 62%),
+    radial-gradient(70% 55% at 97% 6%,color-mix(in srgb,var(--wash-2) 55%,transparent),transparent 60%),
+    radial-gradient(85% 60% at 50% 104%,color-mix(in srgb,var(--wash-3) 50%,transparent),transparent 65%),
+    linear-gradient(160deg,var(--canvas) 0%,var(--canvas-2) 55%,var(--canvas-3) 100%);
+  background-repeat:no-repeat}
+::selection{background:rgba(255,255,255,.15)}
+[data-theme="light"] ::selection{background:rgba(0,0,0,.12)}
+.wrap{max-width:var(--maxw);margin:0 auto;padding:0 var(--s4)}
+
+/* 屏幕外隐藏用逻辑属性 inset-inline-start，不用物理 left。RTL 下 inline-start 在右侧，物理 left 仍指左边 —— skip 链接本该藏到右 9999px，却留在左 9999px 外侧，把文档撑到 scrollWidth 10809（视口仅 816），页面横向漂走。 */
+.skip{position:absolute;inset-inline-start:-9999px;top:1rem;background:var(--accent);color:var(--on-accent);padding:.5rem .9rem;border-radius:100px;z-index:60}
+.skip:focus{inset-inline-start:1rem}
+:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+/* 环色与被聚焦元素同色时等于没画：.buy-band 的底就是 --accent，
+   所以在反色带上改用 --on-accent。 */
+[data-page="index"] .buy-band .btn:focus-visible,
+[data-page="index"] .buy-band .ghost-link:focus-visible{outline-color:var(--on-accent)}
+
+/* nav */
+/* 顶栏 = Lenso chrome 玻璃（D-158：深 .78/.62、浅 .72/.56，blur 50 / sat 160，
+   发丝边 + 顶光）。-webkit- 必须写在标准属性之前，否则压缩器只留前缀版。 */
+.site-head{position:sticky;top:0;z-index:40;
+  background:linear-gradient(180deg,var(--glass-chrome-a),var(--glass-chrome-b));
+  -webkit-backdrop-filter:blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  backdrop-filter:blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  border-bottom:1px solid var(--glass-hairline);
+  box-shadow:inset 0 1px 0 var(--glass-top-sheen)}
+.head-row{display:flex;align-items:center;gap:var(--s4);height:64px}
+.brand{display:flex;align-items:center;gap:12px;text-decoration:none;color:var(--text)}
+.brand-mark{width:30px;height:30px;flex-shrink:0;color:var(--text)}
+.brand-mark.sm{width:24px;height:24px}
+/* 390 下「Rocktier」加红点会超出品牌列宽，红点被折到第二行、贴在字下面。
+   字标整体作为一个不可断行的单元。 */
+.brand-word{font-weight:700;letter-spacing:-.02em;font-size:1.15rem;white-space:nowrap}
+.brand-word span{color:var(--accent)}
+.brand-word i{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--red);margin-left:6px;vertical-align:2px}
+.links{display:flex;align-items:center;gap:var(--s4);margin-inline-start:auto}
+.links a{color:var(--text2);text-decoration:none;font-size:.95rem;padding:12px 0;transition:color .15s;display:inline-block;white-space:nowrap}
+.links a:hover{color:var(--text)}
+.head-actions{display:flex;align-items:center;gap:10px}
+/* 顶栏常驻下载入口。此前 Download 只是导航里的第 3 个文字链，最该点的动作
+   反而最不显眼；这里给它一个实心按钮（zcode 的做法），高度与 44px 图标按钮对齐。
+   1080px 以下主导航收起进汉堡菜单，按钮同时隐藏——菜单里已有 Download，
+   窄屏再占 100px 会把语言切换器挤出去。 */
+.btn-head{display:inline-flex;align-items:center;justify-content:center;height:44px;padding:0 1.15rem;background:var(--accent);color:var(--on-accent);font-size:.9rem;font-weight:600;border-radius:var(--radius-sm);text-decoration:none;white-space:nowrap;transition:transform .2s,box-shadow .2s}
+.btn-head:hover{transform:translateY(-1px);box-shadow:0 6px 18px var(--accent-glow)}
+@media (max-width:1080px){.btn-head{display:none}}
+.ghost{background:var(--card);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text2);width:44px;height:44px;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;transition:all .2s}
+.ghost:hover{background:var(--card-hover);border-color:var(--border-hover);color:var(--text)}
+.ghost{position:relative}
+.ghost::before{content:"";position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:44px;height:44px}
+/* Touch target: expand the hit area to 44x44px without changing the visual size */
+.sun{display:block}.moon{display:none}
+[data-theme="light"] .sun{display:none}[data-theme="light"] .moon{display:block}
+
+/* hero */
+.hero{position:relative;overflow:hidden;padding:var(--pad-top) 0 calc(var(--gap-block)/2)}
+/* hero 末元素的 margin 会与半档内边距相加，出现 144 与 169 两种实测段距 */
+/* 2026-11-21 修：这两条用的 --space-md / --space-xl / --text-sm /
+   --color-muted / --color-rule-2 全是旧令牌名，本文件一个都没定义 ——
+   于是 gap 与分隔线整段失效，首页那行 facts 挤成一串（"八件工具Windows +
+   macOS无账号7天免费试用"）。换成现行令牌。 */
+.hero-facts{display:flex;flex-wrap:wrap;gap:var(--s4);margin-top:var(--s5)}
+.hero-facts span{font-size:.8125rem;color:var(--text3);border-inline-end:1px solid var(--border);padding-inline-end:var(--s4)}
+.hero-facts span:last-child{border-inline-end:0;padding-inline-end:0}
+/* 2026-11-21 修：原为 margin-top:calc(-1 * var(--gap-block))，负值直接吃掉了
+   上一个兄弟元素（.hero-in）的 144px 内容区 —— 实测首页把副标题从中间截断、
+   主副按钮与 facts 行整个压在截图下面，产品页同理。负边距不会与 .hero 的
+   padding-block-end 相抵（那是 section 的，不在这两者之间），所以「借一段
+   段距」的意图从来没成立过，只有遮挡。改成正常流式间距。 */
+.hero-shot{position:relative;z-index:2;margin-top:var(--s4)}
+.hero-shot img{width:100%;height:auto;border-radius:var(--radius-md) var(--radius-md) 0 0;border:1px solid var(--border);border-bottom:0;box-shadow:0 -24px 80px -24px oklch(0% 0 0 / 0.55)}
+.hero-in > :last-child{margin-block-end:0}
+.hero-in{text-align:center;position:relative;z-index:2}
+/* 打字动画会把标题从 1 行「长」到 2 行，结束时把 .lead 与按钮整体下推。
+   只有首页英文标题在 561px 左列真的会换行，其余 22 页全程一行，
+   所以只在 en 的首页预留两行，不全局留死气。
+   注意：这里不能加 text-wrap，runType() 每 34ms 改一次文本，balance 会逐帧重排。 */
+.display{font-size:var(--h1);line-height:1.05;letter-spacing:-.025em;font-weight:800;margin:0 0 var(--s4)}
+html[data-page="index"]:lang(en) .hero-copy .display{min-height:calc(2 * 1.05em)}
+.lead{font-size:clamp(1.05rem,2.4vw,1.125rem);line-height:1.6;color:var(--text2);max-width:var(--col);margin:0 auto var(--s5);text-wrap:pretty;line-break:strict}
+/* 小号脚注：下载按钮下面的补充说明、维护通告、试用提示（全站 10 处）。
+   这些位置此前一律借用 class="lead"（hero 副标题：1.125rem / 640px 居中），
+   再用内联 font-size:13px 压下去 —— 语义和尺度都是错位的，
+   而且每处带三条内联声明，改一处漏一处。 */
+.note{margin:var(--s3) 0 0;max-width:var(--col);font-size:.8125rem;line-height:1.6;color:var(--text2);text-wrap:pretty;line-break:strict}
+/* 居中只用于居中的区带（hero / 下载区 / 校验和），其余跟着 168 那条轴走 */
+.note.center{margin-inline:auto;text-align:center}
+/* 两行连续的小字属于同一段细字，组内收紧。
+   顺序不是随手排的：本条与下面的 .note.loose 特异度都是 (0,2,0)，
+   同特异度下后声明者胜。本条必须先写，.loose 才能盖过它拿到一整档；
+   写反了「.note.loose 紧跟另一个 .note」就会被压成 12px。 */
+.note + .note{margin-block-start:var(--s2)}
+/* 上面隔着卡片网格时，按一整档分开，别让脚注黏在卡片上。
+   本条必须写在 .note + .note **之后**（同上：靠顺序取胜，别挪）。 */
+.note.loose{margin-block-start:var(--s5)}
+
+/* C 型文档页（changelog / privacy / terms / refund-policy 等）：
+   标题左对齐，与下方 640 正文列**同一条左边界**（168）。
+   不给 .hero-in 加 max-width：它是 .wrap，本身已经有正确的 24px 内边距，
+   再收窄会引入第三条轴（实测过 376 与 424 两个错位）。 */
+[data-layout="doc"] .hero-in{text-align:start}
+[data-layout="doc"] .hero-in .lead{margin-inline:0}
+/* 文档页的 H1 是「阅读列里的文种标题」，不是首屏宣言，所以降一档到 --h2。
+   实测：76px 下 13 个汉字的标题宽 988px，而正文列只有 640，
+   标题右缘比正文多出 348px，读起来像横幅压在一篇法律文本上。
+   全站因此只有两种页面标题尺寸，由页面类型决定，不由单页心情决定：
+     有 hero 的页面（首页 / 定价 / 下载 / 8 个产品页 / about / contact / license）= --h1
+     文档页（改版日志 / 隐私 / 条款 / 退款 / 对比 / 打开 md / 反馈 / 404 / sign）= --h2
+   同时把标题宽度收进正文列，右缘与正文对齐。 */
+[data-layout="doc"] h1{font-size:var(--h2);line-height:1.18;letter-spacing:-.02em;max-width:var(--col)}
+/* 文档档里段落标题不该和页面标题同号。
+   vs-online-tools 之前 H1 与 5 个 H2 都是 41.6，层级比 1.0，读者读不出这是两层。
+   收到 --h3（22.4），与 privacy / terms 的 .prose h2 同档，
+   于是 7 个文档页里不再有异类。
+   只收 h2/h3，**不碰 h1**：404 / sign 的 H1 也挂着 .sec-title 这个类，
+   改 h1 会让它们变成第三档字号，破坏「全站只许两档」。 */
+[data-layout="doc"] :is(h2,h3).sec-title{font-size:var(--h3);letter-spacing:-.01em;line-height:1.3}
+/* 注意：本类的 display:flex 曾击穿 [hidden]（license.html 的状态机靠它）。
+   文件开头已有 [hidden]{display:none!important} 兜底，别删那条。 */
+.cta-row{display:flex;gap:var(--s3);justify-content:center;flex-wrap:wrap;margin-block-start:var(--s4)}
+.btn{display:inline-block;background:var(--accent);color:var(--on-accent);font-weight:600;padding:.85rem 1.7rem;border-radius:var(--radius-md);text-decoration:none;font-size:.95rem;transition:all .2s cubic-bezier(.25,.1,.25,1)}
+.btn:hover{box-shadow:0 0 30px var(--accent-glow),0 8px 24px rgba(0,0,0,.4);transform:translateY(-1px)}
+.ghost-link{color:var(--text);text-decoration:none;padding:.85rem .4rem;font-weight:500;border-bottom:1px solid var(--border-hover)}
+.ghost-link:hover{color:var(--accent);border-color:var(--accent)}
+/* Generic ghost variant for .btn (e.g. the PayPal alt button in price cards).
+   Without this, the bare .ghost icon-button rules (fixed 44x44) collide with
+   .btn and crush the label into a tiny square. */
+.btn.ghost{width:auto;height:auto;position:static;background:transparent;color:var(--text);border:1px solid var(--border);display:inline-block;white-space:nowrap}
+.btn.ghost::before{display:none}
+.btn.ghost:hover{background:transparent;border-color:var(--accent);color:var(--accent);box-shadow:none;transform:none}
+
+/* Antigravity-inspired monochrome particle field (canvas)
+   2026-11-16：Lenso 转向后粒子降为氛围层（约 1/3 强度），点阵层已移除，
+   画面层次交给柔光底与玻璃表面。 */
+.hero-in{z-index:2}
+
+/* dot-matrix typewriter for the hero display title */
+@keyframes blink{50%{opacity:0}}
+
+/* 品牌红点：hero 上唯一的装饰性红点（Lenso 里红点只作状态，这里保留一枚品牌点缀） */
+@keyframes pulse{50%{opacity:.4}}
+
+/* sections */
+/* 段落节奏统一由 --gap-block 决定，上下各承担一半，相邻 section 自动均分，
+   不用逐页调。section 的 padding 会挡住 margin 折叠 —— 首尾元素的
+   外边距会叠在 padding 内侧（96+24=120 那种），所以首尾都要清零，见下。 */
+.section{padding-block:calc(var(--gap-block)/2)}
+/* 首尾外边距清零要成对写，只清尾不清头等于没治。
+   section 的 padding 会挡住 margin 折叠，末元素的尾随外边距就顶在 padding 内侧，
+   把段距从 144 顶成 168/156（尾）或 208（首）。
+
+   而且尾随外边距是一路塌上去的：.prose > ul > li 三层结构里，清掉 ul 的 12px
+   之后，li 自己的 12px 又塌上来，照样顶住。所以从 .wrap 往下连清三层，
+   三种承载形态一次覆盖：
+     1. section > 内容
+     2. section > .wrap > 内容（.wrap.prose 也算这一种）
+     3. section > .wrap > .prose / .faq > ul > li（孙 / 曾孙节点） */
+main > .section > :first-child,
+main > .section > .wrap > :first-child,
+main > .section .wrap > :first-child > :first-child,
+main > .section .wrap > :first-child > :first-child > :first-child{margin-block-start:0}
+main > .section > :last-child,
+main > .section > .wrap > :last-child,
+main > .section .wrap > :last-child > :last-child,
+main > .section .wrap > :last-child > :last-child > :last-child{margin-block-end:0}
+/* 五个没有 hero 的页面（404 / sign / feedback / open-md / vs-online-tools）
+   首个区块直接顶在 64px 顶栏下，76px 标题会贴棚。补一整档呼吸，
+   与 hero 页的视觉起点对齐。 */
+main > .section:first-child{padding-block-start:var(--pad-top)}
+/* 兜底页（404 / sign）：整页只有一段话，没有第二段可比节奏。
+   所以把这一段撑到一整屏并垂直居中，否则内容全挤在 64px 顶栏下面，
+   像一页没加载完的 HTML。
+   原来写 70vh：内容比盒子高 102px，而 align-items:center 会让溢出
+   上下均分，于是标题有一半钻到顶栏底下被盖住。撑到一整屏就没有溢出。
+   dvh 优先，vh 是老浏览器的兜底。 */
+.util-page{min-height:100vh;min-height:100dvh;display:flex;align-items:center}
+.util-page > .wrap{text-align:center}
+/* 交替区带用半透底，别拿不透明底把柔光整段切断 */
+.section.alt{background:color-mix(in srgb,var(--bg2) 62%,transparent)}
+/* 段头留在通栏轴（.wrap 左边界），描述段收进 640 窄列。 */
+.sec-head{max-width:none;margin-bottom:var(--s5)}
+.sec-head > p{max-width:var(--col)}
+.sec-head.center{text-align:center;margin-inline:auto}
+.sec-head.center > .sec-title{margin-inline:auto}
+.sec-head.center > p{margin-inline:auto}
+.sec-head > p:not(.eyebrow){margin:var(--s2) 0 0}
+.sec-title{font-size:var(--h2);letter-spacing:-.02em;font-weight:700;line-height:1.15;
+  max-width:min(100%,22em);text-wrap:balance;line-break:strict}
+/* 22em 的标题盒落在 text-align:center 的容器里不会自己居中，会偏左。
+   download 的 .checksums 就是这种容器（段头不是 .sec-head.center）。 */
+.checksums .sec-title{margin-inline:auto}
+/* 全站 29 个居中段头里，27 个后面跟的是通栏块（.grid / .cols / .banner），
+   居中在 720 是对的；只有 pdf.html 的「常见问题」压在 .prose.faq 这个窄列上，
+   段头居中在 720 而 FAQ 列在 168 到 808（中心 488），差 232px。
+   把这一个段头的盒子收进窄列，居中文字就落回列中心。 */
+.sec-head.center:has(+ .prose.faq){max-width:var(--col);margin-inline:0}
+/* 404 / sign / feedback / open-md / vs-online-tools 的页面标题写的是 h1.sec-title
+   （这几页没有 hero）。它们属于文档档，跟着 .sec-title 用 --h2，
+   全站标题只允许两档：hero 档 --h1，文档档 --h2。 */
+h1.sec-title{margin:0 0 var(--s4);max-width:var(--col);text-wrap:balance;line-break:strict}
+/* 当前项改用 aria-current="page" 标记（语义属性本来就该干这件事），
+   并且**只改颜色**：原先的 .active 加了 10px 内边距与圆角软底，
+   换页时导航条会整体左右抖一下（盒尺寸变了）。这里复用悬停那条下划线，
+   下划线是 ::after 的 transform，不占布局，所以换页零位移。
+   当前项与悬停原本渲染完全同款（同一个 color + 同一条 1px 下划线），
+   鼠标移到别的项时屏上会出现两个一模一样的高亮，分不出「你在这」和「你碰到的」。
+   把当前项的下划线加粗到 2px 区分：::after 是绝对定位，加粗不改盒尺寸、不占位。 */
+.links a[aria-current="page"]{color:var(--text)}
+.links a[aria-current="page"]::after{transform:scaleX(1);height:2px}
+
+/* about: name story */
+.name-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:var(--s4)}
+.name-card{background:linear-gradient(180deg,var(--glass-pill-a),var(--glass-pill-b));border:1px solid var(--glass-hairline);border-radius:var(--glass-radius);padding:var(--s5);
+  -webkit-backdrop-filter:blur(24px) saturate(var(--glass-saturate));
+  backdrop-filter:blur(24px) saturate(var(--glass-saturate));
+  box-shadow:inset 0 1px 0 var(--glass-top-sheen);transition:border-color .25s,background-color .25s}
+.name-card:hover{border-color:var(--glass-hairline-strong)}
+.name-glyph{font-size:4rem;font-weight:800;line-height:1;letter-spacing:-.03em;color:var(--accent);display:block;margin-bottom:var(--s2)}
+.name-card .sec-title{margin-bottom:var(--s3)}
+.name-card p{color:var(--text2);margin:0;font-size:1rem}
+.col-title{font-size:1.2rem;font-weight:600;margin:0 0 .4rem}
+
+/* products */
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:var(--s4)}
+/* 卡片 = Lenso 玻璃面板的「安静面」：pill 级透光 + 发丝边 + 顶光。
+   模糊半径比 chrome 小一档（24px）：一页可能十几张卡，50px 会让滚动掉帧。 */
+.card{background:linear-gradient(180deg,var(--glass-pill-a),var(--glass-pill-b));border:1px solid var(--glass-hairline);border-radius:var(--glass-radius);padding:var(--s4);
+  -webkit-backdrop-filter:blur(24px) saturate(var(--glass-saturate));
+  backdrop-filter:blur(24px) saturate(var(--glass-saturate));
+  box-shadow:inset 0 1px 0 var(--glass-top-sheen);transition:background-color .25s var(--ease),border-color .25s,transform .25s cubic-bezier(.25,.1,.25,1),box-shadow .25s}
+.card:hover{background:linear-gradient(180deg,color-mix(in srgb,var(--glass-pill-a) 82%,var(--accent-muted)),var(--glass-pill-b));border-color:var(--glass-hairline-strong);transform:translateY(-3px);box-shadow:inset 0 1px 0 var(--glass-top-sheen),0 20px 40px rgba(0,0,0,.3)}
+.card.featured{border-color:var(--accent)}
+.card-top{display:flex;justify-content:space-between;align-items:center;gap:var(--s3);margin-bottom:var(--s4)}
+.mark-svg{position:relative;width:56px;height:56px;flex:none}
+/* 2026-10 品牌刷新：产品 logo 自带圆角主体（超椭圆），不再需要外框与圆角裁剪 */
+.mark-svg img,.mark-img{position:absolute;inset:0;width:100%;height:100%;object-fit:contain}
+/* 单 <img> + JS 按主题换 src（见 main.js applyTheme），不再需要显隐两套图 */
+.chip{font-family:var(--mono);font-size:.72rem;font-weight:600;color:var(--text3);border:1px solid var(--border);padding:.25rem .6rem;border-radius:100px;letter-spacing:.08em;white-space:nowrap;flex:none}
+.chip.live{color:var(--on-accent);background:var(--accent);border-color:var(--accent)}
+.chip.soon{color:var(--accent);border-color:var(--accent)}
+.card-name{font-size:1.3rem;font-weight:600;letter-spacing:-.01em;margin:0 0 .3rem}
+.card-name span{color:var(--accent)}
+.card-desc{color:var(--text2);margin:0;font-size:.95rem}
+.card-dl{display:flex;flex-wrap:wrap;gap:.5rem;margin-top:auto;padding-top:1rem}
+.card-dl .btn.dl{padding:.55rem 1.05rem;font-size:.8rem;border-radius:8px;white-space:nowrap;min-height:44px;display:inline-flex;align-items:center;min-width:96px;justify-content:center}
+/* 平台按钮是**并列关系**：Windows 与 macOS 同等权重，都用同一套描边样式。
+   此前 macOS 挂 .ghost（透明描边）、Windows 挂 .btn（accent 实心），
+   一实一空被读成「主 / 次」，用户会以为 macOS 是备选或不可用。 */
+.card-dl .btn.dl,
+.card-dl .btn.dl.ghost,
+.dl-center .btn.dl,
+.dl-center .btn.dl.ghost{background:transparent;color:var(--text);border:1px solid var(--border)}
+.card-dl .btn.dl:hover,
+.card-dl .btn.dl.ghost:hover,
+.dl-center .btn.dl:hover,
+.dl-center .btn.dl.ghost:hover{background:var(--card-hover);border-color:var(--accent);color:var(--accent);box-shadow:none;transform:none}
+.card{display:flex;flex-direction:column}
+
+/* philosophy */
+.cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:var(--s5)}
+.col h3{font-size:1.2rem;font-weight:600;margin:0 0 .4rem}
+.col p{color:var(--text2);margin:0}
+
+/* cta banner */
+.banner{border:1px solid var(--glass-hairline);background:linear-gradient(180deg,var(--glass-pill-a),var(--glass-pill-b));border-radius:var(--glass-radius);padding:var(--s6) var(--s4);text-align:center;
+  -webkit-backdrop-filter:blur(24px) saturate(var(--glass-saturate));
+  backdrop-filter:blur(24px) saturate(var(--glass-saturate));
+  box-shadow:inset 0 1px 0 var(--glass-top-sheen)}
+.banner p{color:var(--text2);max-width:46ch;margin:var(--s3) auto var(--s5)}
+/* .banner p 是后代选择器（0,1,1），会连卡内小字一起命中。那些元素的字号被自己的
+   规则改到 11.5px 到 14.4px，46ch 于是按小字号解析，宽度静默塌成 318 到 439px：
+   8 个产品页的「Already bought one? ...」被压成两行、断在 and / activation code.，
+   .lic-note 自己写的 30rem 还被 (0,1,1) 压掉，从来没生效过。
+   小字改用一个明确的 rem 上限，.banner 里的 16px 正文段落继续吃 46ch 的阅读宽度。
+   34rem 不是拍的：它是 .lic-label 3 行降到 2 行、.lic-note 2 行降到 1 行的第一个值，
+   再往上（36 / 40rem）页高不再变，因为已经被容器 590px 卡住。 */
+.banner :is(.price-note,.card-note,.lic-label,.lic-code,.lic-note,.buy-consent-hint){max-width:34rem}
+/* 功能三列之后紧跟一张横幅时，两段之间要按一整档分开。
+   .cols 的列高不等（最后一列常多一行），横幅贴上来会读成第四列。 */
+.cols + .banner{margin-block-start:var(--s5)}
+
+/* footer */
+.foot{border-top:1px solid var(--border);padding:var(--s4) 0}
+.foot-row{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:var(--s2) var(--s5)}
+.foot-row .brand{color:var(--text2)}
+.foot .dot{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--red);vertical-align:2px;margin-left:2px}
+/* 页脚改成两栏：左「品牌 + 版权」，右「法律与支持」。
+   2026-11-20：链接从 11 项收到 5 项，法律条款按 zcode 的做法下沉到右下角，
+   版权不再单独占一行。旧版用 flex-basis:100% 让版权确定性换行，是为了在
+   11 项链接下保证全站页脚高度一致（当时 16 个页面因此多出 39px）；
+   结构换成两栏后该问题由 space-between 承担，模板全站同一份 ⇒ 高度仍然一致。 */
+.foot-brand{display:flex;align-items:center;flex-wrap:wrap;gap:var(--s2) var(--s3);min-width:0}
+.copy{margin:0;font-family:var(--mono);font-size:.75rem;color:var(--text2);letter-spacing:.01em}
+/* Trademark line: deliberately quiet, but present on every page — this is the
+   public half of the disclaimer that also lives in the CAD Viewer About box. */
+.foot-legal{margin-top:var(--s4);padding-top:var(--s3);border-top:1px solid var(--border);color:var(--text2);font-size:.78rem;line-height:1.6}
+.foot-legal p{margin:0;max-width:78ch}
+
+/* 汉堡菜单断点从 720px 提到 1080px。
+   加语言切换器之前顶栏只有 6 个英文导航项；8 语言之后德语
+   「Über uns」「Warum offline」明显更长，.links 在 1000px 视口
+   就换行成两行，把 64px 的 head-row 撑到 92px，导航挤成一团。
+   代价：900–1080px 这段从「直达导航」变成「汉堡菜单」，
+   少一层直达入口 —— 对多语言站点这是必要代价。 */
+/* 基线必须显式隐藏：<button> 的浏览器默认 display 是 inline-block，
+   少了这条 none，汉堡按钮在 1440px 桌面顶栏同样会显示出来，和 6 个
+   导航链接并存。且它必须写在下面媒体查询**之前** —— 同特异度下后声明
+   者胜，放反了就会用 none 反向覆盖掉窄屏的 inline-flex。 */
+.menu-btn{display:none}
+@media (max-width:1080px){
+  .links{display:none}
+  .menu-btn{display:inline-flex}
+  .head-row{height:60px}
+}
+/* 只声明外观，display 交给上面两条：基线 none（宽屏隐藏）、
+   媒体查询 inline-flex（窄屏显示）。 */
+.menu-btn{background:var(--card);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text2);width:44px;height:44px;align-items:center;justify-content:center;cursor:pointer}
+.menu-btn:hover{background:var(--card-hover);border-color:var(--border-hover);color:var(--text)}
+.menu-panel{display:none;flex-direction:column;gap:2px;padding:var(--s2) var(--s4) var(--s3);border-top:1px solid var(--glass-hairline);
+  background:linear-gradient(180deg,var(--glass-chrome-a),var(--glass-chrome-b));
+  -webkit-backdrop-filter:blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  backdrop-filter:blur(var(--glass-blur)) saturate(var(--glass-saturate))}
+.menu-panel.open{display:flex}
+.menu-panel a{color:var(--text2);text-decoration:none;font-size:1.05rem;padding:14px var(--s2);border-radius:10px;display:flex;align-items:center;justify-content:space-between}
+.menu-panel a:hover{background:var(--card-hover);color:var(--text)}
+@media (prefers-reduced-motion:reduce){
+  *{scroll-behavior:auto!important;transition:none!important;animation:none!important}
+  .card:hover{transform:none}
+} 
+/* scrollbar */
+::-webkit-scrollbar{width:6px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:rgba(255,255,255,.1);border-radius:3px}
+::-webkit-scrollbar-thumb:hover{background:rgba(255,255,255,.2)}
+[data-theme="light"] ::-webkit-scrollbar-thumb{background:rgba(0,0,0,.15)}
+[data-theme="light"] ::-webkit-scrollbar-thumb:hover{background:rgba(0,0,0,.25)}
+
+/* motion — lightweight, dependency-free (research: Micro-interaction Lab / css-skills style) */
+/* scroll reveal */
+.js-anim .rv{opacity:0;transform:translateY(26px);transition:opacity .7s ease,transform .7s cubic-bezier(.16,1,.3,1)}
+.js-anim .rv.in{opacity:1;transform:none}
+/* brand mark: boulder settles in as one solid subject (rock + tier together) */
+.brand-mark{animation:lay .55s ease 0.05s both}
+@keyframes lay{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:none}}
+/* card icon lift on hover */
+.card:hover .mark{transform:translateY(-2px)}
+/* nav underline grows from left */
+.links a{position:relative}
+.links a::after{content:"";position:absolute;left:0;right:0;bottom:-5px;height:1px;background:currentColor;transform:scaleX(0);transform-origin:left;transition:transform .25s ease}
+.links a:hover::after{transform:scaleX(1)}
+
+/* 页脚法律与支持：12px、--text2（浅色主题下 5.7:1，过 AA；--text3 只有 4.48:1，不能用）
+   左侧品牌与版权、右侧这一组由 .foot-row 的 space-between 分开。 */
+.legal-links{display:flex;flex-wrap:wrap;align-items:center;gap:var(--s3) var(--s4);min-width:0}
+.legal-links a{color:var(--text2);text-decoration:none;font-size:.75rem;transition:color .2s ease;padding:8px 0}
+.legal-links a:hover{color:var(--text)}
+
+/* privacy prose */
+/* 长文列统一走 --col，并**贴容器左边缘（x=168 @1440）**，不居中。
+   定这一口径的理由：站点的整体语法是左对齐的（首页分栏、价目表、产品页三栏
+   全部从同一条边起），长文居中会在一个左对齐的站里引入第二种阅读起点；
+   而且居中要把段头压进 640 才不产生错位，压窄段头会让 41.6px 的栏目标题每行
+   只放 15 个汉字，「八样工具，一台机器，什么都不送出去。」断成 15 字 +「去。」，
+   孤字问题原样复发。贴左边缘则段头与正文天然同轴，一条规则解决三处错位。 */
+.prose{max-width:var(--col);margin-inline:0;color:var(--text2)}
+/* 六个页面把 .prose 直接挂在 .wrap 上（<div class="wrap prose">）。
+   两个类同时声明 max-width / margin-inline，后写的 .prose 会把 wrap 的
+   auto 外边距一并改掉，元素被钉到视口左边。这里把 wrap 自己的宽度还回去，
+   把 640 的度量下放到子元素，文字才落在 168 这条轴上。 */
+.wrap.prose{max-width:var(--maxw);margin-inline:auto}
+.wrap.prose > *{max-width:var(--col)}
+/* 同一页里第二段 .prose（markdown 的 FAQ 下面是「更多链接」清单）：
+   两段同宽同轴，属于同一块正文的两层，档距用最小一级，不要按整段分开。 */
+.prose + .prose{margin-block-start:var(--s3)}
+/* 对比表（vs-online-tools）：原先是 28 处内联样式，用的是 rgba(128,128,128)
+   这类不属于主题的灰，浅色主题下发脏，而且表格自己一套 14px 字号。
+   收成组件后跟随主题的 --border / --text / --text2 三级色。 */
+.cmp{width:100%;border-collapse:collapse;font-size:.9rem;margin:var(--s4) 0}
+.cmp th,.cmp td{padding:.6rem .5rem;text-align:start;vertical-align:top}
+.cmp thead th{font-family:var(--mono);font-size:.72rem;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--text3);border-bottom:2px solid var(--border-hover)}
+.cmp tbody tr{border-bottom:1px solid var(--border)}
+.cmp tbody tr:last-child{border-bottom:none}
+.cmp td{color:var(--text2)}
+.cmp .cmp-k{font-weight:600;color:var(--text)}
+/* 390 下三列会挤到「收费方式」折成两行，收一档内边距并把标签列撑住 */
+@media (max-width:640px){
+  .cmp{font-size:.85rem}
+  .cmp th,.cmp td{padding:.5rem .35rem}
+  .cmp .cmp-k{min-width:4.5rem}
+}
+/* 更新日志的版本行（日期 + 版本号）原先在 HTML 里重复写了 36 次
+   style="margin:0 0 var(--s3);"，而且 11.52px 的字号在 1x 屏会被亚像素取整成
+   11 或 12，同一行文字在不同 DPR 下宽度不一致。收成一条规则并抬到 12px。 */
+.prose .card-note{margin:0 0 var(--s3);font-size:.75rem;line-height:1.4}
+.prose h2{color:var(--text);font-size:1.4rem;margin:var(--s6) 0 var(--s3)}
+.prose h2:first-of-type{margin-top:0}
+.prose p{margin-bottom:var(--s4)}
+.prose ul{margin:0 0 var(--s3) var(--s4)}
+.prose li{margin-bottom:var(--s2)}
+/* 隐私页里那三个请求端点是一整串不可断的 URL（GET https://api.github.com/repos/<repo>/releases/latest），
+   在 390 下把页面撑出 75px 横向滚动。允许它在必要时断行。 */
+.api-url{overflow-wrap:anywhere}
+.prose code{font-family:var(--mono);font-size:.9em;background:var(--card);padding:.1rem .35rem;border-radius:4px}
+.prose a{color:var(--text);text-decoration:underline;text-underline-offset:3px}
+
+/* SGO key-facts card (Price/Platforms/Trial/Offline/License) — stable extraction block per product page */
+.facts{width:100%;max-width:var(--col);margin:0;border-collapse:collapse;font-size:.95rem}
+.facts th,.facts td{text-align:start;padding:.55rem .8rem;border-bottom:1px solid var(--border)}
+.facts th{color:var(--text3);font-family:var(--mono);font-size:.72rem;font-weight:600;letter-spacing:.08em;text-transform:uppercase;width:9rem}
+.facts tr:last-child th,.facts tr:last-child td{border-bottom:none}
+
+/* consent banner (ePrivacy / GDPR storage notice) */
+/* consent = Lenso float：无遮罩托底的浮层，alpha ≥ .90 保证文字不被背后内容吃掉 */
+.consent{position:fixed;left:var(--s4);right:var(--s4);bottom:var(--s4);z-index:100;display:flex;flex-wrap:wrap;gap:var(--s3);align-items:center;justify-content:space-between;
+  background:linear-gradient(180deg,var(--glass-float-a),var(--glass-float-b));border:1px solid var(--glass-hairline);border-radius:var(--glass-radius);padding:var(--s3) var(--s4);
+  box-shadow:var(--glass-shadow);-webkit-backdrop-filter:blur(24px) saturate(var(--glass-saturate));backdrop-filter:blur(24px) saturate(var(--glass-saturate));max-width:var(--maxw);margin:0 auto}
+.consent.hidden{display:none}
+.consent-text{color:var(--text2);font-size:.9rem;line-height:1.5;flex:1 1 20rem;margin:0}
+.consent-actions{display:flex;gap:.6rem;align-items:center;flex-shrink:0}
+.consent-link{display:inline-flex;align-items:center;min-height:1.5rem;color:var(--text2);font-size:.85rem;text-decoration:underline;text-underline-offset:2px}
+.consent-link:hover{color:var(--text)}
+@media (max-width:480px){.consent{left:var(--s3);right:var(--s3);bottom:var(--s3)}}
+/* 同一条固定悬浮在底部，会直接盖住定价卡与更新日志的最后一段；
+   390 首屏还正好压在 .buy-consent 上。同意条在场时给正文让出 8rem。
+   用 :has() 而不是 JS 加类：条子隐藏后内边距必须自动收回。 */
+body:has(#consent:not(.hidden)){padding-block-end:8rem}
+
+/* product pages */
+.dl-center{justify-content:center;gap:var(--s3);flex-wrap:wrap}
+.dl-center .btn.dl{min-width:160px;padding:.8rem 1.6rem;font-size:.9rem}
+.price-card{padding:var(--s5) var(--s4)}
+.price-amount{font-size:clamp(3rem,8vw,4.5rem);font-weight:800;letter-spacing:-.03em;line-height:1;color:var(--text);margin:0}
+.price-note{font-family:var(--mono);font-size:.85rem;letter-spacing:.04em;color:var(--text3);margin:var(--s3) 0 var(--s4)}
+
+/* pricing page: three plan cards, reusing .card / .card-top / .card-name / .card-dl */
+.plan{padding:var(--s5)}
+.plan .price-amount{font-size:clamp(2.2rem,5vw,2.8rem)}
+.plan-list{list-style:none;margin:var(--s4) 0 0;padding:0;display:grid;gap:.55rem;color:var(--text2);font-size:.95rem}
+.plan-list li{display:flex;gap:.55rem;line-height:1.5}
+.plan-list li::before{content:"✓";color:var(--accent);font-weight:700;flex:none}
+.plan .card-dl .btn{flex:1 1 auto;justify-content:center;min-height:44px;display:inline-flex;align-items:center;text-align:center}
+/* "Purchasing opens soon" — placeholder shown while Paddle and the in-app
+   activation flow are still being built. Deliberately not a button: there is
+   nothing to click yet, and a dashed border reads as a state, not an action. */
+/* License page — activation code card */
+.lic-card{max-width:40rem;margin:0 auto;text-align:center}
+.lic-label{font-family:var(--mono);font-size:.8rem;letter-spacing:.06em;text-transform:uppercase;color:var(--text3);margin:0 0 var(--s4)}
+.lic-label a{color:var(--accent);text-decoration:underline;text-underline-offset:2px;text-transform:none}
+.lic-code{font-family:var(--mono);font-size:clamp(1rem,3.5vw,1.45rem);letter-spacing:.08em;line-height:1.5;color:var(--text);word-break:break-all;margin:0 0 var(--s5);user-select:all}
+.lic-note{font-size:.9rem;color:var(--text3);margin:var(--s4) 0 0;margin-left:auto;margin-right:auto}
+.lic-card .cta-row{justify-content:center}
+
+/* ---------- 设备管理（license.html） ----------
+   一张码最多绑定 N 台机器，超限时用户必须能自己解绑 ——
+   那是「重装系统后还能用」唯一的出路。样式沿用既有变量，不新造配色。 */
+.dev-list{list-style:none;margin:var(--s4) auto 0;padding:0;max-width:34rem;display:grid;gap:var(--s2)}
+.dev-item{display:flex;align-items:center;justify-content:space-between;gap:var(--s3);
+  padding:var(--s3) var(--s4);border:1px solid var(--glass-hairline);border-radius:var(--glass-radius);
+  background:linear-gradient(180deg,var(--glass-pill-a),var(--glass-pill-b))}
+.dev-label{font-family:var(--mono);font-size:.85rem;color:var(--text2);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* 码输入框：等宽 + 可选中，用户经常从邮件里粘贴 */
+.code-input{flex:1;min-width:0;font-family:var(--mono);font-size:.9rem;letter-spacing:.06em;
+  padding:var(--s3) var(--s4);color:var(--text);background:var(--bg2);
+  border:1px solid var(--border-input);border-radius:var(--radius-md)}
+.code-input:focus{outline:2px solid var(--accent);outline-offset:3px}
+/* details 的 summary 做成可点的样子 —— 默认三角在深色下不显眼 */
+#devices summary{cursor:pointer;list-style:none;display:flex;align-items:center;gap:var(--s2)}
+#devices summary::-webkit-details-marker{display:none}
+#devices summary::before{content:"\25B8";display:inline-block;transition:transform .18s ease;color:var(--text3)}
+#devices[open] summary::before{transform:rotate(90deg)}
+#devices summary:hover{color:var(--accent)}
+/* 窄屏：输入框与按钮换行，别把码挤到看不清 */
+@media (max-width:520px){
+  #devices .cta-row{flex-direction:column;align-items:stretch}
+  .dev-item{align-items:flex-start}
+}
+/* Same idea for downloads that aren't open yet (Squeeze waits for Store
+   certification, so its GitHub links would 404 for a visitor). */
+.faq{width:100%;max-width:var(--col);margin:0}
+.faq details{border-bottom:1px solid var(--border);padding:var(--s3) 0}
+.faq details:first-child{border-top:1px solid var(--border)}
+.faq summary{cursor:pointer;font-weight:600;color:var(--text);font-size:1.05rem;list-style:none;display:flex;justify-content:space-between;align-items:center;gap:var(--s3)}
+.faq summary::-webkit-details-marker{display:none}
+.faq summary::after{content:"+";font-family:var(--mono);font-size:1.2rem;color:var(--text3);transition:transform .25s ease}
+.faq details[open] summary::after{transform:rotate(45deg)}
+.faq details[open] summary{color:var(--accent)}
+.faq details p{margin:var(--s2) 0 0;color:var(--text2)}
+.faq .prose p{margin-bottom:var(--s3)}
+/* FAQ 列表之后紧跟一行小字（产品页的商标免责声明）。
+   .faq 是 details 列表，末条自带分隔线，小字贴着线会读成第五条。 */
+.faq + .note{margin-block-start:var(--s4)}
+/* card used as a link (family grid) */
+.grid .card{text-decoration:none;color:var(--text);display:flex;flex-direction:column}
+.grid .card:hover h3{color:var(--accent)}
+.grid .card h3{margin:0 0 .3rem}
+/* whole card clickable, download buttons stay interactive */
+.card{position:relative}
+.card > .stretch{position:absolute;inset:0;border-radius:inherit;z-index:1}
+.card .card-dl{position:relative;z-index:2}
+/* product UI screenshot */
+/* ═══ 细节卷轴（产品页截图区）═══════════════════════════════════════════
+ *
+ * 旧版是三张整窗截图（一张大图 + 一对小图）。整窗图在 772px 的栏里是 0.48
+ * 倍，界面里 12px 的字落到屏幕上只有 5.8px，读者只能看出「这是个软件」，
+ * 看不出这个软件能做什么。这一版改成「一格说一件事」：
+ *
+ *   左：衬纸（玻璃面 + 发丝边）里放一张 420-880px 的局部截图，
+ *       按接近原始像素渲染（--pw 是这张图的原始像素宽，最高放大 1.25 倍）；
+ *   右：编号目录，点哪个看哪个，空闲 5.2 秒自动往下走。
+ *
+ * 为什么不做固定 16:9 的框：八个产品的局部宽窄差一倍（PDF 的侧栏 425，
+ * Markdown 的源栏 880）。固定比例框要么把窄图放大到发虚，要么给宽图留边。
+ * 改为「宽度跟着图片走、高度由最高的一张决定」，切换时舞台不跳。
+ */
+/* 左边是衬纸（宽度跟着取景走），右边是编号目录。整组居中而不是撑满 ——
+   取景收紧后图片比栏窄，撑满会在衬纸与目录之间留一条没人走的空当。 */
+.reel{display:grid;grid-template-columns:minmax(0,calc(var(--reel-w,800) * 1px + 40px)) 15rem;
+  gap:var(--s4);justify-content:center;align-items:start;margin-top:var(--s5)}
+.reel-main{min-width:0;perspective:1400px}
+/* 衬纸宽度 = 本页最宽的那张 + 2x20px 内边距。宽度由生成器按 --reel-w 写进
+   行内样式，因为各产品的取景宽窄差一倍（212 的目录列 vs 705 的编辑区），
+   fit-content 在 grid 里解不出来（面板宽度是百分比，循环依赖）。
+   窄屏下 max-width:100% 接管，面板跟着缩。 */
+.reel-stage{position:relative;width:min(100%,calc(var(--reel-w,800) * 1px + 40px));margin-inline:auto;padding:20px;border-radius:var(--glass-radius);
+  border:1px solid var(--glass-hairline);
+  background:
+    radial-gradient(120% 90% at 50% -20%,color-mix(in srgb,var(--wash-1) 34%,transparent),transparent 72%),
+    linear-gradient(180deg,var(--glass-pill-a),var(--glass-pill-b));
+  -webkit-backdrop-filter:blur(24px) saturate(var(--glass-saturate));
+  backdrop-filter:blur(24px) saturate(var(--glass-saturate));
+  box-shadow:inset 0 1px 0 var(--glass-top-sheen);
+  overflow:hidden;
+  transform:rotateX(var(--rx,0deg)) rotateY(var(--ry,0deg));
+  transform-style:preserve-3d;
+  transition:transform .45s cubic-bezier(.16,1,.3,1)}
+/* 抬起 24px：指针倾斜时衬纸与图片之间才有厚度，否则只是整块在转 */
+.reel-stack{display:grid;transform:translateZ(24px)}
+/* 面板宽度 = min(容器, CSS 宽)。图片是 2x 抓屏裁出来的，1:1 CSS 就是像素对齐；
+   不再放 1.25 倍，放大只会变虚。
+   媒体行高度固定为 --reel-h（本页最高的一张），图在行内垂直居中 ——
+   宽窄不同的取景因此共用同一条图注基线，切换时文字不跳。 */
+.reel-panel{grid-area:1/1;margin:0;width:min(100%,calc(var(--pw,800) * 1px));justify-self:center;
+  display:grid;grid-template-rows:var(--reel-h,auto) auto;align-content:start;
+  opacity:0;visibility:hidden;transform:translateY(14px) scale(.985);
+  transition:opacity .55s ease,transform .85s cubic-bezier(.16,1,.3,1),visibility 0s linear .55s}
+.reel-panel.is-on{opacity:1;visibility:visible;transform:none;transition-delay:0s}
+.reel-frame{position:relative;align-self:center;border-radius:12px;overflow:hidden;border:1px solid var(--border-hover);
+  background:#fff;box-shadow:0 24px 56px -34px rgba(0,0,0,.55)}
+.reel-frame img{display:block;width:100%;height:auto}
+/* 换页时扫过一道高光。浅色主题下白光是看不见的，所以扫的是淡墨色。 */
+.reel-frame::after{content:"";position:absolute;inset:0;pointer-events:none;opacity:0;
+  background:linear-gradient(105deg,transparent 38%,var(--reel-sweep) 50%,transparent 62%)}
+.reel-panel.is-on .reel-frame::after{animation:reelSweep .9s cubic-bezier(.4,0,.2,1) .1s}
+@keyframes reelSweep{0%{opacity:0;transform:translateX(-110%)}30%{opacity:1}100%{opacity:0;transform:translateX(110%)}}
+:root{--reel-sweep:rgba(255,255,255,.55)}
+[data-theme="light"]{--reel-sweep:rgba(0,0,0,.07)}
+@media (max-width:900px){
+  /* 窄屏下图片被压窄，定高的媒体行会留下大块空白，这里改回自然高度 */
+  .reel-panel{grid-template-rows:auto auto}
+}
+.reel-cap{margin-top:var(--s3);padding-inline:2px}
+.reel-cap-no{display:block;font-family:var(--mono);font-size:.68rem;letter-spacing:.14em;color:var(--text3);margin-bottom:.35rem}
+.reel-cap b{display:block;font-size:1.02rem;font-weight:600;letter-spacing:-.01em;line-height:1.3}
+.reel-cap p{margin:.3rem 0 0;font-size:.9rem;line-height:1.55;color:var(--text2)}
+
+/* 编号目录 */
+/* 目录与暂停钮同占右列那一格：目录 align-content:start 贴顶，
+   暂停钮 align-self:end 贴底，中间的空当就是它们的间距。
+   （同格两个元素是合法的，只要目录比面板矮就不会相撞。） */
+.reel-tabs{grid-column:2;grid-row:1;display:grid;align-content:start;border-top:1px solid var(--border)}
+.reel-tab{position:relative;display:grid;grid-template-columns:2rem minmax(0,1fr);gap:.6rem;align-items:baseline;
+  width:100%;padding:.85rem .2rem .85rem .9rem;background:none;border:0;border-bottom:1px solid var(--border);
+  text-align:start;color:var(--text3);cursor:pointer;transition:color .2s,background-color .2s}
+.reel-tab::before{content:"";position:absolute;inset-inline-start:0;top:-1px;bottom:-1px;width:2px;
+  background:var(--accent);transform:scaleY(0);transform-origin:top;transition:transform .45s cubic-bezier(.16,1,.3,1)}
+.reel-tab:hover{color:var(--text2);background:var(--accent-muted)}
+.reel-tab[aria-selected="true"]{color:var(--text)}
+.reel-tab[aria-selected="true"]::before{transform:scaleY(1)}
+.reel-no{font-family:var(--mono);font-size:.72rem;letter-spacing:.08em;color:var(--text3)}
+.reel-tab[aria-selected="true"] .reel-no{color:var(--text2)}
+.reel-label{font-size:.95rem;font-weight:500;line-height:1.35}
+/* 自动轮播的进度线：当前项底部走满 5.2 秒。用 animation 而不是 transition，
+   因为换项时新的一项是「重新匹配选择器」，动画自然从头开始，不用手动清类。 */
+.reel-fill{position:absolute;inset-inline-start:0;bottom:-1px;height:1px;width:100%;
+  background:var(--accent);transform:scaleX(0);transform-origin:left;opacity:0}
+.reel.is-running .reel-tab[aria-selected="true"] .reel-fill{opacity:.85;animation:reelTick 5.2s linear forwards}
+@keyframes reelTick{from{transform:scaleX(0)}to{transform:scaleX(1)}}
+/* 暂停钮坐在目录列底部（grid-column 2 + row 1 的底边）。
+   它曾经跟在面板下方：面板底边之下、背景之上，孤零零一枚，
+   而右侧目录列的四条目次只占到列高的一半，剩下半列是空的。
+   摆到这儿两处一起收干净，视觉上也成了目录的页脚。 */
+.reel-foot{grid-column:2;grid-row:1;align-self:end;justify-self:start;padding-top:var(--s4)}
+.reel-pause{display:inline-flex;align-items:center;gap:.45rem;margin-top:var(--s3);padding:.5rem 0;
+  font-family:var(--mono);font-size:.72rem;letter-spacing:.08em;color:var(--text3);
+  background:none;border:0;cursor:pointer;min-height:44px}
+.reel-foot .reel-pause{margin-top:0}
+.reel-pause:hover{color:var(--text)}
+.reel-pause[hidden]{display:none}
+.reel-pause svg{width:12px;height:12px;flex:none}
+/* 暂停状态只换图标，不换文字：按钮名必须稳定（"Pause"），状态由 aria-pressed
+   表达。换文字会让读屏器听到「Pause / Play」两个不同的控件名。 */
+.reel-pause .ic-play{display:none}
+.reel-pause[aria-pressed="true"] .ic-pause{display:none}
+.reel-pause[aria-pressed="true"] .ic-play{display:block}
+
+/* 入场：JS 挂上 reel-ready 才隐藏，脚本没跑起来时内容照常可见。
+   动画挂在 .reel-main 而不是 .reel-stage 上 —— 舞台自己要用 .45s 的
+   transition 跟随指针倾斜，两者共用一条 transform 会互相拖慢。 */
+.reel-ready .reel-main{opacity:0;transform:translateY(20px)}
+.reel-ready.in .reel-main{opacity:1;transform:none;
+  transition:opacity .7s ease,transform .9s cubic-bezier(.16,1,.3,1)}
+@media (max-width:960px){
+  .reel{grid-template-columns:minmax(0,1fr);display:flex;flex-direction:column;gap:0}
+  /* 窄屏把目录提到图上面：点一项，图就在下面，不用往回找。 */
+  .reel-tabs{order:-1;display:flex;overflow-x:auto;border-top:0;border-bottom:1px solid var(--border);
+    margin-bottom:var(--s3);scrollbar-width:none;-webkit-overflow-scrolling:touch}
+  .reel-tabs::-webkit-scrollbar{display:none}
+  .reel-tab{flex:0 0 auto;grid-template-columns:auto auto;gap:.45rem;border-bottom:0;
+    border-inline-end:1px solid var(--border);padding:.75rem .85rem}
+  .reel-tab::before{top:auto;bottom:0;width:100%;height:2px;transform:scaleX(0);transform-origin:left}
+  .reel-tab[aria-selected="true"]::before{transform:scaleX(1)}
+  /* 窄屏是纵向 flex，grid-column 不生效，暂停钮自然落到最末；顶部留白归零，
+     交给 .reel-pause 自己的 margin-top。 */
+  .reel-foot{padding-top:0}
+  .reel-pause{margin-top:var(--s2)}
+}/* Buy-area consent tick. The Paddle overlay cannot carry our own terms, so this
+   has to happen before the overlay opens — naming is buy-consent* because
+   .consent is already the storage banner. */
+.buy-consent{display:flex;gap:.6rem;align-items:flex-start;justify-content:center;max-width:34rem;margin:0 auto var(--s3);font-size:.85rem;line-height:1.5;color:var(--text3);text-align:start}
+.buy-consent-box{flex:none;width:1.5rem;height:1.5rem;margin-top:.2rem;accent-color:var(--accent);cursor:pointer}
+.buy-consent a{color:var(--text3);text-decoration:underline}
+.buy-consent-hint{max-width:34rem;margin:0 auto var(--s3);font-size:.8rem;color:var(--accent);text-align:center}
+.buy-consent.nudge{outline:1px solid var(--accent);outline-offset:6px;border-radius:4px}
+/* 未勾选就点购买：提示落在被点的按钮旁，焦点留在原按钮。
+   旧实现 focus() 勾选框，移动端会把整页滚回页面顶部。 */
+.buy-consent-inline{display:block;flex-basis:100%;margin:.4rem 0 0;font-size:.78rem;line-height:1.45;color:var(--accent);text-align:end}
+.btn.nudge,.pt-row.nudge{outline:1px solid var(--accent);outline-offset:3px;border-radius:6px;animation:buy-shake .45s ease}
+@keyframes buy-shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-3px)}75%{transform:translateX(3px)}}
+@media (prefers-reduced-motion: reduce){.btn.nudge,.pt-row.nudge{animation:none}}
+
+/* Row layout: one item per line, number + name + explanation. Replaces the
+   three-equal-cards grid on the home page, which the taste skill bans and which
+   was also identical to the about page's layout. */
+.rows{display:grid;margin-top:var(--s5)}
+.row{display:grid;grid-template-columns:3rem minmax(9rem,15rem) 1fr;gap:var(--s4);align-items:baseline;padding:var(--s4) 0;border-top:1px solid var(--border)}
+.row:last-child{border-bottom:1px solid var(--border)}
+.row h3,.row h4{margin:0;font-size:1.05rem;font-weight:600}
+/* 说明文字与全站正文同轴（--col 640px）。原来写的是 62ch：16px 下 657.7px，
+   差 17.7px 不到 1.2 个字，实测 index 三段 1/1/2 行、pricing 三段 2/2/2 行，
+   收进 --col 后行数一个都不变。理由不是 ch 不好，是全站只留一个读数轴。 */
+.row p{margin:0;color:var(--text2);max-width:var(--col);line-height:1.6}
+
+/* Home: the "being built now" block under the product grid. */
+.inwork{margin-top:var(--s6);padding-top:var(--s5);border-top:1px solid var(--border)}
+.inwork-title{margin:0 0 var(--s2);font-size:1.05rem}
+.inwork .rows{margin-top:var(--s3)}
+.inwork-note{margin:var(--s3) 0 0;font-size:.85rem;color:var(--text3)}
+
+/* Small status line under a product card's description. */
+/* Intel sub-link: the primary macOS button stays Apple Silicon; this only
+   appears when the release actually ships an _x64.dmg. */
+.dl-intel{display:inline-block;min-height:1.5rem;padding-block:.25rem;flex:0 0 100%;font-family:var(--mono);font-size:.8rem;letter-spacing:.04em;color:var(--text2);text-decoration:underline;text-underline-offset:2px}
+.dl-intel:hover{color:var(--accent)}
+.dl-intel[hidden]{display:none}
+/* 直链失效时的可见状态：degraded = 只剩 Releases 页；
+   checksums = 钉在本地 checksums.json 里已验证的版本。
+   注记原先是行内 ::after，会把「↗ Releases」塞进按钮、把整行推歪，
+   等于把「有没有 Intel 链接」的抖动换成「网络好不好」的抖动。
+   现在绝对定位到按钮上方，不参与布局。 */
+.btn.dl{position:relative}
+.btn.dl[data-dl-state="checksums"]::after,
+.btn.dl[data-dl-state="degraded"]::after{
+  content:attr(data-dl-note);position:absolute;inset-inline-end:0;bottom:100%;margin-bottom:2px;
+  font-family:var(--mono);font-size:.66em;font-weight:400;letter-spacing:.03em;opacity:.72;white-space:nowrap;pointer-events:none}
+/* 价目表是五条固定轨道，任何宽度变化都会把整行推歪。
+   这里把注记整个关掉，改用虚线边框表示「这条直链不是正路」——
+   虚线在本站既有语义就是「状态，不是动作」（见 .card-dl 旁的历史注释），
+   零宽变，且不依赖 JS 是否改过。
+   两值列举是必须的：main.js 会给**所有**按钮写 data-dl-state="direct"，
+   写不带值的 [data-dl-state] 会让八行全部变虚线。 */
+.idx .btn.dl[data-dl-state="degraded"]::after,
+.idx .btn.dl[data-dl-state="checksums"]::after{content:none}
+.idx .btn.dl[data-dl-state="degraded"],
+.idx .btn.dl[data-dl-state="checksums"]{border-style:dashed}
+.dl-center .dl-intel{text-align:center}
+/* 这四处原先用 --text3，浅色主题下叠在 .idx-row:hover 底上实测 4.29:1，
+   够不上 AA 的 4.5。--text3 令牌本身不动，它承载的是「极弱字」的设计语言。 */
+.arch-note{margin:.45rem 0 0;font-family:var(--mono);font-size:.72rem;letter-spacing:.05em;color:var(--text2)}
+.arch-note.center{text-align:center}
+.card-note{margin:.55rem 0 0;font-family:var(--mono);font-size:.72rem;letter-spacing:.05em;color:var(--text2)}
+/* 「Already bought one?」这一行在 9 个页面出现（8 个产品页 + 定价页）。
+   原先每处自带一条内联 margin，改成共用一行：默认紧跟在上面的内容后面，
+   上方隔着价目表时用 .after-list 按一整档分开。
+   这里必须写成复合选择器，不能只写 .lic-line：产品页的这一行在
+   .banner.price-card 里，而 .banner p 是（0,1,1），单类（0,1,0）会输，
+   上边距被改回 var(--s3)、下边距被改成 var(--s5)，卡片实测高 455 而不是 419。
+   行内用 auto 而不是 0：写了 0 就连 .banner p 那条 auto 一起清掉，
+   卡片是 text-align:center、其余子元素都居中，只有这一行甩到左边。
+   基线里它本来是居中的（.banner p 的 auto 生效），这里必须留着。 */
+.card-note.lic-line,
+.price-note.lic-line{margin:0 auto var(--s2)}
+.price-note.lic-line.after-list{margin-block-start:var(--s4)}
+/* download cards: title links to the product page, one explicit buy row per card */
+.card-name a{color:inherit;text-decoration:none;display:inline-block}
+.card-name a:hover,.card-name a:focus-visible{text-decoration:underline;text-underline-offset:3px}
+.card-buy{display:flex;align-items:center;justify-content:space-between;gap:.75rem;margin-top:.75rem;padding-top:.85rem;border-top:1px solid var(--border)}
+.card-buy .btn{min-height:40px;padding:.5rem 1rem;font-size:.8rem;border-radius:8px;white-space:nowrap}
+.card-more{display:inline-flex;align-items:center;min-height:1.5rem;font-size:.85rem;color:var(--text2);text-decoration:none}
+.card-more:hover,.card-more:focus-visible{color:var(--accent);text-decoration:underline;text-underline-offset:3px}
+
+@media (max-width:820px){
+  .row{grid-template-columns:2.5rem 1fr;gap:.35rem var(--s3)}
+  .row p{grid-column:2}
+}
+
+/* ── 语言切换器 ──
+ *
+ * 用原生 <select> 而非自绘下拉：键盘可用（↑↓ Home End）、
+ * 移动端会自动弹出系统原生选择器、RTL 下自动镜像。
+ * 自绘要自己把这三件事重做一遍且做不到系统级质量。
+ *
+ * 高度与 .menu-btn 一致（44px），否则切换器会比汉堡按钮矮一截，
+ * 在移动端顶栏上很明显。 */
+.lang-switch{display:inline-flex;align-items:center}
+.lang-switch select{
+  appearance:none;-webkit-appearance:none;
+  font:inherit;font-size:.92rem;line-height:1;
+  color:var(--text2);background:var(--card);
+  border:1px solid var(--border);border-radius:var(--radius-sm);
+  padding:0 30px 0 12px;height:44px;min-width:88px;cursor:pointer;
+  background-image:var(--arrow-svg);
+  background-repeat:no-repeat;background-position:right 10px center;
+  transition:border-color .15s,color .15s;
+}
+.lang-switch select:hover{border-color:var(--border-hover);color:var(--text)}
+.lang-switch select:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+/* 桌面端原本漏了 option 的主题样式（只有移动端那份有），深色站点展开
+   下拉会露出系统默认的浅色列表。注：Safari/macOS 由系统渲染展开层，
+   CSS 只能覆盖到一部分浏览器，这是刻意选用原生 select 的固有代价。 */
+.lang-switch select option{background:var(--bg);color:var(--text)}
+
+/* RTL（阿拉伯语）：箭头与内边距左右互换。
+   padding/background-position 用逻辑属性更稳，但浏览器支持要逐个验，
+   这里用 [dir="rtl"] 选择器覆盖，可读性更好也更可控。 */
+[dir="rtl"] .lang-switch select{
+  padding:0 12px 0 30px;
+  background-position:left 10px center;
+}
+
+/* 移动端顶栏空间紧张：切换器只留当前语言缩写宽度，
+   桌面端保留完整 endonym 的余量。 */
+@media (max-width:640px){
+  .lang-switch select{min-width:64px;padding-right:24px;font-size:.85rem}
+  [dir="rtl"] .lang-switch select{padding-right:12px;padding-left:24px}
+}
+
+/* 320 级窄机：品牌 + 语言切换 + 汉堡 + 主题挤不进一行（实测溢出 36px）。
+   语言切换在移动菜单里还有一份，这里只收起顶栏那份，控件不丢。 */
+@media (max-width:380px){
+  .head-row{gap:var(--s2)}
+  .head-actions{gap:8px}
+  .head-actions .lang-switch{display:none}
+}
+
+/* 汉堡面板内的切换器：与面板里的链接同排版（1.05rem / 14px 纵向内边距），
+   否则它比旁边的导航项小一号，看着像另一个层级的控件。 */
+.lang-switch-mobile{display:block;margin-top:var(--s2);padding:0 var(--s2)}
+.lang-switch-mobile select{
+  /* 这里原先是 width:100%，铺满整行的 select 看起来像输入框而不是选择器；
+     且右内边距只有 --s2，装不下从 .lang-switch 继承来的箭头（在 right:10px，
+     宽 12px），文字会挤在左侧、箭头压上来。
+     改为宽度贴合内容（仍受面板宽度约束），右侧留 34px 给箭头。 */
+  width:auto;max-width:100%;min-width:200px;
+  height:auto;padding:14px 34px 14px var(--s2);
+  font-size:1.05rem;text-align:start;
+}
+[dir="rtl"] .lang-switch-mobile select{padding:14px var(--s2) 14px 34px}
+.lang-switch-mobile select option{background:var(--bg);color:var(--text)}
+
+/* ─── Checksums（2026-10-11 添加，原站无此区块）───────────────────────────
+   校验和表格。用等宽 + 可选中 + 断行，因为 64 位 hex 必须能被整段复制。
+   不用 JS 生成的 table —— 前端注入的是 div 行，样式跟着 div 走。 */
+.checksums{text-align:center}
+/* 校验和是页面里的子块，与上面的卡片网格隔一整档；
+   段头在 .wrap 里不再是首元素，section 的首元素清零规则摸不到它。 */
+.checksums > .sec-head{margin-top:var(--s6)}
+/* 引子：上面紧跟段头，下面紧跟校验和行，所以只留下方一整档 */
+.checksums > .note{margin-block:0 var(--s5)}
+.ck-row{
+  display:flex;flex-direction:column;gap:2px;
+  padding:12px 16px;margin:0 auto 8px;max-width:760px;
+  background:var(--card);border:1px solid var(--border);border-radius:var(--radius-sm);
+  text-align:start;
+}
+.ck-name{font-size:12px;font-weight:600;color:var(--text);word-break:break-all}
+.ck-hash{margin:0}
+.ck-hash code{
+  font-family:var(--mono);font-size:11px;color:var(--text2);
+  word-break:break-all;-webkit-user-select:all;user-select:all;
+}
+.ck-gen{font-size:11px;color:var(--text3);margin-top:12px}
+
+/* ─── 打字动画（js/main.js runType）──────────────────────────────────────────
+ * .tw 与 .caret 由 createElement("span").className = "tw" /
+ * createElement("i").className = "caret" 动态创建 —— 静态 grep js/ 找不到
+ * 字面量。2026-09-21 的 17f48f0 因此误判为死规则删掉，标题动画退化成无样式
+ * 内联文本（光标不闪、文本不保留换行）。2026-10-11 由 check-site.mjs 的
+ * 「class 引用 vs CSS 定义」检查发现并恢复。 */
+.tw{display:inline-block;min-width:1px;white-space:pre-wrap}
+.caret{font-style:normal;font-weight:300;color:var(--accent);animation:blink 1.1s steps(1,end) infinite}
+@media (prefers-reduced-motion: reduce){.caret{animation:none}}
+
+/* ── 定价页：每款价格明细表 ── */
+.price-table {
+  max-width: var(--col);
+  margin: 0;
+}
+/* #apps 没有 .sec-head：标题与注脚是 .wrap 的直接子元素。
+   它们与表格必须同一条左边界（168），否则同页两个轴。 */
+#apps .sec-title,
+#apps .price-note {
+  max-width: var(--col);
+  margin-inline: 0;
+}
+.pt-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  padding: 10px 4px;
+  border-bottom: 1px solid var(--line, rgba(128, 128, 128, 0.22));
+}
+.pt-row:last-child {
+  border-bottom: none;
+}
+a.pt-row{color:inherit;text-decoration:none}
+a.pt-row:hover,a.pt-row:focus-visible{color:var(--accent)}
+.pt-row span:first-child {
+  font-weight: 500;
+}
+.pt-row span:last-child {
+  font-variant-numeric: tabular-nums;
+}
+.pt-family {
+  color: var(--accent, #ffffff);
+  font-weight: 600;
+}
+
+/* ── Index 2026-10-30（09 设计稿：编辑部式价目目录）────────────────
+   只作用于 data-page="index"；共用类（.btn/.card-dl/.banner）不动，
+   其余页面不受影响。 */
+/* 2026-11-19：首页不再放截图。首屏改成单栏的「声明 + 规格条」——
+   右边那张整窗截图原本占掉半个屏，却把 12px 的界面文字压到 6px，
+   既讲不清功能，也挤掉了本页真正该说的话（八个工具各自做什么、
+   这个家族守什么规矩）。 */
+[data-page="index"] .hero-in{text-align:start}
+/* 首页标题不再自带字号：全站只有一个 --h1，覆盖一次就会和其余 22 页错开。 */
+.hero-copy .display{margin:0 0 var(--s4)}
+[data-page="index"] .hero-copy .lead{margin:0 0 var(--s5)}
+[data-page="index"] .hero-copy .cta-row{justify-content:flex-start}
+/* 规格条：四格数字，等宽字标签 + 大号数字。数字用 tabular-nums，
+   否则 08 / 00 / 07 三个值在不同分辨率下宽度会差一像素，四格的
+   分隔线就跟着抖。 */
+
+/* 功能索引：按「文档 / 文字 / 图与图样」分三组，每组一张定义表。
+   不是三列等分卡片 —— 组的左边是标签轨，右边是逐条的功能清单，
+   与下方 .rows 共用同一条读数轴。 */
+.cap{margin-top:var(--s5);border-top:1px solid var(--border-hover)}
+.cap-group{display:grid;grid-template-columns:11rem minmax(0,1fr);gap:var(--s4);
+  padding-block:var(--s4);border-bottom:1px solid var(--border)}
+.cap-label{font-family:var(--mono);font-size:.72rem;font-weight:600;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--text3);margin:0;padding-top:.15rem}
+.cap-list{list-style:none;margin:0;padding:0;display:grid;gap:.9rem}
+.cap-row{display:grid;grid-template-columns:10.5rem minmax(0,1fr);gap:var(--s3);align-items:baseline}
+.cap-name{font-size:.95rem;font-weight:600;color:var(--text);text-decoration:none;white-space:nowrap;min-height:1.5rem;display:inline-block}
+.cap-name span{font-weight:450;color:var(--text3);transition:color .2s}
+.cap-name:hover span{color:var(--text2)}
+.cap-what{margin:0;font-size:.9rem;line-height:1.55;color:var(--text2)}
+@media (max-width:860px){
+  .cap-group{grid-template-columns:minmax(0,1fr);gap:var(--s2)}
+  .cap-row{grid-template-columns:minmax(0,1fr);gap:.15rem}
+  .cap-name{white-space:normal}
+}
+@media (max-width:560px){
+  /* 两列两行时，右列仍要有分隔线，上排下沿补一条 */
+  .spec-cell:nth-child(2n){border-inline-end:0}
+  .spec-cell:nth-child(n+3){border-bottom:0}
+}
+
+/* 价目目录：一行一工具，名字、一句话、价格、平台、下载各归其位。
+   末轨固定 12rem(192px)：实测 Windows 84 + macOS 72 + gap 8 = 164，
+   余 28px。曾写成 minmax(0,auto)，OCR 那行（多一条 Intel 子链接）会把
+   整轨撑宽，于是只有那一行的价格/平台/下载一起右移 160px。
+   行高用 min-height 统一到 108px：8 行里最高的内容 104px，都装得下。 */
+.idx{list-style:none;margin:var(--s4) 0 0;padding:0;border-top:1px solid var(--border-hover)}
+.idx-row{display:grid;grid-template-columns:2.75rem minmax(0,1fr) 5.5rem 7rem 12rem;
+  column-gap:var(--s4);align-items:center;min-height:6.75rem;padding:0 .375rem;
+  border-bottom:1px solid var(--border);transition:background-color .15s}
+.idx-row:hover{background:var(--accent-muted)}
+/* 产品名是整行的主入口，但它是行内链接，盒高只有 22px。
+   WCAG 2.5.8 的 24px 下限在这里该满足：给成 inline-block 并抬到 24。 */
+.idx-name{font-size:1.05rem;font-weight:600;letter-spacing:-.01em;color:var(--text);text-decoration:none;white-space:nowrap;
+  display:inline-block;min-height:1.5rem}
+.idx-name span{color:var(--text3);font-weight:450}
+.idx-row:hover .idx-name span{color:var(--text2)}
+.idx-desc{margin:.15rem 0 0;font-size:.9rem;color:var(--text2)}
+.idx-price{font-family:var(--mono);font-size:.85rem;text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.idx-plat{font-size:.75rem;color:var(--text2);text-align:right;white-space:nowrap}
+.idx-dl{display:grid;grid-template-columns:auto auto;justify-content:end;justify-items:end;
+  column-gap:.5rem;row-gap:.25rem;margin:0;padding:0}
+.idx-dl .dl-intel{grid-column:1 / -1;justify-self:end}
+.idx-dl .btn.dl{min-width:0;min-height:2.25rem;padding:.4rem .85rem;font-size:.78rem}
+/* 触屏设备恢复站内既定的 44px 触控目标（桌面保持紧凑行高）。
+   用 (any-pointer:coarse) 而不是 hover:none / pointer:coarse：带触摸屏的笔记本
+   主指针仍是鼠标，pointer:coarse 与 hover:none 都不匹配，旧写法在那类机器上
+   等于没修。any-pointer 只要存在任一粗指针就成立。 */
+@media (hover:none),(any-pointer:coarse){.idx-dl .btn.dl{min-height:44px}}
+
+/* 首页截图带已删除（2026-11-19）：三张整窗缩略图既看不清内容，
+   也和下面按功能分组的清单重复。首屏与功能区现在都不放图。 */
+
+/* 购买横幅：反色块 + 价目三行 */
+[data-page="index"] .buy-band{background:var(--accent);color:var(--on-accent);border-color:var(--accent);text-align:start;display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,1fr);gap:3rem;align-items:center}
+[data-page="index"] .buy-band .buy-copy .sec-title{margin:0 0 var(--s3)}
+[data-page="index"] .buy-band p{color:var(--on-accent);opacity:.78;max-width:48ch;margin:0 0 var(--s5)}
+[data-page="index"] .buy-band .cta-row{justify-content:flex-start}
+[data-page="index"] .buy-band .btn{background:var(--on-accent);color:var(--accent)}
+[data-page="index"] .buy-band .btn:hover{box-shadow:0 0 30px rgba(0,0,0,.25),0 8px 24px rgba(0,0,0,.25);transform:translateY(-1px)}
+[data-page="index"] .buy-band .ghost-link{color:var(--on-accent);border-color:color-mix(in srgb,var(--on-accent) 45%,transparent)}
+[data-page="index"] .buy-band .ghost-link:hover{color:var(--on-accent);border-color:var(--on-accent)}
+.prices{border-top:1px solid color-mix(in srgb,var(--on-accent) 60%,transparent)}
+.prices .pr{display:flex;align-items:baseline;justify-content:space-between;gap:16px;padding:14px 0;border-bottom:1px solid color-mix(in srgb,var(--on-accent) 30%,transparent)}
+.prices .pr span{font-size:.9rem;opacity:.78}
+.prices .pr b{font-family:var(--mono);font-size:1.25rem;font-weight:500;font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+
+[data-page="index"] .idx-note{margin:.5rem 0 0;font-family:var(--mono);font-size:.75rem;letter-spacing:.04em;color:var(--text3)}
+
+@media (max-width:960px){
+  [data-page="index"] .hero-in{grid-template-columns:minmax(0,1fr);gap:2rem}
+  .idx-row{grid-template-columns:2rem minmax(0,1fr) auto;column-gap:.75rem;row-gap:.35rem;min-height:0;padding:.9rem .375rem}
+  .idx-plat{display:none}
+  /* 描述句不再单行截断：390 下原样式把「整个文件夹」这类差异点切掉，
+     而只有 en/zh 两门，放开换行最多多一行，不值得为此丢信息。 */
+  .idx-desc{margin:.15rem 0 0;font-size:.9rem;white-space:normal;text-overflow:clip}
+  .idx-name{overflow:visible;text-overflow:clip;white-space:normal}
+  .idx-price{grid-column:3}
+  .idx-dl{grid-column:2 / 4;justify-content:start;justify-items:start}
+  .idx-dl .dl-intel{justify-self:start}
+  [data-page="index"] .buy-band{grid-template-columns:minmax(0,1fr)}
+}
+.idx-main{min-width:0}
+
+/* ═══ 辅助功能（Apple HIG）══════════════════════════════════════════════
+   两条系统偏好在 WebKit/Safari 与 Chromium 上都能读到；站点是纯静态的，
+   没有运行时开关，跟随系统偏好是唯一正确的接入点。 */
+
+/* 降低透明度：玻璃退成不透明面，文字不再依赖「背后是什么」 */
+@media (prefers-reduced-transparency: reduce){
+  .site-head,.menu-panel{background:var(--pane-bg);-webkit-backdrop-filter:none;backdrop-filter:none}
+  .card,.name-card,.banner,.consent,.dev-item{background:var(--pane-bg);-webkit-backdrop-filter:none;backdrop-filter:none}
+}
+/* 提高对比度：发丝边是玻璃的层级信号，对比度偏好下必须加深，否则整块面消失 */
+@media (prefers-contrast: more){
+  :root{--glass-hairline:rgba(255,255,255,.30);--glass-hairline-strong:rgba(255,255,255,.48);--text3:rgba(255,255,255,.72)}
+  [data-theme="light"]{--glass-hairline:rgba(0,0,0,.30);--glass-hairline-strong:rgba(0,0,0,.45);--text3:rgba(0,0,0,.75)}
+  :focus-visible{outline-width:3px}
+  .links a{color:var(--text)}
+  .prose{color:var(--text)}
+}
+

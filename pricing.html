@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="en" data-page="pricing">
+<head>
+
+    <link rel="icon" type="image/svg+xml" href="/assets/favicons/family/favicon.svg">
+    <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicons/family/favicon-32.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="/assets/favicons/family/apple-touch-icon.png">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Rocktier pricing: try any app free for 7 days, then pay once. Apps are priced from $4.99 to $14.99, the whole family is $29.99. No subscription, no account.">
+<title>Pricing | Rocktier</title>
+  <meta property="og:image" content="https://rocktier.com/assets/og/index.png">
+
+<meta name="google-site-verification" content="9JRvmDgeEQUDA84q812hWXg2eU5zJxbF7caCklZi6mw" />
+<link rel="canonical" href="https://rocktier.com/pricing">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Rocktier">
+<meta property="og:title" content="Pricing | Rocktier">
+<meta property="og:description" content="Try any Rocktier app free for 7 days, then pay once. Apps are priced from $4.99 to $14.99, the whole family is $29.99.">
+<meta property="og:url" content="https://rocktier.com/pricing">
+<meta name="twitter:card" content="summary">
+<link rel="stylesheet" href="css/styles.css">
+<noscript><style>#themeBtn{display:none}</style></noscript>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+
+<header class="site-head">
+  <div class="wrap head-row">
+    <a class="brand" href="/" aria-label="Rocktier home">
+      <svg class="brand-mark" viewBox="0 0 40 40" fill="none" aria-hidden="true">
+        <circle cx="20" cy="20" r="17" stroke="currentColor" stroke-width="1.8" fill="none"/>
+        <path d="M12.5 21.5l5.2 5.3L29 14.8" stroke="currentColor" stroke-width="2.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      <span class="brand-word">Rock<span>tier</span><i></i></span>
+    </a>
+    <nav class="links" aria-label="Primary">
+      <a href="/#products" data-i18n="nav.products">Products</a>
+      <a href="/pricing" data-i18n="nav.pricing" aria-current="page">Pricing</a>
+      <a href="/vs-online-tools" data-i18n="nav.why">Why offline</a>
+      <a href="/about" data-i18n="nav.about">About</a>
+      <a href="/#philosophy" data-i18n="nav.philosophy">Philosophy</a>
+      <a href="/changelog" data-i18n="nav.changelog">Changelog</a>
+    </nav>
+    <div class="head-actions">
+      <div class="lang-switch" id="langSwitch"></div>
+      <button class="menu-btn" id="menuBtn" type="button" aria-label="Menu" aria-expanded="false" aria-controls="menuPanel">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+      </button>
+      <button class="ghost" id="themeBtn" type="button" aria-label="Toggle light or dark theme">
+        <svg class="sun" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+        <svg class="moon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3 7 7 0 0 0 21 12.8z"/></svg>
+      </button>
+      <a class="btn-head" href="/download" data-i18n="nav.download">Download</a>
+    </div>
+  </div>
+  <nav class="menu-panel" id="menuPanel" aria-label="Mobile">
+    <a href="/#products" data-i18n="nav.products">Products</a>
+    <a href="/pricing" data-i18n="nav.pricing" aria-current="page">Pricing</a>
+    <a href="/download" data-i18n="nav.download">Download</a>
+    <a href="/vs-online-tools" data-i18n="nav.why">Why offline</a>
+    <a href="/about" data-i18n="nav.about">About</a>
+    <a href="/#philosophy" data-i18n="nav.philosophy">Philosophy</a>
+    <a href="/changelog" data-i18n="nav.changelog">Changelog</a>
+    <div class="lang-switch lang-switch-mobile" id="langSwitchMobile"></div>
+  </nav>
+</header>
+
+<main id="main">
+  <section class="hero" id="top">
+    <div class="wrap hero-in">
+      <h1 class="display" data-i18n="pr.title">Buy once. Keep it forever.</h1>
+      <p class="lead" data-i18n="pr.sub">
+            No subscription, no account, no renewal. Try any app free for 7 days, then pay once if it fits.
+          </p>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="wrap">
+      <!-- 与下载页同一套同意机制：定价页本来没有勾选框，checkout.js
+           的 requireConsent 因此直接放行，同一次购买在两个页面规则不同。 -->
+      <label class="buy-consent" for="buy-consent">
+        <input class="buy-consent-box" id="buy-consent" type="checkbox" />
+        <span data-i18n="p.consent">I agree that Rocktier delivers the software immediately after payment, and that, where applicable, I lose the right of withdrawal once delivery has started.</span>
+      </label>
+      <p class="buy-consent-hint" data-i18n="p.consentHint" hidden>Please tick the box above before paying.</p>
+      <div class="grid">
+
+        <article class="card plan">
+          <div class="card-top">
+            <h2 class="card-name" data-i18n="pr.trialName">Free trial</h2>
+            <span class="chip" data-i18n="pr.trialChip">7 days</span>
+          </div>
+          <p class="price-amount">$0</p>
+          <p class="price-note" data-i18n="pr.trialNote">Full features, no card</p>
+          <ul class="plan-list" role="list">
+            <li data-i18n="pr.trialF1">Every feature unlocked</li>
+            <li data-i18n="pr.trialF2">Windows and macOS</li>
+            <li data-i18n="pr.trialF3">No account to create</li>
+          </ul>
+          <div class="card-dl">
+            <a class="btn ghost" href="/download" data-i18n="pr.trialCta">Download the trial</a>
+          </div>
+        </article>
+
+        <article class="card plan">
+          <div class="card-top">
+            <h2 class="card-name" data-i18n="pr.singleName">One app</h2>
+            <span class="chip" data-i18n="pr.singleChip">One-time</span>
+          </div>
+          <p class="price-amount">$4.99-$14.99</p>
+          <p class="price-note" data-i18n="pr.singleNote">One payment, no renewal</p>
+          <ul class="plan-list" role="list">
+            <li data-i18n="pr.singleF1">Any one app you choose, priced per app</li>
+            <li data-i18n="pr.singleF2">Windows and macOS on one licence</li>
+            <li data-i18n="pr.singleF3">Yours to keep</li>
+          </ul>
+          <div class="card-dl">
+            <!-- 单款购买：定价页本身必须能收钱 -- 原先这里指向 /#products，
+                 又滚回首页网格，标题写着 "Buy once" 却没有一个可点的购买动作。
+                 现在直接给到最贵/最专业那一款的购买入口作为代表，其余 8 款在下载页。 -->
+            <a class="btn" href="#apps" data-i18n="pr.singleCta">Choose an app</a>
+          </div>
+        </article>
+
+        <article class="card plan featured">
+          <div class="card-top">
+            <h2 class="card-name" data-i18n="pr.familyName">The whole family</h2>
+            <span class="chip live" data-i18n="pr.familyChip">Best value</span>
+          </div>
+          <p class="price-amount">$29.99</p>
+          <p class="price-note" data-i18n="pr.familyNote">Every app, one payment</p>
+          <ul class="plan-list" role="list">
+            <li data-i18n="pr.familyF1">Every Rocktier app on one licence</li>
+            <li data-i18n="pr.familyF2">Windows and macOS</li>
+            <li data-i18n="pr.familyF3">Apps added later are included too</li>
+          </ul>
+          <!-- FL 现在有真实支付入口。原先是 /#products -- 按钮写 "Get the whole family"，
+               点了却滚回产品网格，等于给了一个空承诺。 -->
+          <div class="cta-row">
+            <a class="btn" href="https://www.creem.io/payment/prod_36hw8U5U2f87OIxJnNEi9J" data-buy="creem" data-product="FL" data-price="29.99" data-i18n="pr.familyCta">Get the whole family</a>
+            <a class="btn ghost" href="/download" data-i18n="pr.familyAlt">Compare each app</a>
+          </div>
+        </article>
+
+      </div>
+    </div>
+  </section>
+
+  <section class="section alt" id="apps">
+    <div class="wrap">
+      <h2 class="sec-title" data-i18n="pr.tableTitle">Per-app prices</h2>
+      <p class="price-note" data-i18n="pr.tableNote">One-time, in US dollars. Every download includes the 7-day trial.</p>
+      <div class="price-table">
+        <a class="pt-row" href="/pic2webp"><span>Rocktier Pic2WebP</span><span>$4.99</span></a>
+        <a class="pt-row" href="/markdown"><span>Rocktier Markdown</span><span>$6.99</span></a>
+        <a class="pt-row" href="/pdf"><span>Rocktier PDF</span><span>$9.99</span></a>
+        <a class="pt-row" href="/journal"><span>Rocktier Journal</span><span>$9.99</span></a>
+        <a class="pt-row" href="/compressor"><span>Rocktier Compressor</span><span>$9.99</span></a>
+        <a class="pt-row" href="/write"><span>Rocktier Write</span><span>$12.99</span></a>
+        <a class="pt-row" href="/cad-viewer"><span>Rocktier CAD Viewer</span><span>$14.99</span></a>
+        <a class="pt-row" href="/ocr"><span>Rocktier OCR</span><span>$14.99</span></a>
+        <a class="pt-row pt-family" href="https://www.creem.io/payment/prod_36hw8U5U2f87OIxJnNEi9J" data-buy="creem" data-product="FL" data-price="29.99"><span data-i18n="pr.familyRow">Every app (family licence)</span><span>$29.99</span></a>
+      </div>
+      <p class="price-note lic-line after-list"><a class="card-more" href="/license" data-i18n="dl.haveLicence">Already bought one? Get your licence and activation code.</a></p>
+    </div>
+  </section>
+
+  <section class="section alt">
+    <div class="wrap">
+      <div class="sec-head">
+        <h2 class="sec-title" data-i18n="pr.sameTitle">Three choices, the same promises.</h2>
+      </div>
+      <div class="rows">
+        <div class="row">
+          <h3 data-i18n="pr.s1">Local by default</h3>
+          <p data-i18n="pr.s1b">
+            Your files are processed on your own machine and never uploaded: trial or paid.
+          </p>
+        </div>
+        <div class="row">
+          <h3 data-i18n="pr.s2">No subscription</h3>
+          <p data-i18n="pr.s2b">
+            You pay once. Nothing renews, no account, nothing to cancel.
+          </p>
+        </div>
+        <div class="row">
+          <h3 data-i18n="pr.s3">Trial before you decide</h3>
+          <p data-i18n="pr.s3b">
+            Every download includes a 7-day full-feature trial, so you can check it fits your work first.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="wrap prose">
+      <h2 data-i18n="pr.payT">Payment and tax</h2>
+      <p data-i18n="pr.payP">
+            Prices are in US dollars. Where sales tax or VAT applies, we calculate and collect it at checkout. Cards and PayPal both accepted.
+          </p>
+
+      <h2 data-i18n="pr.buyT">Where you buy</h2>
+      <p data-i18n="pr.buyP">Every licence is bought from the page of the app you want. Open any app, then choose the single licence or the family licence.</p>
+
+      <h2 data-i18n="pr.keepT">One payment, not a subscription</h2>
+      <p data-i18n="pr.keepP">
+            A Rocktier licence is a one-time purchase. No recurring charge, no account to manage, and the apps keep working offline.
+          </p>
+
+      <h2 data-i18n="pr.refT">Refunds</h2>
+      <p><span data-i18n="pr.refP1">If a Rocktier app is not right for you, you can ask for a refund. The</span> <a href="/refund-policy" data-i18n="pr.refLink">refund policy</a> <span data-i18n="pr.refP2">explains the window and how to request one.</span></p>
+
+      <h2 data-i18n="pr.askT">Anything else</h2>
+      <p><span data-i18n="pr.askP1">Write to</span> <a href="mailto:hello@rocktier.com">hello@rocktier.com</a> <span data-i18n="pr.askP2">and we will answer, usually within 48 hours.</span></p>
+    </div>
+  </section>
+</main>
+
+<footer class="foot">
+  <div class="wrap foot-row">
+    <div class="foot-brand">
+      <a class="brand" href="/">
+        <svg class="brand-mark sm" viewBox="0 0 40 40" fill="none" aria-hidden="true">
+          <circle cx="20" cy="20" r="17" stroke="currentColor" stroke-width="1.8" fill="none"/>
+          <path d="M12.5 21.5l5.2 5.3L29 14.8" stroke="currentColor" stroke-width="2.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        <span class="brand-word">Rock<span>tier</span><i></i></span>
+      </a>
+      <p class="copy" data-i18n="footer.copy">© 2026 Rocktier · Operated by Wuhan Hanyang Rock Network Technology Studio.</p>
+    </div>
+    <nav class="legal-links" aria-label="Legal">
+      <a href="/privacy" data-i18n="nav.privacy">Privacy</a>
+      <a href="/terms" data-i18n="nav.terms">Terms</a>
+      <a href="/refund-policy" data-i18n="nav.refunds">Refunds</a>
+      <a href="/license" data-i18n="nav.licences">Licence</a>
+      <a href="/contact" data-i18n="nav.contact">Contact</a>
+    </nav>
+  </div>
+</footer>
+
+<div class="consent" id="consent" role="region" aria-live="polite" aria-label="Storage consent">
+  <p class="consent-text" data-i18n="consent.text">We only store your theme preference on this device. No tracking, no analytics.</p>
+  <div class="consent-actions">
+    <a class="consent-link" href="/privacy" data-i18n="consent.learn">Privacy</a>
+    <button class="btn" id="consentAccept" type="button" data-i18n="consent.accept">Accept</button>
+    <button class="btn ghost" id="consentDecline" type="button" data-i18n="consent.decline">Decline</button>
+  </div>
+</div>
+
+<script src="js/checkout.js"></script>
+<script src="js/main.js"></script>
+<script src="js/i18n.js"></script>
+</body>
+</html>

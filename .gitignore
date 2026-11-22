@@ -1,0 +1,28 @@
+# OS files
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Editor / IDE
+.vscode/
+.idea/
+*.swp
+
+# Logs
+*.log
+
+# Local temp
+.tmp/
+.vercel
+.env
+.env.local
+.env*.local
+.env*
+*.env
+.envrc
+
+# 审校缓存（含第三方机翻结果，体积大且可重新生成）
+tools/.cache/
+
+# 设计审校工具的本地盐值，不参与构建
+.hallmark/

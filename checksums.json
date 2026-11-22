@@ -1,0 +1,178 @@
+{
+  "generated": "2026-11-22T02:11:42.520Z",
+  "note": "SHA-256 digests as published by GitHub for each release asset. Verify with: Get-FileHash <file> -Algorithm SHA256  |  shasum -a 256 <file>",
+  "products": {
+    "pdf": {
+      "repo": "Rocktier/Rocktier-softwares",
+      "version": "pdf/v1.2.2",
+      "published": "2026-11-21T14:39:08Z",
+      "windows": {
+        "name": "Rocktier.PDF_1.2.2_x64-setup.exe",
+        "url": "https://github.com/Rocktier/Rocktier-softwares/releases/download/pdf/v1.2.2/Rocktier.PDF_1.2.2_x64-setup.exe",
+        "sha256": "7a047d944ade2c1f745c4fdecd79e8cbbf6e27ab5d506a306ced7e5bae482997"
+      },
+      "macos": {
+        "aarch64": {
+          "name": "Rocktier.PDF_1.2.2_aarch64.dmg",
+          "url": "https://github.com/Rocktier/Rocktier-softwares/releases/download/pdf/v1.2.2/Rocktier.PDF_1.2.2_aarch64.dmg",
+          "sha256": "60b3d4d34cee21441340c38dfdf649bd33ab93a54dfb0b49a15b5687810c2f32"
+        },
+        "x64": {
+          "name": "Rocktier.PDF_1.2.2_x64.dmg",
+          "url": "https://github.com/Rocktier/Rocktier-softwares/releases/download/pdf/v1.2.2/Rocktier.PDF_1.2.2_x64.dmg",
+          "sha256": "5a9da29e2744858ea9611c07f457d396229b9e87aed39ef38d3c02d4ea041a95"
+        }
+      }
+    },
+    "pic2webp": {
+      "repo": "Rocktier/Rocktier-softwares",
+      "version": "pic2webp/v1.10.2",
+      "published": "2026-11-21T14:49:53Z",
+      "windows": {
+        "name": "Rocktier.Pic2WebP_1.10.2_x64-setup.exe",
+        "url": "https://github.com/Rocktier/Rocktier-softwares/releases/download/pic2webp/v1.10.2/Rocktier.Pic2WebP_1.10.2_x64-setup.exe",
+        "sha256": "4a5ea40fe90c1c63449e6c4b415611347e3a5068c019bfcdeb8f5610288f3464"
+      },
+      "macos": {
+        "aarch64": {
+          "name": "Pic2WebP_1.10.2_aarch64.dmg",
+          "url": "https://github.com/Rocktier/Rocktier-softwares/releases/download/pic2webp/v1.10.2/Pic2WebP_1.10.2_aarch64.dmg",
+          "sha256": "17d87fead1d1b463a1fbff9cd413b2acf41a0bdc1f8d71162ba3033f9a96f693"
+        },
+        "x64": {
+          "name": "Pic2WebP_1.10.2_x64.dmg",
+          "url": "https://github.com/Rocktier/Rocktier-softwares/releases/download/pic2webp/v1.10.2/Pic2WebP_1.10.2_x64.dmg",
+          "sha256": "7a7940ec5ee3018fcd959e0791f049accc69e386d16c17889cdeb3ec1159e917"
+        }
+      }
+    },
+    "markdown": {
+      "repo": "Rocktier/Rocktier-softwares",
+      "version": "markdown/v1.0.26",
+      "published": "2026-11-21T14:54:49Z",
+      "windows": {
+        "name": "Rocktier.Markdown_1.0.26_x64-setup.exe",
+        "url": "https://github.com/Rocktier/Rocktier-softwares/releases/download/markdown/v1.0.26/Rocktier.Markdown_1.0.26_x64-setup.exe",
+        "sha256": "a532ed0bc590324c240ab7a5941aed1b5e948289a12c942baa5022d83ec383a5"
+      },
+      "macos": {
+        "aarch64": {
+          "name": "Rocktier.Markdown_1.0.26_aarch64.dmg",
+          "url": "https://github.com/Rocktier/Rocktier-softwares/releases/download/markdown/v1.0.26/Rocktier.Markdown_1.0.26_aarch64.dmg",
+          "sha256": "8e749adccb16d3fef85a730fcb32d289e09431176720414df47b373455ad11fa"
+        },
+        "x64": {
+          "name": "Rocktier.Markdown_1.0.26_x64.dmg",
+          "url": "https://github.com/Rocktier/Rocktier-softwares/releases/download/markdown/v1.0.26/Rocktier.Markdown_1.0.26_x64.dmg",
+          "sha256": "708f4cd5727056bf11e58055e778dacc2f6fe5c090a0b7caff50ae22610365e7"
+        }
+      }
+    },
+    "cad-viewer": {
+      "repo": "Rocktier/Rocktier-softwares",
+      "version": "cad-viewer/v0.2.18",
+      "published": "2026-11-21T14:50:32Z",
+      "windows": {
+        "name": "Rocktier.CAD.Viewer_0.2.18_x64-setup.exe",
+        "url": "https://github.com/Rocktier/Rocktier-softwares/releases/download/cad-viewer/v0.2.18/Rocktier.CAD.Viewer_0.2.18_x64-setup.exe",
+        "sha256": "c942090241b2953e1e7fe107f01dc8b003f1ad1c708f19fc02caea37088ffa1b"
+      },
+      "macos": {
+        "aarch64": {
+          "name": "Rocktier-CAD-Viewer_0.2.18_aarch64.dmg",
+          "url": "https://github.com/Rocktier/Rocktier-softwares/releases/download/cad-viewer/v0.2.18/Rocktier-CAD-Viewer_0.2.18_aarch64.dmg",
+          "sha256": "9578a8286be887b01d020d8ae8231353d94f1c1a7ac5fd892cbd68db8f107739"
+        },
+        "x64": {
+          "name": "Rocktier-CAD-Viewer_0.2.18_x64.dmg",
+          "url": "https://github.com/Rocktier/Rocktier-softwares/releases/download/cad-viewer/v0.2.18/Rocktier-CAD-Viewer_0.2.18_x64.dmg",
+          "sha256": "419ca626932e73309f41c9e22de4028fb09c325112948c2b4422d966cb95c157"
+        }
+      }
+    },
+    "ocr": {
+      "repo": "Rocktier/Rocktier-OCR",
+      "version": "v0.2.15",
+      "published": "2026-11-15T17:23:25Z",
+      "windows": {
+        "name": "Rocktier.OCR_0.2.15_x64-setup.exe",
+        "url": "https://github.com/Rocktier/Rocktier-OCR/releases/download/v0.2.15/Rocktier.OCR_0.2.15_x64-setup.exe",
+        "sha256": "576374a921ef6e02126ca2da8da644fe64b8728a905155b9cc4534e3ad437478"
+      },
+      "macos": {
+        "aarch64": {
+          "name": "Rocktier.OCR_0.2.15_aarch64.dmg",
+          "url": "https://github.com/Rocktier/Rocktier-OCR/releases/download/v0.2.15/Rocktier.OCR_0.2.15_aarch64.dmg",
+          "sha256": "fb829ae16ed5f192ed704093b1cb4875d5d7b5b22aac00bcc7f974e4ab84712b"
+        },
+        "x64": {}
+      }
+    },
+    "write": {
+      "repo": "Rocktier/Rocktier-softwares",
+      "version": "write/v1.4.19",
+      "published": "2026-11-21T14:50:05Z",
+      "windows": {
+        "name": "Rocktier.Write_1.4.19_x64-setup.exe",
+        "url": "https://github.com/Rocktier/Rocktier-softwares/releases/download/write/v1.4.19/Rocktier.Write_1.4.19_x64-setup.exe",
+        "sha256": "371b34dbe1c2421ba0addb8d416069984383405b9c87448b5fda80e373897153"
+      },
+      "macos": {
+        "aarch64": {
+          "name": "Rocktier.Write_1.4.19_aarch64.dmg",
+          "url": "https://github.com/Rocktier/Rocktier-softwares/releases/download/write/v1.4.19/Rocktier.Write_1.4.19_aarch64.dmg",
+          "sha256": "90981ebc53420552246f306d2a79f4cb5df9c015e4a5989c2ff3d28d9fcbedaa"
+        },
+        "x64": {
+          "name": "Rocktier.Write_1.4.19_x64.dmg",
+          "url": "https://github.com/Rocktier/Rocktier-softwares/releases/download/write/v1.4.19/Rocktier.Write_1.4.19_x64.dmg",
+          "sha256": "c88b3068caabc340c9c3a7a3566e2b55799d37a96560525e280a148274270912"
+        }
+      }
+    },
+    "journal": {
+      "repo": "Rocktier/Rocktier-softwares",
+      "version": "journal/v0.2.17",
+      "published": "2026-11-21T14:59:30Z",
+      "windows": {
+        "name": "Rocktier.Journal_0.2.17_x64-setup.exe",
+        "url": "https://github.com/Rocktier/Rocktier-softwares/releases/download/journal/v0.2.17/Rocktier.Journal_0.2.17_x64-setup.exe",
+        "sha256": "6e17ac557ad993d0eac552e80da060db8b0b6272e838ac3cb155da31a948e7df"
+      },
+      "macos": {
+        "aarch64": {
+          "name": "Rocktier.Journal_0.2.17_aarch64.dmg",
+          "url": "https://github.com/Rocktier/Rocktier-softwares/releases/download/journal/v0.2.17/Rocktier.Journal_0.2.17_aarch64.dmg",
+          "sha256": "056152b52fd2399d52f88b35b22d2c12a81cc951a18f9d5842d7dc122f931b71"
+        },
+        "x64": {
+          "name": "Rocktier.Journal_0.2.17_x64.dmg",
+          "url": "https://github.com/Rocktier/Rocktier-softwares/releases/download/journal/v0.2.17/Rocktier.Journal_0.2.17_x64.dmg",
+          "sha256": "69be71ab8025ef03ead20257a9a231cf9c6b790fd2616950c9f70a08d09ac84d"
+        }
+      }
+    },
+    "compressor": {
+      "repo": "Rocktier/Rocktier-softwares",
+      "version": "compressor/v0.1.16",
+      "published": "2026-11-21T14:58:47Z",
+      "windows": {
+        "name": "Rocktier.Compressor_0.1.16_x64-setup.exe",
+        "url": "https://github.com/Rocktier/Rocktier-softwares/releases/download/compressor/v0.1.16/Rocktier.Compressor_0.1.16_x64-setup.exe",
+        "sha256": "2aada4e6ef70eada7371c16a673e19336cfd0dae9e31569149918695bb22e955"
+      },
+      "macos": {
+        "aarch64": {
+          "name": "Rocktier.Compressor_0.1.16_aarch64.dmg",
+          "url": "https://github.com/Rocktier/Rocktier-softwares/releases/download/compressor/v0.1.16/Rocktier.Compressor_0.1.16_aarch64.dmg",
+          "sha256": "b598cdd020b7e2d09613436176a752f4ed45403e45af973bef2f7fef6588d5a8"
+        },
+        "x64": {
+          "name": "Rocktier.Compressor_0.1.16_x64.dmg",
+          "url": "https://github.com/Rocktier/Rocktier-softwares/releases/download/compressor/v0.1.16/Rocktier.Compressor_0.1.16_x64.dmg",
+          "sha256": "72eb7b9f5b0fb2976a780d59c276a46b9061ff20d1158235f2980d3a88b29b6d"
+        }
+      }
+    }
+  }
+}

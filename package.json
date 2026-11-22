@@ -1,0 +1,36 @@
+{
+  "name": "rocktier-com-site-tools",
+  "private": true,
+  "type": "module",
+  "description": "rocktier.com 的构建与校验工具。不是网站本身 —— 那个是纯静态 HTML。",
+  "scripts": {
+    "i18n:extract": "node tools/extract-site-i18n.mjs",
+    "i18n:extract:check": "node tools/extract-site-i18n.mjs --check",
+    "i18n:gen": "node tools/gen-site-i18n.mjs",
+    "i18n:audit": "node tools/audit-site-i18n.mjs --lang all",
+    "i18n:report": "node tools/audit-site-i18n.mjs --report all",
+    "i18n:sample": "node tools/sample-audit.mjs --lang all --n 5",
+    "checksums:gen": "node tools/gen-checksums.mjs",
+    "verify:checksums": "node tools/verify-checksums.mjs",
+    "verify:checksums:selftest": "node tools/verify-checksums.mjs --selftest",
+
+    "check:placeholders": "node tools/check-placeholders.mjs",
+    "check:content": "node tools/check-site-i18n.mjs",
+    "check:site": "node tools/check-site.mjs",
+    "check:site:selftest": "node tools/check-site.mjs --selftest",
+    "check:secrets": "node tools/check-secrets.mjs",
+    "test:audit-diff": "node tools/test-audit-diff.mjs",
+
+    "test:consent": "node tools/test-consent.mjs",
+    "test:devices": "node tools/test-devices.mjs",
+    "test:devices-api": "node tools/test-devices-api.mjs",
+    "test:revocation": "node tools/test-revocation.mjs",
+    "test:creem-verify": "node tools/test-creem-verify.mjs",
+    "test:creem-webhook": "node tools/test-creem-webhook.mjs",
+    "verify:keypair": "node tools/verify-keypair.mjs",
+    "verify:redirect": "node tools/verify-real-redirect.mjs",
+
+    "check": "npm run check:placeholders && npm run check:content && npm run check:site && npm run check:secrets",
+    "test": "npm run test:audit-diff && npm run test:consent && npm run test:revocation"
+  }
+}
