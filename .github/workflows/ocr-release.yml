@@ -158,16 +158,26 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # ort-sys 的 copy_dylibs 在 Windows 上先试 symlink_file，失败则 fs::copy 兜底；
-      # symlink 需要 Developer Mode（或提权），兜底 copy 又会因 examples/deps 目录
-      # 不存在而 NotFound 崩溃（dynamic_link.rs:42）。两件事都在构建前备好。
+      # ort-sys 的 copy_dylibs 在 Windows 上把 DirectML.dll 依次软链/拷贝到
+      # <OUT_DIR 向上三级>/、其 examples/、deps/ 三个位置；后两者父目录不存在时
+      # symlink 与 fs::copy 双双 NotFound 崩溃（dynamic_link.rs:42，2.1(a) 之外
+      # 的第二处构建阻塞）。这里把两级可能的基准目录下的 examples/deps 都预建好，
+      # 并启用 Developer Mode 保证 symlink 可用。
       - name: Enable Developer Mode + pre-create target dirs (ort-sys dylib copy)
         shell: pwsh
         run: |
           reg add "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\AppModelUnlock" /t REG_DWORD /f /v "AllowDevelopmentWithoutDevLicense" /d "1" | Out-Null
-          New-Item -ItemType Directory -Force -Path `
-            "apps/ocr/src-tauri/target/release/examples", `
-            "apps/ocr/src-tauri/target/release/deps" | Out-Null
+          $dirs = @(
+            "apps/ocr/src-tauri/target/release/build/examples",
+            "apps/ocr/src-tauri/target/release/build/deps",
+            "apps/ocr/src-tauri/target/release/examples",
+            "apps/ocr/src-tauri/target/release/deps",
+            "apps/ocr/src-tauri/target/x86_64-pc-windows-msvc/release/build/examples",
+            "apps/ocr/src-tauri/target/x86_64-pc-windows-msvc/release/build/deps",
+            "apps/ocr/src-tauri/target/x86_64-pc-windows-msvc/release/examples",
+            "apps/ocr/src-tauri/target/x86_64-pc-windows-msvc/release/deps"
+          )
+          New-Item -ItemType Directory -Force -Path $dirs | Out-Null
 
       - uses: dtolnay/rust-toolchain@stable
 
