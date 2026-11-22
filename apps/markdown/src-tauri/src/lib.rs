@@ -435,8 +435,6 @@ where
     }
 }
 
-#[tauri::command]
-#[cfg(desktop)]
 /// App Store（沙盒）构建里，打开/保存面板选中的路径在沙盒容器之外，直接
 /// std::fs 读写会 EPERM——Apple 审核复现的 2.1(a)「Save 报错」即此。面板授予
 /// 的是安全作用域资源，读写前后必须 start/stopAccessingSecurityScopedResource；
@@ -464,6 +462,8 @@ fn with_scoped<T>(path: &std::path::Path, f: impl FnOnce() -> T) -> T {
     f()
 }
 
+#[tauri::command]
+#[cfg(desktop)]
 fn save_document(path: String, content: String) -> Result<(), String> {
     // 保存是本应用最核心的写操作：受授权闸门保护（FAMILY-LICENSE.md §2）。
     ensure_write_allowed()?;
