@@ -66,7 +66,7 @@ The Rust binary contains no networking code and the Tauri capability set grants 
 network permission; the only way out of the application is the activation request
 made by the webview, which the content-security policy restricts to
 `rocktier.com`. You can audit both yourself — the source is public at
-<https://github.com/Rocktier/Rocktier-PDF>.
+<https://github.com/Rocktier/Rocktier-softwares>.
 
 If you find a request leaving this app, it is a bug. Please report it.
 

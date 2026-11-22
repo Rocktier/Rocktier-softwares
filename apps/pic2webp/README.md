@@ -6,7 +6,7 @@
 
  JPG / PNG / WebP / AVIF → WebP，质量 75-85 通常比原图小 25-50%
 
-[⬇️ 下载](https://github.com/Rocktier/pic2webp/releases) · [📖 文档](#开发--development) · [🐛 反馈](https://github.com/Rocktier/pic2webp/issues)
+[⬇️ 下载](https://github.com/Rocktier/Rocktier-softwares/releases) · [📖 文档](#开发--development) · [🐛 反馈](https://github.com/Rocktier/Rocktier-softwares/issues)
 
 </div>
 
@@ -32,7 +32,7 @@
 
 ## ⬇️ 下载
 
-前往 [Releases](https://github.com/Rocktier/pic2webp/releases) 下载对应平台的安装包。
+前往 [Releases](https://github.com/Rocktier/Rocktier-softwares/releases) 下载对应平台的安装包。
 
 | 平台 | 安装包 | 大小 |
 |------|--------|------|
@@ -119,7 +119,7 @@ registry = "sparse+https://rsproxy.cn/index/"
 
 Reduce image size by 25-50% at quality 75-85
 
-[⬇️ Download](https://github.com/Rocktier/pic2webp/releases) · [📖 Docs](#development) · [🐛 Issues](https://github.com/Rocktier/pic2webp/issues)
+[⬇️ Download](https://github.com/Rocktier/Rocktier-softwares/releases) · [📖 Docs](#development) · [🐛 Issues](https://github.com/Rocktier/Rocktier-softwares/issues)
 
 </div>
 
@@ -141,7 +141,7 @@ Reduce image size by 25-50% at quality 75-85
 
 ## ⬇️ Download
 
-Get the latest release from [Releases](https://github.com/Rocktier/pic2webp/releases).
+Get the latest release from [Releases](https://github.com/Rocktier/Rocktier-softwares/releases).
 
 | Platform | Package | Size |
 |----------|---------|------|

@@ -60,8 +60,8 @@ See [PRIVACY.md](PRIVACY.md).
 ## Building from source
 
 ```bash
-git clone https://github.com/Rocktier/Rocktier-PDF.git
-cd Rocktier-PDF
+git clone https://github.com/Rocktier/Rocktier-softwares.git
+cd Rocktier-softwares/apps/pdf
 
 npm install                                    # also fetches the pinned Pdfium build
 bash scripts/provision-qpdf-macos.sh           # macOS: qpdf as a self-contained sidecar
