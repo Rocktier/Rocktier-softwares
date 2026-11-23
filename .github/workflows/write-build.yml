@@ -154,6 +154,10 @@ jobs:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+          # 公证凭据：API Key 不过期，优先；Apple ID + 专用密码只作回退（见 scripts/notarize-dmg.sh）
+          APPLE_API_KEY_P8: ${{ secrets.APPLE_API_KEY_P8 }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
         run: |
           set -euo pipefail
           app=$(find "apps/write/src-tauri/target/${{ matrix.target }}/release/bundle/macos" \

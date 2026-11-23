@@ -158,9 +158,16 @@ jobs:
       # 没有证书时只做 ad-hoc 签名，产物与旧版一致（Gatekeeper 仍会拦）。
       - name: Sign + notarize the DMG
         env:
+          # 证书在「Import Developer ID certificate」步骤已进 keychain，但脚本要靠
+          # APPLE_CERT_P12 判断「此刻本该公证」——不传它，漏配凭据会被误当成合法跳过。
+          APPLE_CERT_P12: ${{ secrets.APPLE_CERT_P12 }}
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+          # 公证凭据：API Key 不过期，优先；Apple ID + 专用密码只作回退（见 scripts/notarize-dmg.sh）
+          APPLE_API_KEY_P8: ${{ secrets.APPLE_API_KEY_P8 }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
         run: |
           set -euo pipefail
           dmg=$(find apps/cad-viewer/src-tauri/target/release/bundle/dmg -name '*.dmg' ! -name '*.tmp.dmg' -print -quit)

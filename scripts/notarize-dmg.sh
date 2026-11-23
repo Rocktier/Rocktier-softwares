@@ -10,9 +10,14 @@
 #   1. APPLE_API_KEY_P8 + APPLE_API_KEY_ID + APPLE_API_ISSUER  → --key / --key-id / --issuer
 #   2. APPLE_ID + APPLE_APP_PASSWORD (+ APPLE_TEAM_ID)         → --apple-id / --password / --team-id
 #   3. 都没有 → 退出码 3（调用方当作「跳过公证」处理，不算失败）
+#      但若此时 APPLE_CERT_P12 存在，说明「证书配了、凭据没配」——这是配置错误，
+#      退出码 4。否则产物是 Unnotarized Developer ID，Gatekeeper 必拒，而调用方的
+#      「有证书就断言 Gatekeeper 必须接受」会报出一句和根因无关的 rejected（2026-11-23
+#      write-build 就红在这里：实际是漏传 APPLE_API_* 三个 secret）。
 #
 # 用法：bash scripts/notarize-dmg.sh path/to/Rocktier.Foo_1.0.0_aarch64.dmg
-# 退出码：0 成功 / 3 无凭据跳过 / 其他 notarytool 或 stapler 的失败码
+# 退出码：0 成功 / 3 无凭据跳过（未配证书时合法）/ 4 配了证书但没凭据（配置错误）
+#         其他 notarytool 或 stapler 的失败码
 
 set -uo pipefail
 
@@ -34,6 +39,10 @@ elif [ -n "${APPLE_ID:-}" ] && [ -n "${APPLE_APP_PASSWORD:-}" ] && [ -n "${APPLE
   auth=(--apple-id "$APPLE_ID" --password "$APPLE_APP_PASSWORD" --team-id "$APPLE_TEAM_ID")
   kind="apple-id ${APPLE_ID}"
 else
+  if [ -n "${APPLE_CERT_P12:-}" ]; then
+    echo "::error::APPLE_CERT_P12 已配置，但没有任何公证凭据（APPLE_API_KEY_P8/ID/ISSUER 或 APPLE_ID/APPLE_APP_PASSWORD）。这会让产物变成 Unnotarized Developer ID，Gatekeeper 必然拒绝。请把公证凭据一并传进这个步骤的 env。" >&2
+    exit 4
+  fi
   echo "::warning::没有任何公证凭据（APPLE_API_* 或 APPLE_ID/APPLE_APP_PASSWORD），跳过公证。签名已生效，但下载后 Gatekeeper 仍会拦一次。" >&2
   exit 3
 fi
