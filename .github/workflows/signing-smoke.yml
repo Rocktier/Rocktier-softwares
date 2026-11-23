@@ -9,6 +9,11 @@ name: Signing smoke test
 
 on:
   workflow_dispatch:
+  # workflow_dispatch 在这个账号上会被反复 cancel（原因未定），所以留一条分支触发：
+  # push 到 signing-smoke 分支即跑，跑完删分支。
+  push:
+    branches:
+      - signing-smoke
 
 permissions:
   contents: read
