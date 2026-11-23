@@ -133,11 +133,9 @@ jobs:
 
           if [ -n "${APPLE_CERT_P12:-}" ]; then
             codesign -s "$identity" --timestamp -fv "$dmg"
-            xcrun notarytool submit "$dmg" \
-              --apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" \
-              --password "$APPLE_APP_PASSWORD" --wait
-            xcrun stapler staple "$dmg"
-            xcrun stapler validate "$dmg"
+            rc=0
+            bash scripts/notarize-dmg.sh "$dmg" || rc=$?
+            if [ "$rc" -ne 0 ] && [ "$rc" -ne 3 ]; then exit "$rc"; fi
           else
             codesign -s - -fv "$dmg"
           fi
