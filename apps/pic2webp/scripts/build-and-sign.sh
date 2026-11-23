@@ -125,11 +125,13 @@ if [ -n "$identity" ]; then
     echo ""
     echo "🔏 签名 + 公证 DMG（notarytool 可能要等几分钟）..."
     codesign -s "$identity" --timestamp -fv "$DMG_OUT"
-    xcrun notarytool submit "$DMG_OUT" \
-      --apple-id "${APPLE_ID:-}" --team-id "${APPLE_TEAM_ID:-}" \
-      --password "${APPLE_APP_PASSWORD:-}" --wait
-    xcrun stapler staple "$DMG_OUT"
-    xcrun stapler validate "$DMG_OUT"
+    # 认证方式与 stapling 收敛在仓库根的 scripts/notarize-dmg.sh：
+    # 有 APPLE_API_* 就用 API Key（不过期、不需要 2FA 生成的专用密码），
+    # 否则回退 Apple ID + App 专用密码；两者都没有时返回 3，只签名不公证。
+    repo_root=$(cd "$(dirname "$0")/../../.." && pwd)
+    notarize_rc=0
+    bash "$repo_root/scripts/notarize-dmg.sh" "$DMG_OUT" || notarize_rc=$?
+    if [ "$notarize_rc" -ne 0 ] && [ "$notarize_rc" -ne 3 ]; then exit "$notarize_rc"; fi
 
     info=$(codesign -dv --verbose=4 "$DMG_OUT" 2>&1 || true)
     case "$info" in *"Authority=Developer ID Application"*) ;; *)
@@ -160,6 +162,7 @@ else
     echo "  效果: 本机不报「已损坏，无法打开」；从浏览器下载的副本仍会被"
     echo "        Gatekeeper 拦（未签名开发者），需右键「打开」或 xattr -cr"
     echo "  要真正消除拦截: 提供 APPLE_CERT_P12 / APPLE_CERT_PASSWORD /"
-    echo "        APPLE_ID / APPLE_TEAM_ID / APPLE_APP_PASSWORD 后重跑"
+    echo "        APPLE_TEAM_ID 加上公证凭据（APPLE_API_KEY_P8 / APPLE_API_KEY_ID /"
+    echo "        APPLE_API_ISSUER，或 APPLE_ID / APPLE_APP_PASSWORD）后重跑"
 fi
 echo ""
