@@ -14,7 +14,7 @@ env:
 
 # 同一分支/tag 的新推送会取消旧的构建
 concurrency:
-  group: build-${{ github.ref }}
+  group: build-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
