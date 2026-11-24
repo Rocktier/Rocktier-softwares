@@ -151,6 +151,12 @@ export const zh: Strings = {
       },
       language: "语言",
       version: "版本",
+      about: "关于",
+      // 与官网 journal.html 的 jr.maintenance、README 顶部同口径，改一处要三处一起改。
+      aboutMaintenance:
+        "Rocktier Journal 自 2026-10-29 起进入维护模式：只修安全与数据完整性问题，不再新增功能。已有保险箱与备份照常可用，应用也继续提供下载。",
+      aboutSign:
+        "原先独立的 Rocktier Sign 已退役，签名能力并入 Rocktier PDF 1.1.0；Sign 的回执在 PDF 里继续解锁数字签名。",
       recoveryLabel: "恢复码",
       recovery: {
         ready: "已启用",

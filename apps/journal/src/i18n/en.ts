@@ -151,6 +151,12 @@ export const en = {
       },
       language: "Language",
       version: "Version",
+      about: "About",
+      // Same wording as jr.maintenance on the site and the README banner.
+      aboutMaintenance:
+        "Rocktier Journal has been in maintenance mode since 2026-10-29: security and data-integrity fixes only, no new features. Existing vaults and backups keep working, and the app stays available for download.",
+      aboutSign:
+        "The standalone Rocktier Sign has been retired; its signing engine now lives in Rocktier PDF 1.1.0, where Sign receipts still unlock digital signatures.",
       recoveryLabel: "Recovery code",
       recovery: {
         ready: "Set up",

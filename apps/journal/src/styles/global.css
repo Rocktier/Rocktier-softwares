@@ -1454,6 +1454,38 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
+/* 「关于」是两段长文字，不是一个标签配一个值：覆盖 .settings-item 的
+   横向 space-between 布局，否则段落会被挤成一条细柱。 */
+.settings-item-block {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+}
+
+.settings-about p {
+  margin: 0 0 8px;
+  font-size: 12px;
+  line-height: 1.65;
+  color: var(--text-tertiary);
+}
+
+.settings-link {
+  align-self: flex-start;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--accent);
+  font: inherit;
+  font-size: 12px;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+.settings-link:hover {
+  opacity: 0.8;
+}
+
 /* ============ Scrollbar ============ */
 
 ::-webkit-scrollbar {

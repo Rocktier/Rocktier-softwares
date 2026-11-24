@@ -23,6 +23,17 @@ export default function Settings() {
     getVersion().then(setVersion).catch(() => {});
   }, []);
 
+  /** Family site: desktop goes through the Rust whitelist command, browser dev
+   *  opens a tab (same split as LicenseDialog's buy()). */
+  const openSite = () => {
+    const url = "https://rocktier.com";
+    if (typeof window !== "undefined" && "__TAURI_INTERNALS__" in window) {
+      invoke("open_url", { url }).catch(() => {});
+    } else {
+      window.open(url, "_blank", "noopener");
+    }
+  };
+
   const handleRegenerate = async () => {
     if (!regenConfirming) {
       setRegenConfirming(true);
@@ -135,6 +146,19 @@ export default function Settings() {
       <div className="settings-item">
         <label>{t("settings.version")}</label>
         <span className="settings-version">{version || "—"} ({locale})</span>
+      </div>
+
+      {/* 关于：维护模式与 Sign 并入 PDF 这两条历史，官网和 README 都写了、
+          应用内一直没写。用户装的是本地应用，可能一辈子不看官网。 */}
+      <div className="settings-item settings-item-block">
+        <label>{t("settings.about")}</label>
+        <div className="settings-about">
+          <p>{t("settings.aboutMaintenance")}</p>
+          <p>{t("settings.aboutSign")}</p>
+          <button className="settings-link" onClick={openSite}>
+            rocktier.com
+          </button>
+        </div>
       </div>
     </div>
   );
