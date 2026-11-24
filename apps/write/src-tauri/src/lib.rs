@@ -659,8 +659,13 @@ fn build_menu(app: tauri::AppHandle, lang: String) -> Result<(), String> {
 /// 帮助菜单里的外链（官网 / 反馈邮箱），白名单防止任意 URL。
 #[tauri::command]
 fn open_url(app: tauri::AppHandle, url: String) -> Result<(), String> {
-    const ALLOWED: [&str; 3] =
-        ["https://rocktier.com/", "https://www.rocktier.com/", "mailto:"];
+    const ALLOWED: [&str; 4] = [
+        "https://rocktier.com/",
+        "https://www.rocktier.com/",
+        // Update dialog → family Releases page. Scoped to our own org.
+        "https://github.com/Rocktier/",
+        "mailto:",
+    ];
     if !ALLOWED.iter().any(|p| url.starts_with(p)) {
         return Err(format!("blocked url: {url}"));
     }

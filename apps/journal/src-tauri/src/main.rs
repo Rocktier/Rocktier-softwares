@@ -29,6 +29,7 @@ fn main() {
         })
         .invoke_handler(tauri::generate_handler![
             menu::build_menu,
+            menu::open_url,
             vault::force_create_vault,
             vault::delete_vault,
             vault::get_hint,

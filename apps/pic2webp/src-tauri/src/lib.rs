@@ -392,6 +392,40 @@ fn is_dir(path: String) -> Result<bool, String> {
     Ok(Path::new(&path).is_dir())
 }
 
+/// 打开外链，白名单限于 rocktier.com 与 mailto（家族统一做法）。
+///
+/// 前端 `src/updates.js` 的 `openUrl()` 一直在调 `invoke("open_url", …)`，
+/// 但这个命令从未定义、也没注册进 handler —— 「检查更新」弹窗里的下载按钮
+/// 在桌面端点了没反应，失败被 `.catch(() => {})` 吞掉。
+///
+/// 解析 host 而不是比字符串前缀：前缀检查会放过
+/// `https://rocktier.com.evil.tld/`，也会误拒 `https://rocktier.com`（无尾斜杠）。
+#[tauri::command]
+fn open_url(app: AppHandle, url: String) -> Result<(), String> {
+    let allowed = if url.starts_with("mailto:") {
+        true
+    } else if let Some(rest) = url
+        .strip_prefix("https://")
+        .or_else(|| url.strip_prefix("http://"))
+    {
+        let host = rest.split(['/', '?', '#']).next().unwrap_or("");
+        host == "rocktier.com"
+            || host == "www.rocktier.com"
+            // 更新弹窗 → 家族 Releases 页；限定本组织路径，
+            // 免得变成「能打开任意 github.com 地址」。
+            || rest.starts_with("github.com/Rocktier/")
+    } else {
+        false
+    };
+    if !allowed {
+        return Err(format!("URL not allowed: {url}"));
+    }
+    use tauri_plugin_opener::OpenerExt;
+    app.opener()
+        .open_url(url, None::<&str>)
+        .map_err(|e| e.to_string())
+}
+
 /// Generate a base64 thumbnail for a file
 #[tauri::command]
 fn generate_thumbnail(path: String, size: Option<u32>) -> Result<String, String> {
@@ -1330,6 +1364,7 @@ pub fn run() {
             initial_file,
             start_convert, cancel_convert, force_close, get_file_size,
             check_disk_space, is_dir, generate_thumbnail, build_menu,
+            open_url,
             report_machine_fingerprint,
             license_status, store_receipt, clear_receipt,
             store_default_output_dir,

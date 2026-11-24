@@ -397,9 +397,13 @@ fn batch_compress(
 fn open_url(app: tauri::AppHandle, url: String) -> Result<(), String> {
     let allowed = url::Url::parse(&url).is_ok_and(|u| match u.scheme() {
         "mailto" => true,
-        "https" => {
-            u.host_str() == Some("rocktier.com") || u.host_str() == Some("www.rocktier.com")
-        }
+        "https" => match u.host_str() {
+            Some("rocktier.com") | Some("www.rocktier.com") => true,
+            // Update dialog → family Releases page. Path-scoped to our own org
+            // so this cannot become "open any github.com URL".
+            Some("github.com") => u.path().starts_with("/Rocktier/"),
+            _ => false,
+        },
         _ => false,
     });
     if !allowed {

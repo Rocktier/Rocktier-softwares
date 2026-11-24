@@ -344,9 +344,14 @@ fn build_menu(app: AppHandle, lang: String, has_doc: bool) -> Result<(), String>
 /// Opens an external link from the Help menu, restricted to a whitelist.
 #[tauri::command]
 fn open_url(url: String) -> Result<(), String> {
-    const ALLOWED: [&str; 3] = [
+    const ALLOWED: [&str; 4] = [
         "https://rocktier.com/",
         "https://www.rocktier.com/",
+        // The update dialog's download button points at the family Releases
+        // page. Without this the button rejected every click and the front
+        // end's `.catch(() => {})` swallowed it — a dead button on every build.
+        // Scoped to our own org, not the whole of github.com.
+        "https://github.com/Rocktier/",
         "mailto:",
     ];
     if !ALLOWED.iter().any(|prefix| url.starts_with(prefix)) {

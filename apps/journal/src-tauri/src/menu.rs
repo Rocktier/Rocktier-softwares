@@ -21,7 +21,11 @@ fn is_allowed_url(url: &str) -> bool {
         return false;
     };
     let host = rest.split(['/', '?', '#']).next().unwrap_or("");
-    host == "rocktier.com" || host == "www.rocktier.com"
+    // The update dialog's download button points at the family Releases page;
+    // path-scoped to our own org so this is not "open any github.com URL".
+    host == "rocktier.com"
+        || host == "www.rocktier.com"
+        || rest.starts_with("github.com/Rocktier/")
 }
 
 fn open_extern(app: &AppHandle, url: &str) {
@@ -29,6 +33,25 @@ fn open_extern(app: &AppHandle, url: &str) {
         return;
     }
     let _ = app.opener().open_url(url, None::<&str>);
+}
+
+/// Open a whitelisted URL in the user's browser — the front-end entry point.
+///
+/// The licence dialog has been calling `invoke("open_url", …)` since the
+/// whitelist refactor, but the command was never exposed or registered: every
+/// call rejected with "command not found", and `buy()`'s `.catch(() => {})`
+/// swallowed it. The 「解锁购买 / Unlock」button therefore clicked into
+/// nothing on every desktop build, while working in the browser dev mode
+/// (that path uses `window.open`). The error is returned rather than
+/// swallowed so a caller that wants to surface it can.
+#[tauri::command]
+pub fn open_url(app: AppHandle, url: String) -> Result<(), String> {
+    if !is_allowed_url(&url) {
+        return Err(format!("不允许打开的地址: {url}"));
+    }
+    app.opener()
+        .open_url(&url, None::<&str>)
+        .map_err(|e| e.to_string())
 }
 
 /// Build the standard Rocktier family application menu.
