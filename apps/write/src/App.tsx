@@ -978,8 +978,18 @@ export default function App() {
   const docName = activeDoc.path ? baseName(activeDoc.path) : t("doc.untitled");
 
   useEffect(() => {
-    document.title = activeDoc.path ? `${baseName(activeDoc.path)} — Rocktier Write` : "Rocktier Write";
-  }, [activeDoc.path]);
+    // 未保存时补 •（Dock / 任务栏里看不出哪一章还没存）。Tauri 不会把
+    // document.title 同步到窗口标题栏，桌面端再显式设一次。
+    const title = activeDoc.path
+      ? `${baseName(activeDoc.path)}${activeDoc.modified ? " •" : ""} — Rocktier Write`
+      : "Rocktier Write";
+    document.title = title;
+    if (isTauri) {
+      void getCurrentWindow()
+        .setTitle(title)
+        .catch(() => {});
+    }
+  }, [activeDoc.path, activeDoc.modified]);
 
   const hasFrontmatter = useMemo(
     () => extractFrontmatter(activeDoc.content).frontmatter !== null,

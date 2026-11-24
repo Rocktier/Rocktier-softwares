@@ -575,6 +575,17 @@ export function App() {
     []
   );
 
+  /* ── Window title ─────────────────────────────────────────────── */
+  // 文件名 + 未保存标记。固定写「Rocktier PDF」时，同时开两份图纸根本分不清
+  // 谁是谁（Dock / Mission Control 里全是同样的字）。• 放末尾，与 macOS
+  // 文档窗口的惯例一致。
+  useEffect(() => {
+    const title = pdf.doc
+      ? `${pdf.doc.name}${pdf.doc.dirty ? ' •' : ''} — Rocktier PDF`
+      : 'Rocktier PDF';
+    void getCurrentWindow().setTitle(title).catch(() => {});
+  }, [pdf.doc?.name, pdf.doc?.dirty]);
+
   /* ── Window close & replacement guard ────────────────────────── */
   useEffect(() => {
     let disposed = false;

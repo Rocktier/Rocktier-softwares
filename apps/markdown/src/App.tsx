@@ -1172,15 +1172,23 @@ export default function App() {
   }, [openMarkdownPath, showToast]);
 
   // Inject frontmatter title into document title (for PDF export / window title)
+  //
+  // 未保存时补一个 •：任务栏 / Dock 里看不出哪份没存，切窗口时才发现刚才那篇
+  // 草稿还挂在那儿。Tauri 不会把 WebView 的 document.title 同步到窗口标题栏，
+  // 桌面端得再显式 setTitle 一次。
   useEffect(() => {
-    if (frontmatterData?.title) {
-      document.title = `${frontmatterData.title} — Rocktier Markdown`;
-    } else if (doc.path) {
-      document.title = `${baseName(doc.path)} — Rocktier Markdown`;
-    } else {
-      document.title = "Rocktier Markdown";
+    const named = Boolean(frontmatterData?.title || doc.path);
+    const base = frontmatterData?.title ?? (doc.path ? baseName(doc.path) : "");
+    const title = named
+      ? `${base}${doc.modified ? " •" : ""} — Rocktier Markdown`
+      : "Rocktier Markdown";
+    document.title = title;
+    if (isTauri) {
+      void getCurrentWindow()
+        .setTitle(title)
+        .catch(() => {});
     }
-  }, [frontmatterData, doc.path]);
+  }, [frontmatterData, doc.path, doc.modified]);
 
   // frontmatter 面板支持 Esc 关闭（本轮 U6），与 FindReplace 行为一致
   useEffect(() => {
