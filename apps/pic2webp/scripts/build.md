@@ -20,21 +20,15 @@ npm run tauri build
 
 ### 签名说明
 
-发布时 `npm run build:release` 会自动对 DMG 内的 `.app` 做 ad-hoc 签名，
-消除 Gatekeeper "已损坏，无法打开" 提示，**不需要苹果开发者账号，免费**。
+**CI 发版（唯一可信路径）**：`.github/workflows/pic2webp-build.yml` 从 secret 导入
+`APPLE_CERT_P12`，拿到 `Developer ID Application: Lei Dang (7384875SK5)`，重签 `.app`
+并重打 DMG，然后交给 `scripts/notarize-dmg.sh`——它优先用 App Store Connect API Key
+（`APPLE_API_KEY_P8` / `APPLE_API_KEY_ID` / `APPLE_API_ISSUER`，不过期）提交公证并 staple，
+Apple ID + 专用密码只作回退。判据是产物出现 `source=Notarized Developer ID`，由工作流里的
+`spctl` 硬断言把关。六个 secret 已灌在 `Rocktier/Rocktier-softwares`。
 
-如果想要正式签名（消除"仍要打开"弹窗），需在 `tauri.conf.json` 配置：
-
-```json
-"bundle": {
-  "macOS": {
-    "signing": {
-      "apple-id": "hello@rocktier.com",
-      "team-id": "XXXXXXXXXX"
-    }
-  }
-}
-```
+**本地构建**：`npm run build:release` 仍是 ad-hoc 签名（本机没有证书私钥），
+只能自测，别发给用户——Gatekeeper 会拦。
 
 ## Windows
 
