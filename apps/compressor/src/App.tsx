@@ -563,6 +563,30 @@ export default function App() {
     if (f.status !== "done" || !r?.outputPath) return sum;
     return sum + Math.max(0, r.originalSize - r.compressedSize);
   }, 0);
+
+  // 压缩前的预估：官网承诺「批量到底能省多少空间」，这是它的兑现。
+  // 压缩率依内容差异很大（一份纯扫描 PDF 和一份文字 PDF 能差三倍），所以给区间
+  // 并标「预计」，不假装是实测值；有了完成项之后一律显示真实节省，避免两套数字打架。
+  const pendingItems = files.filter((f) => f.status === "pending" && (f.size ?? 0) > 0);
+  const pendingBytes = pendingItems.reduce((sum, f) => sum + (f.size ?? 0), 0);
+  const estimate = pendingItems.length
+    ? pendingItems.reduce(
+        (acc, f) => {
+          const e = extOf(f.name);
+          const [lo, hi] = IMAGE_EXTS.has(e)
+            ? quality === "low"
+              ? [0.45, 0.78]
+              : quality === "medium"
+                ? [0.25, 0.6]
+                : [0.1, 0.4]
+            : e === ".pdf"
+              ? [0.2, 0.55]
+              : [0.03, 0.2];
+          return { lo: acc.lo + (f.size ?? 0) * lo, hi: acc.hi + (f.size ?? 0) * hi };
+        },
+        { lo: 0, hi: 0 },
+      )
+    : null;
   const countParts: string[] = [];
   if (doneCount) countParts.push(t(`${doneCount} 个完成`, `${doneCount} done`));
   if (currentPath) countParts.push(t("1 个处理中", "1 processing"));
@@ -571,9 +595,14 @@ export default function App() {
   const summaryCap =
     doneCount > 0 && savedBytes > 0
       ? t("已节省 · ", "Saved · ") + countParts.join(t("，", ", "))
-      : countParts.length
-        ? countParts.join(t("，", ", "))
-        : t("还没有可比较的结果", "Nothing to compare yet");
+      : estimate
+        ? t(
+            `预计可省 · 共 ${fmtBytes(pendingBytes)} 待压缩`,
+            `Estimated · ${fmtBytes(pendingBytes)} to compress`,
+          )
+        : countParts.length
+          ? countParts.join(t("，", ", "))
+          : t("还没有可比较的结果", "Nothing to compare yet");
   const settingsSummary =
     `${activeProfile ? profileLabel(activeProfile) : t("默认", "Default")} · ${qualityLabel(quality)}` +
     (!hideTarget && target > 0 ? ` · ${t("目标", "Target")} ${targetLabel}` : "");
@@ -812,7 +841,13 @@ export default function App() {
           <div className="rule" />
 
           <section className="summary" aria-live="polite">
-            <span className="big">{savedBytes > 0 ? fmtBytes(savedBytes) : "—"}</span>
+            <span className="big">
+              {savedBytes > 0
+                ? fmtBytes(savedBytes)
+                : estimate
+                  ? `~${fmtBytes(estimate.lo)}–${fmtBytes(estimate.hi)}`
+                  : "—"}
+            </span>
             <span className="cap">{summaryCap}</span>
           </section>
         </aside>
