@@ -168,6 +168,10 @@ export const zh: Strings = {
       printFailed: '打印失败',
       printFailedDetail: '打印失败：{reason}',
       saveFirstForImage: '请先保存文档再粘贴图片',
+      toTraditional: '已转换为繁体中文',
+      toSimplified: '已转换为简体中文',
+      convertNoChange: '没有需要转换的内容',
+      convertFailed: '简繁转换失败',
     },
     doc: {
       untitled: '未命名',

@@ -33,6 +33,7 @@ import { exists, readTextFile, stat } from "@tauri-apps/plugin-fs";
 import { WELCOME_DOCUMENT, type MarkdownDocument } from "./types/index";
 import { t, useUiLang } from "./i18n";
 import { extractFrontmatter } from "./services/markdown";
+import { convertHan } from "./services/hanVariant";
 
 /** toast 语气。error 必须同时改变配色、存活时长、可点击关闭与 aria role（家族铁律 7）。 */
 type ToastTone = "info" | "success" | "error";
@@ -265,6 +266,42 @@ export default function App() {
       showToast(t("compare.readFailed"), "error");
     }
   }, [docs, activeId, showToast]);
+
+  // 简繁转换：正文照转，代码块 / 行内代码 / 链接地址 / frontmatter 由 hanVariant 保护。
+  // 源码视图走 CodeMirror 事务，撤销栈还在；富文本与预览视图只能整篇替换 ——
+  // Tiptap 的 setContent 本来就会重建文档（richTextSync 同理），撤销栈在那里
+  // 也不存在，所以不假装能撤。
+  const convertVariant = useCallback(
+    async (direction: "s2t" | "t2s") => {
+      const target = docs.find((d) => d.id === activeId) ?? docs[0];
+      if (!target) return;
+      try {
+        const { text, changed } = await convertHan(target.content, direction);
+        if (!changed) {
+          showToast(t("toast.convertNoChange"));
+          return;
+        }
+        const cm = (window as unknown as {
+          __cmView?: {
+            state: { doc: { length: number } };
+            dispatch: (spec: unknown) => void;
+          };
+        }).__cmView;
+        if (viewMode === "source" && cm) {
+          cm.dispatch({ changes: { from: 0, to: cm.state.doc.length, insert: text } });
+        } else {
+          setActiveDoc((d) => ({ ...d, content: text, modified: true }));
+        }
+        showToast(
+          t(direction === "s2t" ? "toast.toTraditional" : "toast.toSimplified"),
+          "success",
+        );
+      } catch {
+        showToast(t("toast.convertFailed"), "error");
+      }
+    },
+    [docs, activeId, setActiveDoc, showToast, viewMode],
+  );
 
   // ── License（家族 L6）：读一次试用状态；写操作被拦时由 Rust 发 license-expired
   //    事件（命令层统一发，界面不用在每个 catch 里各判一次），这里弹激活对话框并
@@ -741,6 +778,8 @@ export default function App() {
           case "find": toggleFindReplace(); break;
           case "toggle-sidebar": setSidebar((v) => !v); break;
           case "toggle-theme": cycleTheme(); break;
+          case "to-traditional": void convertVariant("s2t"); break;
+          case "to-simplified": void convertVariant("t2s"); break;
           case "license": openLicense(); break;
           case "check-updates": setUpdateOpen(true); void runUpdateCheck(); break;
           case "website":
@@ -754,7 +793,7 @@ export default function App() {
       })
       .then((fn) => { if (disposed) fn(); else unlisten = fn; });
     return () => { disposed = true; unlisten?.(); };
-  }, [doNew, doOpen, doSave, doSaveAs, toggleFindReplace, openLicense, runUpdateCheck]);
+  }, [doNew, doOpen, doSave, doSaveAs, toggleFindReplace, openLicense, runUpdateCheck, convertVariant]);
 
   const shortcuts = useMemo(() => ({
     onSave: doSave, onSaveAs: doSaveAs, onNew: doNew, onOpen: doOpen,

@@ -601,6 +601,23 @@ fn build_app_menu(app: &tauri::AppHandle, lang: &str) -> tauri::Result<()> {
             &PredefinedMenuItem::copy(app, None)?,
             &PredefinedMenuItem::paste(app, None)?,
             &PredefinedMenuItem::select_all(app, None)?,
+            &PredefinedMenuItem::separator(app)?,
+            // 简繁转换：OpenCC 词表在前端按需加载（1 MB，不进启动包），
+            // 这里只负责把动作发下去。代码块/链接/元数据由 hanVariant 保护。
+            &MenuItem::with_id(
+                app,
+                "to-simplified",
+                tr(lang, "Convert to Simplified Chinese", "转换为简体中文", "簡体字に変換", "간체자로 변환", "Convertir en chinois simplifié", "In vereinfachtes Chinesisch umwandeln", "Convertir a chino simplificado", "Converter para chinês simplificado"),
+                true,
+                None::<&str>,
+            )?,
+            &MenuItem::with_id(
+                app,
+                "to-traditional",
+                tr(lang, "Convert to Traditional Chinese", "转换为繁体中文", "繁体字に変換", "번체자로 변환", "Convertir en chinois traditionnel", "In traditionelles Chinesisch umwandeln", "Convertir a chino tradicional", "Converter para chinês tradicional"),
+                true,
+                None::<&str>,
+            )?,
         ],
     )?;
 

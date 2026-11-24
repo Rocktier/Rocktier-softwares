@@ -1,0 +1,95 @@
+name: Pic2WebP Encoding Benchmark
+
+# 只在手动触发与每周定时跑：这套要编 Tauri 才会拿到被测二进制，占 macOS 并发槽位，
+# 而且它是「观测」不是「门禁」——main push 上再加一条会挤掉构建与 checks。
+on:
+  workflow_dispatch:
+  schedule:
+    # 每周一 03:00 UTC（北京时间 11:00），上周的基线数字进 artifact 留档
+    - cron: '0 3 * * 1'
+
+env:
+  CARGO_NET_RETRY: 10
+
+concurrency:
+  group: bench-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  bench:
+    # 用 Intel 机器而不是 macos-latest：runner 的 CPU 代际会影响编码耗时，
+    # 固定下来「耗时」这一列才有纵向可比性（体积不受影响）。
+    runs-on: macos-15-intel
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Setup npm mirror (China)
+        working-directory: apps/pic2webp
+        run: npm config set registry https://registry.npmmirror.com
+
+      - name: Install webp tools
+        run: brew install webp
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust build
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: apps/pic2webp/src-tauri
+
+      - name: Install npm dependencies
+        working-directory: apps/pic2webp
+        run: npm install
+
+      - name: Build frontend (tauri build.rs 需要 dist/)
+        working-directory: apps/pic2webp
+        run: npm run build
+
+      - name: Build release binary
+        working-directory: apps/pic2webp/src-tauri
+        run: cargo build --release --bin pic2webp
+
+      - name: Self-check the harness
+        working-directory: apps/pic2webp
+        run: node --test tests/bench.test.mjs
+
+      - name: Run benchmark
+        working-directory: apps/pic2webp
+        run: |
+          set -euo pipefail
+          node bench/run.mjs \
+            --bin src-tauri/target/release/pic2webp \
+            --out bench/report | tee bench-output.txt
+
+      - name: Summarize in job page
+        if: always()
+        run: |
+          set -euo pipefail
+          if [ -f apps/pic2webp/bench/report/report.md ]; then
+            {
+              echo '## Pic2WebP benchmark'
+              echo
+              sed -n '/## 结论/,/## 同体积/p' apps/pic2webp/bench/report/report.md | sed '$d'
+            } >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo '::warning::benchmark 没有产出 report.md，看上游步骤日志'
+          fi
+
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pic2webp-bench-${{ github.run_number }}
+          path: |
+            apps/pic2webp/bench/report/report.md
+            apps/pic2webp/bench/report/report.json
+          if-no-files-found: warn

@@ -167,6 +167,10 @@ export const en = {
       printFailed: 'Printing failed',
       printFailedDetail: 'Printing failed: {reason}',
       saveFirstForImage: 'Save the document first before pasting images',
+      toTraditional: 'Converted to Traditional Chinese',
+      toSimplified: 'Converted to Simplified Chinese',
+      convertNoChange: 'Nothing to convert',
+      convertFailed: 'Conversion failed',
     },
     doc: {
       untitled: 'Untitled',
