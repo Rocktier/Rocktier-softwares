@@ -49,6 +49,12 @@ jobs:
     name: Tests & Lints (PDF)
     needs: changes
     if: needs.changes.outputs.pdf == 'true'
+    # 账号的 macOS 并发上限是 5，而本文件有 7 个 macOS job。一次改多个 app 时
+    # 它们会一起抢占，排到后面的 job 被清掉（2026-11-23 实测 15 分钟无 step 后
+    # cancelled）。串行排队，峰值恒为 1；单 app 改动只有 1 个 job，不受影响。
+    concurrency:
+      group: macos-checks
+      cancel-in-progress: false
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
@@ -89,6 +95,12 @@ jobs:
     name: Tests & Lints (Markdown)
     needs: changes
     if: needs.changes.outputs.markdown == 'true'
+    # 账号的 macOS 并发上限是 5，而本文件有 7 个 macOS job。一次改多个 app 时
+    # 它们会一起抢占，排到后面的 job 被清掉（2026-11-23 实测 15 分钟无 step 后
+    # cancelled）。串行排队，峰值恒为 1；单 app 改动只有 1 个 job，不受影响。
+    concurrency:
+      group: macos-checks
+      cancel-in-progress: false
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
@@ -132,6 +144,12 @@ jobs:
     name: Tests & Lints (OCR)
     needs: changes
     if: needs.changes.outputs.ocr == 'true'
+    # 账号的 macOS 并发上限是 5，而本文件有 7 个 macOS job。一次改多个 app 时
+    # 它们会一起抢占，排到后面的 job 被清掉（2026-11-23 实测 15 分钟无 step 后
+    # cancelled）。串行排队，峰值恒为 1；单 app 改动只有 1 个 job，不受影响。
+    concurrency:
+      group: macos-checks
+      cancel-in-progress: false
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
@@ -157,6 +175,12 @@ jobs:
     name: Tests & Lints (Write)
     needs: changes
     if: needs.changes.outputs.write == 'true'
+    # 账号的 macOS 并发上限是 5，而本文件有 7 个 macOS job。一次改多个 app 时
+    # 它们会一起抢占，排到后面的 job 被清掉（2026-11-23 实测 15 分钟无 step 后
+    # cancelled）。串行排队，峰值恒为 1；单 app 改动只有 1 个 job，不受影响。
+    concurrency:
+      group: macos-checks
+      cancel-in-progress: false
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
@@ -191,6 +215,12 @@ jobs:
     name: Tests & Lints (Pic2WebP)
     needs: changes
     if: needs.changes.outputs.pic2webp == 'true'
+    # 账号的 macOS 并发上限是 5，而本文件有 7 个 macOS job。一次改多个 app 时
+    # 它们会一起抢占，排到后面的 job 被清掉（2026-11-23 实测 15 分钟无 step 后
+    # cancelled）。串行排队，峰值恒为 1；单 app 改动只有 1 个 job，不受影响。
+    concurrency:
+      group: macos-checks
+      cancel-in-progress: false
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
@@ -223,6 +253,12 @@ jobs:
     name: Tests & Lints (CAD Viewer)
     needs: changes
     if: needs.changes.outputs.cad-viewer == 'true'
+    # 账号的 macOS 并发上限是 5，而本文件有 7 个 macOS job。一次改多个 app 时
+    # 它们会一起抢占，排到后面的 job 被清掉（2026-11-23 实测 15 分钟无 step 后
+    # cancelled）。串行排队，峰值恒为 1；单 app 改动只有 1 个 job，不受影响。
+    concurrency:
+      group: macos-checks
+      cancel-in-progress: false
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
@@ -251,6 +287,12 @@ jobs:
     name: Tests & Lints (Compressor)
     needs: changes
     if: needs.changes.outputs.compressor == 'true'
+    # 账号的 macOS 并发上限是 5，而本文件有 7 个 macOS job。一次改多个 app 时
+    # 它们会一起抢占，排到后面的 job 被清掉（2026-11-23 实测 15 分钟无 step 后
+    # cancelled）。串行排队，峰值恒为 1；单 app 改动只有 1 个 job，不受影响。
+    concurrency:
+      group: macos-checks
+      cancel-in-progress: false
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4

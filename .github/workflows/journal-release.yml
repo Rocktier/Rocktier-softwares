@@ -1,11 +1,12 @@
 # Rocktier Journal — build & release
 # macOS aarch64/x64 dmg + app.zip; Windows x64 MSI/NSIS + MSIX/MSIXBundle (Store).
-# 触发：tag 推送（v*）。main 分支推送只留 artifact，不创建 release。
+# 触发：tag 推送（journal/v*）与手动。main push 不再自动打包 —— 叠加 checks.yml
+# 会打爆账号的 5 个 macOS 并发槽位（2026-11-23 实测 aarch64 被取消）。
+# main 的编译正确性由 checks.yml 负责；要出测试包用 workflow_dispatch。
 name: Build & Release
 
 on:
   push:
-    branches: [main, master]
     tags: ["journal/v*"]
   workflow_dispatch:
 

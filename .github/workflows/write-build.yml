@@ -14,8 +14,10 @@
 name: Build & Release
 
 on:
+  # 只在发版 tag 与手动触发时打包。main push 叠加 checks.yml 会打爆账号的
+  # 5 个 macOS 并发槽位，aarch64 被取消（2026-11-23 实测）。main 的编译
+  # 正确性由 checks.yml 的 cargo test + clippy + tsc 负责。
   push:
-    branches: [main]
     tags: ["write/v*"]
   workflow_dispatch:
 

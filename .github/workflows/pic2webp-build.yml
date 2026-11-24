@@ -1,8 +1,10 @@
 name: Build & Release
 
 on:
+  # 只在发版 tag 与手动触发时打包。main push 叠加 checks.yml 会打爆账号的
+  # 5 个 macOS 并发槽位（2026-11-23 实测整个 run 被取消）。main 的编译正确性
+  # 由 checks.yml 负责。要出测试包用 workflow_dispatch。
   push:
-    branches: [main]
     tags: ['pic2webp/v*']
   # 手动出测试包：特性分支也能产出 artifact，不必先把 main 弄脏。
   # 只上传 artifact，不创建 release（release 仍只认 tag）。

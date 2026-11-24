@@ -1,8 +1,11 @@
 name: Build & Release
 
 on:
+  # 只在发版 tag 与手动触发时打包。2026-11-23 实测：main push 会同时拉起
+  # 四套 macOS 构建 × 2 arch，再叠加 checks.yml 的 7 个 macOS job，十几个
+  # 同时抢账号的 5 个 macOS 并发槽位，aarch64 全被取消、包子产不出来。
+  # main 上的编译正确性由 checks.yml（cargo test + clippy + tsc，已按 app 路径过滤）负责。
   push:
-    branches: [main]
     tags: ['cad-viewer/v*']
   workflow_dispatch:
     inputs:
