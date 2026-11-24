@@ -436,6 +436,14 @@ export default function App() {
     // 取消发生在最后一个文件上时 skipped 为 0，也要如实说「已取消」。
     if (cancelRef.current || skipped > 0) {
       msg = t(`已取消（完成 ${ok}，跳过 ${skipped}）`, `Cancelled (${ok} done, ${skipped} skipped)`);
+      // 取消最怕的是「留下写坏的半个文件」。引擎每写完一个才动下一个，
+      // 跳过的那批连输出文件都没创建 —— 说清楚用户才敢放心收拾战场。
+      if (skipped > 0) {
+        msg += t(
+          "，跳过的文件未生成任何输出",
+          " — skipped files produced no output",
+        );
+      }
     } else if (fail === 0) {
       msg = t(`完成：${ok} 个文件`, `Done: ${ok} file${ok === 1 ? "" : "s"}`);
     } else {
