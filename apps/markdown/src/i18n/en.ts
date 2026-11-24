@@ -89,6 +89,11 @@ export const en = {
     confirm: {
       discard: 'This document has unsaved changes. Discard them?',
       discardMany: '{n} tabs have unsaved changes. Close anyway?',
+      // Close prompt with three buttons: the question has to offer saving.
+      unsavedClose: 'You have unsaved changes. Save before closing?',
+      unsavedCloseMany: '{n} tabs are unsaved. Save before closing?',
+      saveAndClose: 'Save and close',
+      discardClose: "Don't save",
       closeDirty: '“{name}” has unsaved changes. Closing the tab discards them.',
       title: 'Confirm',
       cancel: 'Cancel',

@@ -90,6 +90,11 @@ export const zh: Strings = {
     confirm: {
       discard: '当前文档有未保存的更改，确定要丢弃吗？',
       discardMany: '有 {n} 个标签存在未保存的更改，确定要关闭吗？',
+      // 关窗三按钮：问句要给出「保存」这个选项，不能只问「要不要丢弃」。
+      unsavedClose: '还有未保存的更改，关闭前要保存吗？',
+      unsavedCloseMany: '有 {n} 个标签还没保存，关闭前要保存吗？',
+      saveAndClose: '保存并关闭',
+      discardClose: '不保存',
       closeDirty: '「{name}」有未保存的更改，关闭标签会丢弃它们。',
       title: '请确认',
       cancel: '取消',

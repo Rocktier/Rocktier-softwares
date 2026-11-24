@@ -112,6 +112,11 @@ export const zh: Strings = {
       recoverNamedOlder: '检测到未保存的草稿「{name}」，但它比磁盘上的文件旧。恢复会用旧内容覆盖磁盘，确定恢复吗？',
       recoverUntitled: '检测到一份从未保存的新文档草稿，是否恢复？',
       discard: '当前文档有未保存的更改，确定要丢弃吗？',
+      // 关窗三按钮：问句要给出「保存」这个选项，不能只问「要不要丢弃」。
+      unsavedClose: '还有未保存的更改，关闭前要保存吗？',
+      unsavedCloseMany: '有 {n} 份文档还没保存，关闭前要保存吗？',
+      saveAndClose: '保存并关闭',
+      discardClose: '不保存',
       externalChange: '文件已在外部被修改。是否重新加载？未保存的更改将丢失。',
       title: '请确认',
       cancel: '取消',

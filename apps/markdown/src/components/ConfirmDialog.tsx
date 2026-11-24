@@ -6,21 +6,35 @@ import { t } from "../i18n";
 
 interface ConfirmDialogProps {
   message: string;
-  onResolve: (ok: boolean) => void;
+  /** 三按钮模式（关窗用）：显示「保存并关闭」，由 onSave 处理。 */
+  saveLabel?: string;
+  /** 确认（两按钮时是「确定」，三按钮时是「不保存」）。 */
+  onResolve: () => void;
+  /** 取消：按钮、Esc、点遮罩三处共用。 */
+  onCancel: () => void;
+  onSave?: () => void;
 }
 
-export function ConfirmDialog({ message, onResolve }: ConfirmDialogProps) {
+export function ConfirmDialog({
+  message,
+  saveLabel,
+  onResolve,
+  onCancel,
+  onSave,
+}: ConfirmDialogProps) {
   // Esc = 取消（与 UpdateDialog / LicenseDialog 一致）
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onResolve(false);
+      if (e.key === "Escape") onCancel();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [onResolve]);
+  }, [onCancel]);
+
+  const threeWay = Boolean(saveLabel && onSave);
 
   return (
-    <div className="update-overlay" onMouseDown={() => onResolve(false)} role="presentation">
+    <div className="update-overlay" onMouseDown={onCancel} role="presentation">
       <div
         className="update-dialog"
         onMouseDown={(e) => e.stopPropagation()}
@@ -35,13 +49,24 @@ export function ConfirmDialog({ message, onResolve }: ConfirmDialogProps) {
           <p className="confirm-message">{message}</p>
         </div>
         <div className="update-footer">
-          <button type="button" onClick={() => onResolve(false)}>
+          <button type="button" onClick={onCancel}>
             {t("confirm.cancel")}
           </button>
           <span className="update-footer-spacer" />
-          <button type="button" className="update-get-btn" onClick={() => onResolve(true)}>
-            {t("confirm.ok")}
+          {/* 三按钮时「不保存」不再是主按钮：主按钮要让给「保存并关闭」，
+              否则用户顺手点最右边，丢的正是他刚写的东西。 */}
+          <button
+            type="button"
+            className={threeWay ? undefined : "update-get-btn"}
+            onClick={onResolve}
+          >
+            {threeWay ? t("confirm.discardClose") : t("confirm.ok")}
           </button>
+          {threeWay && (
+            <button type="button" className="update-get-btn" onClick={onSave}>
+              {saveLabel}
+            </button>
+          )}
         </div>
       </div>
     </div>

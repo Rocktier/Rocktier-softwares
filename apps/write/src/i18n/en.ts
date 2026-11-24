@@ -109,6 +109,11 @@ export const en = {
       recoverNamedCount: '({n} unsaved draft(s) in total.)',
       recoverUntitled: 'An unsaved new document was found. Restore it?',
       discard: 'This document has unsaved changes. Discard them?',
+      // Close prompt with three buttons: the question has to offer saving.
+      unsavedClose: 'You have unsaved changes. Save before closing?',
+      unsavedCloseMany: '{n} documents are unsaved. Save before closing?',
+      saveAndClose: 'Save and close',
+      discardClose: "Don't save",
       externalChange: 'This file was changed externally. Reload it? Unsaved changes will be lost.',
       title: 'Please confirm',
       cancel: 'Cancel',

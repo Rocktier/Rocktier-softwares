@@ -53,6 +53,9 @@ interface TabMeta {
   savedContent: string;
   savedPath: string | null;
 }
+
+/** 关窗确认的三个出口：保存并关闭 / 不保存直接关 / 留在窗口里。 */
+type CloseChoice = "save" | "discard" | "cancel";
 import { resolvePath, baseDirOf } from "./services/path";
 import { WELCOME_DOCUMENT, type MarkdownDocument, type ViewMode } from "./types/index";
 import { t, useUiLang } from "./i18n";
@@ -164,21 +167,39 @@ export default function App() {
   const updateChecking = useRef(false);
 
   /* 应用内确认框（规范 v2 §7：禁止原生 ask / window.confirm）。
-     Promise 化让「等用户点一下」保持原有 `if (await …)` 的调用形态。 */
+     Promise 化让「等用户点一下」保持原有 `if (await …)` 的调用形态。
+     关窗那条路要三个选项（取消 / 不保存 / 保存并关闭），所以底层 resolve
+     统一成三态，askConfirm 再折回 boolean —— 其余调用点一行都不用改。 */
   const [confirmReq, setConfirmReq] = useState<{
     message: string;
-    resolve: (ok: boolean) => void;
+    saveLabel?: string;
+    resolve: (choice: CloseChoice) => void;
   } | null>(null);
   const askConfirm = useCallback(
-    (message: string) => new Promise<boolean>((resolve) => setConfirmReq({ message, resolve })),
-    []
+    (message: string) =>
+      new Promise<boolean>((resolve) =>
+        setConfirmReq({ message, resolve: (c) => resolve(c !== "cancel") }),
+      ),
+    [],
   );
-  const settleConfirm = useCallback((ok: boolean) => {
+  const askSaveOrDiscard = useCallback(
+    (message: string) =>
+      new Promise<CloseChoice>((resolve) =>
+        setConfirmReq({ message, saveLabel: t("confirm.saveAndClose"), resolve }),
+      ),
+    [],
+  );
+  const settleConfirm = useCallback((choice: CloseChoice) => {
     setConfirmReq((req) => {
-      req?.resolve(ok);
+      req?.resolve(choice);
       return null;
     });
   }, []);
+  // 三个出口各给一个稳定回调：ConfirmDialog 的 Esc 监听把它们放进依赖数组，
+  // 内联箭头会让每次渲染都重装一次 keydown。
+  const confirmDiscardCb = useCallback(() => settleConfirm("discard"), [settleConfirm]);
+  const confirmCancelCb = useCallback(() => settleConfirm("cancel"), [settleConfirm]);
+  const confirmSaveCb = useCallback(() => settleConfirm("save"), [settleConfirm]);
   const toastRef = useRef(0);
   const checkingRef = useRef(false);
   const previewRef = useRef<HTMLDivElement>(null);
@@ -301,15 +322,70 @@ export default function App() {
     setDoc((d) => ({ ...d, content, modified: true }));
   }, []);
 
-  /* 关窗前的丢弃确认。多标签下必须看**所有**标签：只查当前标签的话，
-     后台那张改过没保存的文档会随着关窗静默消失（草稿虽在，但用户以为存了）。 */
-  const confirmDiscard = useCallback(async (): Promise<boolean> => {
+  /* 关窗前的保存/丢弃确认。多标签下必须看**所有**标签：只查当前标签的话，
+     后台那张改过没保存的文档会随着关窗静默消失（草稿虽在，但用户以为存了）。
+     三个出口：保存并关闭 / 不保存 / 取消（留在窗口里）。 */
+  const confirmClose = useCallback(async (): Promise<CloseChoice> => {
     const dirty = tabsRef.current.filter((tb) => tb.doc.modified);
-    if (dirty.length === 0) return true;
-    return askConfirm(
-      dirty.length === 1 ? t("confirm.discard") : t("confirm.discardMany", { n: dirty.length }),
+    if (dirty.length === 0) return "discard";
+    return askSaveOrDiscard(
+      dirty.length === 1
+        ? t("confirm.unsavedClose")
+        : t("confirm.unsavedCloseMany", { n: dirty.length }),
     );
-  }, [askConfirm]);
+  }, [askSaveOrDiscard]);
+
+  /** 关窗前「保存」：把所有改过的标签逐个写盘。
+   *  返回 false = 有东西没存成（用户取消了另存 / 写盘失败），调用方必须留在窗口上。
+   *  这里刻意不更新「最近打开列表」—— 马上要退出了，列表没有下次可服务的对象；
+   *  而 rememberPath 定义在下方，提前引用会让 effect 的依赖数组踩 TDZ。 */
+  const saveAllDirty = useCallback(async (): Promise<boolean> => {
+    const dirty = tabsRef.current.filter((tb) => tb.doc.modified);
+    for (const tb of dirty) {
+      const { path, content } = tb.doc;
+      const payload = applyEol(content, metaOf(tb.id).eol);
+      try {
+        let target: string;
+        if (path) {
+          await saveFile(path, payload);
+          target = path;
+        } else {
+          // 未命名文档必须由用户选路径；取消另存等于「这次不保存」，不能关窗。
+          const p = await saveFileAs(payload);
+          if (!p) return false;
+          target = p;
+        }
+        clearRecovery(path ?? UNTITLED_KEY);
+        metaOf(tb.id).savedContent = content;
+        metaOf(tb.id).savedPath = target;
+        setTabs((ts) =>
+          ts.map((t) =>
+            t.id === tb.id
+              // 写盘期间内容可能又变了：只有没变才敢标成已保存
+              ? {
+                  ...t,
+                  doc:
+                    t.doc.content === content
+                      ? { ...t.doc, path: target, modified: false }
+                      : { ...t.doc, path: target },
+                }
+              : t,
+          ),
+        );
+      } catch (e) {
+        if (isLicenseExpiredError(e)) openLicense();
+        else {
+          const reason = errorReason(e);
+          showToast(
+            reason ? t("toast.saveFailedDetail", { reason }) : t("toast.saveFailed"),
+            "error",
+          );
+        }
+        return false;
+      }
+    }
+    return true;
+  }, [metaOf, clearRecovery, showToast, openLicense, UNTITLED_KEY]);
 
   // Native close button: Rust blocks the close until the frontend is ready,
   // then hands the decision to the frontend (unsaved-changes check).
@@ -322,7 +398,10 @@ export default function App() {
         // 立即向 Rust 报告"事件循环存活"，阻止 10s 看门狗强杀（复审 F5）。
         // 用户可能正停在确认弹窗上，不能被看门狗误伤。
         invoke("close_ack").catch(() => {});
-        if (!(await confirmDiscard())) return;
+        const choice = await confirmClose();
+        if (choice === "cancel") return;
+        // 保存失败或用户取消了另存：留在窗口上，绝不带着未保存内容退出去。
+        if (choice === "save" && !(await saveAllDirty())) return;
         try {
           await invoke("force_close");
         } catch {
@@ -342,7 +421,7 @@ export default function App() {
       disposed = true;
       unlisten?.();
     };
-  }, [confirmDiscard]);
+  }, [confirmClose, saveAllDirty]);
 
   const rememberPath = useCallback((path: string | null) => {
     try {
@@ -1228,7 +1307,13 @@ export default function App() {
       {/* 丢弃未保存更改 / 外部修改冲突 / 恢复草稿：应用内确认框。
           规范 v2 §7 禁止原生 ask()。 */}
       {confirmReq && (
-        <ConfirmDialog message={confirmReq.message} onResolve={settleConfirm} />
+        <ConfirmDialog
+          message={confirmReq.message}
+          saveLabel={confirmReq.saveLabel}
+          onResolve={confirmDiscardCb}
+          onCancel={confirmCancelCb}
+          onSave={confirmSaveCb}
+        />
       )}
       {/* 更新检查：入口在帮助菜单「检查更新…」，结果弹 UpdateDialog。
           右下角常驻悬浮入口已移除（fixed 定位不稳定，容易盖住底部内容）。 */}

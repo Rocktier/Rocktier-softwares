@@ -86,6 +86,8 @@ function failMessage(reason: string, detailKey: string, plainKey: string): strin
   return reason ? t(detailKey, { reason }) : t(plainKey);
 }
 
+/** 关窗确认的三个出口：保存并关闭 / 不保存直接关 / 留在窗口里。 */
+type CloseChoice = "save" | "discard" | "cancel";
 const MARKDOWN_EXTS = ["md", "markdown", "mdown", "mkd", "txt", "text"];
 const DOCX_EXTS = ["docx"];
 
@@ -297,18 +299,35 @@ export default function App() {
      `if (await …)` 的调用形态，调用点不用改成回调。 */
   const [confirmReq, setConfirmReq] = useState<{
     message: string;
-    resolve: (ok: boolean) => void;
+    saveLabel?: string;
+    resolve: (choice: CloseChoice) => void;
   } | null>(null);
   const askConfirm = useCallback(
-    (message: string) => new Promise<boolean>((resolve) => setConfirmReq({ message, resolve })),
+    (message: string) =>
+      new Promise<boolean>((resolve) =>
+        setConfirmReq({ message, resolve: (c) => resolve(c !== "cancel") }),
+      ),
     []
   );
-  const settleConfirm = useCallback((ok: boolean) => {
+  /** 关窗专用三按钮版：其余 6 处确认框仍是「取消 / 确定」。 */
+  const askSaveOrDiscard = useCallback(
+    (message: string) =>
+      new Promise<CloseChoice>((resolve) =>
+        setConfirmReq({ message, saveLabel: t("confirm.saveAndClose"), resolve }),
+      ),
+    []
+  );
+  const settleConfirm = useCallback((choice: CloseChoice) => {
     setConfirmReq((req) => {
-      req?.resolve(ok);
+      req?.resolve(choice);
       return null;
     });
   }, []);
+  // 三个出口各给一个稳定回调：ConfirmDialog 的 Esc 监听把它们放进依赖数组，
+  // 内联箭头会让每次渲染都重装一次 keydown。
+  const confirmDiscardCb = useCallback(() => settleConfirm("discard"), [settleConfirm]);
+  const confirmCancelCb = useCallback(() => settleConfirm("cancel"), [settleConfirm]);
+  const confirmSaveCb = useCallback(() => settleConfirm("save"), [settleConfirm]);
 
   /* 检查更新。**只有这里会触发联网检查** —— 右下角入口与帮助菜单共用。
      用 ref 而非 state 判重：连点两次不该发出两个请求。 */
@@ -364,6 +383,53 @@ export default function App() {
     } catch { /* non-fatal */ }
   }, []);
 
+  /** 关窗前「保存」：把每份改过的文档逐个写盘。
+   *  返回 false = 有东西没存成（用户取消了另存 / 写盘失败），调用方必须留在窗口上。
+   *  与 doSave 同一套基线更新（lastSavedRef / savedAtMap / 草稿清理），区别只是
+   *  遍历全部 docs 而不是当前那份 —— 后台那几章改过没保存的，关窗时一样要救下来。 */
+  const saveAllDirty = useCallback(async (): Promise<boolean> => {
+    const dirty = docs.filter((d) => d.modified);
+    for (const d of dirty) {
+      const eol = eolRef.current.get(d.id) ?? "\n";
+      const payload = applyEol(d.content, eol);
+      try {
+        let finalPath = d.path;
+        if (!d.path) {
+          // 未命名文档必须由用户选路径；取消另存等于「这次不保存」，不能关窗。
+          const p = await saveFileAs(payload);
+          if (!p) return false;
+          finalPath = p;
+        } else {
+          await saveFile(d.path, payload);
+        }
+        lastSavedRef.current.set(d.id, d.content);
+        setSavedAtMap((m) => ({ ...m, [d.id]: Date.now() }));
+        invoke("clear_recovery", { path: finalPath ?? untitledKey(d.id) }).catch(() => {});
+        setDocs((ds) =>
+          ds.map((x) =>
+            x.id === d.id
+              // 写盘期间内容可能又变了：只有没变才敢标成已保存
+              ? {
+                  ...x,
+                  path: finalPath,
+                  ...(x.content === d.content ? { modified: false } : {}),
+                }
+              : x,
+          ),
+        );
+      } catch (e) {
+        if (isLicenseExpiredError(e)) openLicense();
+        else
+          showToast(
+            failMessage(errorReason(e), "toast.saveFailedDetail", "toast.saveFailed"),
+            "error",
+          );
+        return false;
+      }
+    }
+    return true;
+  }, [docs, showToast, openLicense]);
+
   // ── Close-guard with Rust ────────────────────────────────────────
   useEffect(() => {
     if (!isTauri) return;
@@ -372,9 +438,16 @@ export default function App() {
     (async () => {
       const fn = await getCurrentWindow().listen<null>("app-close-requested", async () => {
         invoke("close_ack").catch(() => {});
-        const hasUnsaved = docs.some((d) => d.modified);
-        if (hasUnsaved) {
-          if (!(await askConfirm(t("confirm.discard")))) return;
+        const dirty = docs.filter((d) => d.modified);
+        if (dirty.length > 0) {
+          const choice = await askSaveOrDiscard(
+            dirty.length === 1
+              ? t("confirm.unsavedClose")
+              : t("confirm.unsavedCloseMany", { n: dirty.length }),
+          );
+          if (choice === "cancel") return;
+          // 保存失败或用户取消了另存：留在窗口上，绝不带着未保存内容退出去。
+          if (choice === "save" && !(await saveAllDirty())) return;
         }
         try { await invoke("force_close"); } catch { /* window gone */ }
       });
@@ -383,7 +456,7 @@ export default function App() {
       await invoke("mark_ready").catch(() => {});
     })();
     return () => { disposed = true; unlisten?.(); };
-  }, [docs, askConfirm]);
+  }, [docs, askSaveOrDiscard, saveAllDirty]);
 
   // ── Recovery on launch ───────────────────────────────────────────
   useEffect(() => {
@@ -1170,7 +1243,13 @@ export default function App() {
         />
       )}
       {confirmReq && (
-        <ConfirmDialog message={confirmReq.message} onResolve={settleConfirm} />
+        <ConfirmDialog
+          message={confirmReq.message}
+          saveLabel={confirmReq.saveLabel}
+          onResolve={confirmDiscardCb}
+          onCancel={confirmCancelCb}
+          onSave={confirmSaveCb}
+        />
       )}
       {toast && (
         <div
