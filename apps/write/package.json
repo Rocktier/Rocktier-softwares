@@ -14,7 +14,7 @@
     "tauri:dev": "tauri dev",
     "tauri:build": "tauri build",
     "tauri:windows:build": "tauri-windows-bundle build --runner npm",
-    "family:check": "node scripts/family-check.mjs --self --product write",
+    "family:check": "node ../../scripts/family-gate.mjs --product write",
     "verify:fs": "node scripts/verify-fs-permissions.mjs --selftest"
   },
   "dependencies": {

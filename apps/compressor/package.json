@@ -10,7 +10,7 @@
     "tauri": "tauri",
     "tauri:build": "tauri build",
     "tauri:windows:build": "tauri-windows-bundle build --runner npm",
-    "family:check": "node scripts/family-check.mjs --self --product compressor"
+    "family:check": "node ../../scripts/family-gate.mjs --product compressor"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.12.1",

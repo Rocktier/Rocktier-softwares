@@ -12,7 +12,7 @@
     "tauri:windows:build": "tauri-windows-bundle build --runner npm",
     "build:release": "bash scripts/build-and-sign.sh",
     "test": "node --test tests/formats.test.mjs tests/result-ui.test.mjs tests/wiring.test.mjs tests/redesign.test.mjs",
-    "family:check": "node scripts/family-check.mjs --self --product pic2webp"
+    "family:check": "node ../../scripts/family-gate.mjs --product pic2webp"
   },
   "dependencies": {
     "@tauri-apps/api": "^2",

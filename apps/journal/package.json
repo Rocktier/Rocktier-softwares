@@ -12,7 +12,7 @@
     "tauri:dev": "tauri dev",
     "tauri:build": "tauri build",
     "tauri:windows:build": "tauri-windows-bundle build --runner npm",
-    "family:check": "node scripts/family-check.mjs --self --product journal"
+    "family:check": "node ../../scripts/family-gate.mjs --product journal"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.8.0",
