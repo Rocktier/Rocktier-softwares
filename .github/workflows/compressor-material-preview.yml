@@ -1,0 +1,76 @@
+name: Material preview
+
+# 只出 .app 产物、**不发版**（2026-11-24 立，真材质试点用）。
+#
+# 为什么单独一条：`compressor-build.yml` 的最后一个 job 会把产物挂到 release，
+# 而且带「5 包齐全才发布为 latest」的闸门。拿它做视觉试点，等于把一个还没人
+# 看过的材质改动直接发上线。这条流水的唯一职责是「产出一个能装进 /Applications
+# 双击打开的包」，产物留在 artifact 里 7 天，看完即弃。
+#
+# 只在 macOS arm64 上跑：材质是 macOS 专属（windowEffects），Windows 侧这轮
+# 不动，也不需要为它付一次 runner。
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  preview:
+    name: macOS arm64 preview
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "stable"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: "npm"
+          cache-dependency-path: apps/compressor/package-lock.json
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin
+
+      - name: Install dependencies
+        working-directory: apps/compressor
+        run: npm ci
+
+      - name: Build compress-engine
+        # build.rs 在 bundle.resources 缺文件时 hard-fail，所以引擎必须先产出。
+        working-directory: apps/compressor
+        run: |
+          cd compress-engine
+          CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -o ../src-tauri/compress-engine-macos .
+          cd ..
+
+      - name: Window parity gate
+        # 平台覆盖是 JSON Merge Patch（数组整体替换），漏一个字段就静默回落默认值。
+        working-directory: apps/compressor
+        run: node scripts/verify-window-parity.mjs
+
+      - name: Build app bundle
+        # 只打 .app：dmg 在这一轮没有意义（要的是能双击打开看一眼），
+        # 少一步 hdiutil 也少一次签名/公证的机会出错。
+        working-directory: apps/compressor
+        run: npm run tauri:build -- --target aarch64-apple-darwin --bundles app
+
+      - name: Package app.zip
+        run: |
+          set -euo pipefail
+          APP=$(find apps/compressor/src-tauri/target/aarch64-apple-darwin/release/bundle/macos -maxdepth 1 -name '*.app' | head -1)
+          [ -z "$APP" ] && { echo "::error::.app not found"; exit 1; }
+          echo "Bundled: $APP"
+          ditto -c -k --keepParent "$APP" "Rocktier-Compressor-preview.app.zip"
+          ls -lh "Rocktier-Compressor-preview.app.zip"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: compressor-material-preview
+          path: Rocktier-Compressor-preview.app.zip
+          retention-days: 7
