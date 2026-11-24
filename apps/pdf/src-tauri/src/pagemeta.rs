@@ -72,8 +72,8 @@ fn inherited(doc: &Document, id: ObjectId, key: &[u8]) -> Option<Object> {
         if let Ok(value) = dict.get(key) {
             return Some(value.clone());
         }
-        match dict.get(b"Parent").ok() {
-            Some(Object::Reference(parent)) => cursor = *parent,
+        match dict.get(b"Parent") {
+            Ok(Object::Reference(parent)) => cursor = *parent,
             _ => return None,
         }
     }

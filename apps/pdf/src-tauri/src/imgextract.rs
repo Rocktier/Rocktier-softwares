@@ -65,8 +65,8 @@ fn inherited(doc: &Document, id: ObjectId, key: &[u8]) -> Option<Object> {
         if let Ok(value) = dict.get(key) {
             return Some(value.clone());
         }
-        match dict.get(b"Parent").ok() {
-            Some(Object::Reference(parent)) => cursor = *parent,
+        match dict.get(b"Parent") {
+            Ok(Object::Reference(parent)) => cursor = *parent,
             _ => return None,
         }
     }
@@ -375,7 +375,9 @@ fn referenced_masks(doc: &Document, images: &[ObjectId]) -> HashSet<ObjectId> {
         let Ok(stream) = obj.as_stream() else {
             continue;
         };
-        if let Some(Object::Reference(mask)) = stream.dict.get(b"SMask").ok() {
+        // `Result` 直接匹配，不先 `.ok()` 再 match `Some` —— clippy 的
+        // match_result_ok 会把那种写法判成冗余（-D warnings 下就是错误）。
+        if let Ok(Object::Reference(mask)) = stream.dict.get(b"SMask") {
             out.insert(*mask);
         }
     }
