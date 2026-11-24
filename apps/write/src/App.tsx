@@ -57,6 +57,35 @@ const UNTITLED_PREFIX = "__untitled__:";
 const untitledKey = (id: string) => `${UNTITLED_PREFIX}${id}`;
 
 const isTauri = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
+
+/**
+ * 把后端 `Err(String)` / fs 插件抛的错变成一句可读的原因，用于 toast。
+ *
+ * 此前打开与保存失败一律只有「无法读取文件」「保存失败：无法写入文件」两句，
+ * errno 与路径全被吞掉 —— Markdown 在 1.0.26 被 Apple 按 2.1(a) 拒时，
+ * 截图里只有那句话，没人判断得出是沙盒权限、只读盘还是路径不对。Write 侧
+ * 同一个坑一直没补（Markdown 的 errorReason 见 apps/markdown/src/App.tsx）。
+ *
+ * 原样带出，超长才截断：WebView2 / WKWebView 的错误串常把 errno 写在末尾，
+ * 从头部截断会恰好把最有用的部分切掉，所以超过阈值时保留首尾。
+ */
+function errorReason(e: unknown): string {
+  const raw = e instanceof Error ? e.message : typeof e === "string" ? e : String(e ?? "");
+  const s = raw.trim();
+  if (!s) return "";
+  if (s.length <= 180) return s;
+  return `${s.slice(0, 120)}…${s.slice(-50)}`;
+}
+
+/**
+ * 有原因就带原因的 toast，没有原因就退回笼统那句。
+ * 不使用 `reason ? detail : plain` 的三元散落在每个 catch 里 —— 一处写错
+ * 就会把 `{reason}` 原样连同花括号显示给用户。
+ */
+function failMessage(reason: string, detailKey: string, plainKey: string): string {
+  return reason ? t(detailKey, { reason }) : t(plainKey);
+}
+
 const MARKDOWN_EXTS = ["md", "markdown", "mdown", "mkd", "txt", "text"];
 const DOCX_EXTS = ["docx"];
 
@@ -448,7 +477,9 @@ export default function App() {
         const md = await invoke<string>("import_docx", { path: r.path });
         openContent(md, null, "\n", true);
         showToast(t("toast.docxImported"), "success");
-      } catch { showToast(t("toast.cannotOpenFile"), "error"); }
+      } catch (e) {
+        showToast(failMessage(errorReason(e), "toast.cannotOpenFileDetail", "toast.cannotOpenFile"), "error");
+      }
       return;
     }
     openContent(r.content, r.path, r.eol);
@@ -482,7 +513,7 @@ export default function App() {
     } catch (e) {
       // 事件链已弹对话框（license-expired）；这里兜错误串，防事件丢失时只剩裸失败。
       if (isLicenseExpiredError(e)) openLicense();
-      else showToast(t("toast.saveFailed"), "error");
+      else showToast(failMessage(errorReason(e), "toast.saveFailedDetail", "toast.saveFailed"), "error");
     }
   }, [activeDoc, showToast, rememberPath, openLicense]);
 
@@ -502,7 +533,7 @@ export default function App() {
       }
     } catch (e) {
       if (isLicenseExpiredError(e)) openLicense();
-      else showToast(t("toast.saveFailed"), "error");
+      else showToast(failMessage(errorReason(e), "toast.saveFailedDetail", "toast.saveFailed"), "error");
     }
   }, [activeDoc, showToast, rememberPath, openLicense]);
 
@@ -513,12 +544,13 @@ export default function App() {
     if (viewMode !== "preview") setViewMode("preview");
     // give React a tick to paint preview, then open print dialog
     requestAnimationFrame(() => {
-      // 打印失败（print_doc 起不来/被系统拒绝）至少要给个提示，不再静默吞错；
-      // 复用导出家族已有的 saveFailed 键，不新增硬编码英文。
+      // 打印失败（print_doc 起不来/被系统拒绝）至少要给个提示，不再静默吞错。
+      // 此前复用 saveFailed，用户看到「保存失败：无法写入文件」——他刚点的是打印，
+      // 会去找保存按钮。改用自己的键，并带出真实原因。
       // 被授权闸门拦下则弹激活对话框，不算打印失败。
       invoke("print_doc").catch((e) => {
         if (isLicenseExpiredError(e)) openLicense();
-        else showToast(t("toast.saveFailed"), "error");
+        else showToast(failMessage(errorReason(e), "toast.printFailedDetail", "toast.printFailed"), "error");
       });
     });
   }, [viewMode, showToast, openLicense]);
@@ -562,7 +594,7 @@ export default function App() {
         // 图片落盘被闸门拦下：弹激活对话框；返回 null 交回编辑器走内联 base64 兜底
         // （不写盘的内容允许留在文档里，但保存会被拦）。
         if (isLicenseExpiredError(e)) openLicense();
-        else showToast(t("toast.imageFailed"), "error");
+        else showToast(failMessage(errorReason(e), "toast.imageFailedDetail", "toast.imageFailed"), "error");
       }
     },
     [activeDoc.path, showToast, openLicense],
@@ -695,7 +727,7 @@ export default function App() {
         showToast(t("toast.savedAs"), "success");
       } catch (e) {
         if (isLicenseExpiredError(e)) openLicense();
-        else showToast(t("toast.saveFailed"), "error");
+        else showToast(failMessage(errorReason(e), "toast.saveFailedDetail", "toast.saveFailed"), "error");
       }
     }, [activeDoc, showToast, rememberPath, openLicense]);
 
@@ -712,11 +744,16 @@ export default function App() {
         openContent(md, null, "\n", true);
         showToast(t("toast.docxImported"), "success"); return true;
       }
-      if (!(await exists(filePath))) { showToast(t("toast.cannotOpenFile"), "error"); return false; }
+      // 「不存在」与「读不出来」是两回事：前者用户要去找文件，后者多半是权限或
+      // 编码问题。此前两者共用一句「无法打开文件」，用户不知道该重试还是该找文件。
+      if (!(await exists(filePath))) { showToast(t("toast.fileMissing"), "error"); return false; }
       const { content, eol } = normalizeEol(await readTextFile(filePath));
       openContent(content, filePath, eol);
       showToast(t("toast.fileOpened"), "success"); return true;
-    } catch { showToast(t("toast.cannotReadFile"), "error"); return false; }
+    } catch (e) {
+      showToast(failMessage(errorReason(e), "toast.cannotReadFileDetail", "toast.cannotReadFile"), "error");
+      return false;
+    }
   }, [docs, showToast, openContent, askConfirm]);
 
   const onDrop = useCallback(async (e: React.DragEvent) => {
@@ -741,7 +778,9 @@ export default function App() {
       const { content, eol } = normalizeEol(await file.text());
       openContent(content, null, eol);
       showToast(t("toast.fileOpened"), "success");
-    } catch { showToast(t("toast.cannotReadFile"), "error"); }
+    } catch (e) {
+      showToast(failMessage(errorReason(e), "toast.cannotReadFileDetail", "toast.cannotReadFile"), "error");
+    }
   }, [docs, showToast, openContent, askConfirm]);
 
   useEffect(() => {
