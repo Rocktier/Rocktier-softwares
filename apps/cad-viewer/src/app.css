@@ -290,8 +290,8 @@ body {
   place-items: center;
   cursor: pointer;
   transition:
-    background-color var(--dur-fast) var(--ease),
-    color var(--dur-fast) var(--ease);
+    background-color var(--dur-hover) var(--ease),
+    color var(--dur-hover) var(--ease);
 }
 .tool svg {
   width: 16px;

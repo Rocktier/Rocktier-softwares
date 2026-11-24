@@ -113,9 +113,8 @@
   --radius-pill: 999px;
   --ease: cubic-bezier(0.32, 0.72, 0, 1);
   --dur-hover: 100ms;
-  --dur-fast: 0.1s;
   --dur-state: 160ms;
-  --dur-normal: 0.16s;
+  --dur-normal: 160ms;
   --dur-enter: 240ms;
   --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC",
     "Hiragino Sans GB", "Microsoft YaHei", sans-serif;

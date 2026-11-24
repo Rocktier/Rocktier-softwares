@@ -180,7 +180,7 @@ html.is-mac .topbar {
      减弱动态由 tokens.css 的 transition-duration: 0.01ms 兜底，缩放瞬时到位、不滑行。 */
   transition: background-color var(--dur-hover) var(--ease),
     border-color var(--dur-hover) var(--ease), color var(--dur-hover) var(--ease),
-    transform var(--dur-fast) var(--ease);
+    transform var(--dur-hover) var(--ease);
 }
 
 .tbar-btn:hover {
@@ -317,7 +317,7 @@ html.is-mac .topbar {
   color: var(--text-primary);
   font-size: var(--fs-sm);
   font-variant-numeric: tabular-nums;
-  transition: border-color var(--dur-fast) var(--ease);
+  transition: border-color var(--dur-hover) var(--ease);
 }
 
 .goal-input:focus {
@@ -569,7 +569,7 @@ html.is-mac .topbar {
   opacity: 0;
   /* 不可见时也别吃点击：行右缘那 16px 会误触「设目标」 */
   pointer-events: none;
-  transition: opacity var(--dur-fast);
+  transition: opacity var(--dur-hover);
   background: var(--rail);
   border-radius: var(--radius-xs);
 }
@@ -1711,7 +1711,7 @@ html.is-mac .topbar {
   cursor: pointer;
   white-space: nowrap;
   max-width: 180px;
-  transition: background var(--dur-fast), color var(--dur-fast);
+  transition: background var(--dur-hover), color var(--dur-hover);
 }
 
 .tab:hover {
@@ -1758,7 +1758,7 @@ html.is-mac .topbar {
   background: transparent;
   border: none;
   cursor: pointer;
-  transition: opacity var(--dur-fast), background var(--dur-fast);
+  transition: opacity var(--dur-hover), background var(--dur-hover);
 }
 
 /* × 视觉仍是 16×16，::after 把可点区域补到 24×24（WCAG 2.5.8；与
@@ -1791,7 +1791,7 @@ html.is-mac .topbar {
   cursor: pointer;
   background: transparent;
   border: none;
-  transition: color var(--dur-fast), background var(--dur-fast);
+  transition: color var(--dur-hover), background var(--dur-hover);
 }
 
 .tab-new:hover {
@@ -1808,7 +1808,7 @@ html.is-mac .topbar {
   padding: 6px 12px;
   background: var(--bg-floating);
   border-bottom: 1px solid var(--border);
-  animation: slideIn var(--dur-fast) var(--ease);
+  animation: slideIn var(--dur-hover) var(--ease);
   position: relative;
   z-index: 5;
   flex-shrink: 0;

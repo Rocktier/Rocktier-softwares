@@ -89,8 +89,14 @@
   --font-mono: "Geist Mono", "SF Mono", "JetBrains Mono", "Fira Code", ui-monospace,
     monospace;
   --ease: cubic-bezier(0.25, 0.1, 0.25, 1);
+  /* 时长四档，单位一律 ms（2026-11-24 收敛）。
+     原先是两套并存：本组 hover/state/enter 用 ms，另一组 fast/normal/slow 用 s。
+     其中 --dur-fast 0.15s 与 --dur-hover 150ms **完全等值**，--dur-slow 零引用，
+     已分别合并与删除。单位混用是真风险：`calc()` 里 ms 与 s 相加会悄悄算错，
+     读代码也得先换算才敢判断快慢。 */
   --dur-hover: 150ms;
   --dur-state: 200ms;
+  --dur-normal: 250ms;
   --dur-enter: 300ms;
   --titlebar-h: 44px;
   --toolbar-h: 44px;
@@ -100,13 +106,11 @@
   /* 中性 hover / active 底色：低强度、不改变文字色（保持 --text-primary）。
      与 --accent-hover 的分工见深色档 --accent-hover 旁注释。 */
   --accent-muted: rgba(255, 255, 255, 0.08);
-  --dur-fast: 0.15s;
   --font-sans: "Geist", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
     "Helvetica Neue", Arial, "PingFang SC", "Hiragino Sans GB",
     "Microsoft YaHei", sans-serif;
   --text3: rgba(255, 255, 255, 0.5);
   --mono: "Geist Mono", "SF Mono", "JetBrains Mono", "Fira Code", ui-monospace, Menlo, monospace;
-  --dur-normal: 0.25s;
   --text: rgba(255, 255, 255, 0.95);
   /* --text-muted 深色档原为 rgba(255,255,255,.30) = **2.46:1**，远低于 AA 正文 4.5:1。
      而它被**全部 9 个产品**引用（30 处 var()），只有 Compressor 覆盖了它 ——
@@ -141,7 +145,6 @@
   --code-number: #79c0ff;
   --code-variable: #79c0ff;
   --code-tag: #7ee787;
-  --dur-slow: 0.4s;
   --focus-ring: rgba(255, 255, 255, 0.65);
   --radius: 12px;
   --surface-2: #1c1c1c;
@@ -256,8 +259,14 @@
   --font-mono: "Geist Mono", "SF Mono", "JetBrains Mono", "Fira Code", ui-monospace,
     monospace;
   --ease: cubic-bezier(0.25, 0.1, 0.25, 1);
+  /* 时长四档，单位一律 ms（2026-11-24 收敛）。
+     原先是两套并存：本组 hover/state/enter 用 ms，另一组 fast/normal/slow 用 s。
+     其中 --dur-fast 0.15s 与 --dur-hover 150ms **完全等值**，--dur-slow 零引用，
+     已分别合并与删除。单位混用是真风险：`calc()` 里 ms 与 s 相加会悄悄算错，
+     读代码也得先换算才敢判断快慢。 */
   --dur-hover: 150ms;
   --dur-state: 200ms;
+  --dur-normal: 250ms;
   --dur-enter: 300ms;
   --titlebar-h: 44px;
   --toolbar-h: 44px;
@@ -266,13 +275,11 @@
   --rail-w-open: 208px;
   /* 语义同深色档 --accent-muted：中性 hover / active 低强度底，文字保持 --text-primary。 */
   --accent-muted: rgba(0, 0, 0, 0.06);
-  --dur-fast: 0.15s;
   --font-sans: "Geist", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
     "Helvetica Neue", Arial, "PingFang SC", "Hiragino Sans GB",
     "Microsoft YaHei", sans-serif;
   --text3: rgba(0, 0, 0, 0.58);
   --mono: "Geist Mono", "SF Mono", "JetBrains Mono", "Fira Code", ui-monospace, Menlo, monospace;
-  --dur-normal: 0.25s;
   --text: rgba(0, 0, 0, 0.95);
   --text-muted: rgba(0, 0, 0, 0.58);
   --brand: #ff4a3d;
@@ -300,7 +307,6 @@
   --code-number: #0550ae;
   --code-variable: #953800;
   --code-tag: #116329;
-  --dur-slow: 0.4s;
   --focus-ring: rgba(0, 0, 0, 0.45);
   --radius: 12px;
   --surface-2: #f5f5f5;

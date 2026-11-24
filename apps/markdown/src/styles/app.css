@@ -777,7 +777,7 @@ html.is-mac .toolbar {
   overflow: hidden;
   text-overflow: ellipsis;
   border-left: 2px solid transparent;
-  transition: all var(--dur-fast);
+  transition: all var(--dur-hover);
 }
 
 /* 标题文字占剩余宽度，省略号在文字上而不是整行 */

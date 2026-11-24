@@ -125,7 +125,7 @@ export const StatusBar = memo(function StatusBar({
           onClick={() => void cycleUiLang()}
           title={t("statusBar.lang")}
         >
-          {/* 2026-11-15 用户令：语言控件统一为 A+地球图标（纯图标，去文字） */}
+          {/* 2026-11-15 用户令：语言控件统一为 地球图标（纯图标，去文字） */}
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
             <circle cx="12" cy="12" r="9" />
             <ellipse cx="12" cy="12" rx="3.8" ry="9" />

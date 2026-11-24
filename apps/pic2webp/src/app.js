@@ -1,7 +1,7 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { open, ask } from "@tauri-apps/plugin-dialog";
-import { initLang, getLang, t, translateBackendMessage } from "./i18n.js";
+import { initLang, getLang, toggleLang, t, translateBackendMessage } from "./i18n.js";
 import { runUpdateCheck } from "./updates.js";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import {
@@ -61,6 +61,7 @@ const inspImages = $("#insp-images");
 const inspSource = $("#insp-source");
 
 const themeToggle = $("#theme-toggle");
+const langToggle = $("#lang-toggle");
 const chkResize = $("#chk-resize");
 const resizeW = $("#resize-w");
 const resizeH = $("#resize-h");
@@ -1271,6 +1272,15 @@ if (themeToggle) {
       // 隐私模式：本次会话仍然生效
     }
     applyTheme(next);
+  });
+
+  // 语言切换（2026-11-24 新增工具栏入口，此前只有原生菜单）。
+  // toggleLang 内部会 applyLang()：刷新所有 data-i18n / data-i18n-aria 并派发
+  // lang-changed，本文件末尾那个监听器据此重渲染动态文本 —— 按钮无需自己画。
+  // 菜单必须一起重建，否则工具栏是英文、菜单还是中文。
+  langToggle?.addEventListener("click", () => {
+    const next = toggleLang();
+    if (isTauri()) invoke("build_menu", { lang: next }).catch(() => {});
   });
 
   // 语言切换后重算 title / aria-label

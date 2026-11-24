@@ -96,7 +96,7 @@ export default function Settings() {
 
       <div className="settings-item">
         <label>{t("settings.language")}</label>
-        {/* 语言切换收成 A+地球图标按钮（2026-11-15 用户令）：en/zh 对切。 */}
+        {/* 语言切换收成 地球图标按钮（2026-11-15 用户令）：en/zh 对切。 */}
         <button
           className="icon-btn"
           onClick={() => changeLocale(locale === "en-US" ? "zh-CN" : "en-US")}

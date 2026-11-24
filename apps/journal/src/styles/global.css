@@ -714,9 +714,9 @@ body {
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  transition: background-color var(--dur-fast) var(--ease),
-              color var(--dur-fast) var(--ease),
-              border-color var(--dur-fast) var(--ease);
+  transition: background-color var(--dur-hover) var(--ease),
+              color var(--dur-hover) var(--ease),
+              border-color var(--dur-hover) var(--ease);
 }
 .tbar-btn:hover:not(:disabled) {
   background: var(--bg-card-hover);

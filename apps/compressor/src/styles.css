@@ -639,7 +639,7 @@ body {
   white-space: nowrap;
   /* 按下微缩（规范 v2.2 §2.3 规则 4）：像被按下去，而非「亮一下」。
      transition 同时覆盖 hover 的 filter，否则按下时亮度变化会跳变。 */
-  transition: transform var(--dur-fast) var(--ease), filter var(--dur-fast) var(--ease);
+  transition: transform var(--dur-hover) var(--ease), filter var(--dur-hover) var(--ease);
 }
 .primary:hover:not(:disabled) {
   background: var(--accent);
@@ -665,8 +665,8 @@ body {
   cursor: pointer;
   white-space: nowrap;
   /* 按下微缩同 .primary（规范 v2.2 §2.3 规则 4） */
-  transition: transform var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease),
-    color var(--dur-fast) var(--ease);
+  transition: transform var(--dur-hover) var(--ease), border-color var(--dur-hover) var(--ease),
+    color var(--dur-hover) var(--ease);
 }
 .secondary:hover {
   border-color: var(--accent);

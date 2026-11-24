@@ -81,7 +81,7 @@ export const StatusBar = memo(function StatusBar({
       )}
       <span className="sep" />
       {/* 家族语言 2026-10-13 收敛为 en/zh 两门。2026-11-15 用户令：语言切换
-          一律收成 A+地球图标按钮，点击在两门间对切（与主题按钮同款交互），
+          一律收成 地球图标按钮，点击在两门间对切（与主题按钮同款交互），
           不再占文字位。外层 span 沿用 .status-lang 的右推布局职责。 */}
       <span className="status-lang">
         <button

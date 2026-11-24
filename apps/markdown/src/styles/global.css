@@ -65,7 +65,7 @@ body {
 ::-webkit-scrollbar-thumb {
   background: var(--scrollbar);
   border-radius: 3px;
-  transition: background var(--dur-fast) var(--ease);
+  transition: background var(--dur-hover) var(--ease);
 }
 
 ::-webkit-scrollbar-thumb:hover {
@@ -93,7 +93,7 @@ button {
   background: none;
   color: inherit;
   font-size: inherit;
-  transition: all var(--dur-fast) var(--ease);
+  transition: all var(--dur-hover) var(--ease);
 }
 
 input, textarea {
