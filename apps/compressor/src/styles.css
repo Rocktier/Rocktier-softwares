@@ -128,6 +128,13 @@ html[data-material="vibrancy"] .app {
   align-items: center;
   gap: 8px;
   min-width: 0;
+  /* 拖拽区必须铺满标题栏的「中间那块」。
+     原来只设 display:flex，宽度等于内部文字宽度、高度等于文字高度 —— 于是
+     .titlebar（space-between）中间那一大片空白、以及 52px 高度里上下各十几像素，
+     都不在任何拖拽区里。用户抓住最自然的空白处拖，窗口一动不动，看起来像卡死。
+     D-151 当年补的是「权限」与「deep 语义」，没补覆盖范围，所以那条修完仍然拖不动。 */
+  flex: 1;
+  align-self: stretch;
 }
 .brand-dot {
   width: 8px;

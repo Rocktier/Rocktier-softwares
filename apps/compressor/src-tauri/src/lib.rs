@@ -787,6 +787,20 @@ pub fn run() {
             }
             init_app_handle(handle.clone());
             let _ = build_default_menu(handle);
+
+            // 真材质（Lenso 阶段 265，阶段 267 补这一刀）：窗口透明、CSS 也透明，看到的
+            // 仍可能是实底 —— 因为 WKWebView 自己有一层不透明底色。wry 收到
+            // set_background_color 时会把这个开关（私有 KVC `drawsBackground`）关掉，
+            // 与配置里的 `transparent` 走同一个开关；配置那条路径要先经过 platform
+            // 配置文件的合并，实测不足以保证。这里无条件清一次，重复调用无副作用。
+            // 只在 macOS：Windows/Linux 的窗口本来就不透明，清了反而会露出窗口外的底色。
+            #[cfg(target_os = "macos")]
+            {
+                if let Some(w) = app.get_webview_window("main") {
+                    let _ = w.set_background_color(Some(tauri::webview::Color(0, 0, 0, 0)));
+                }
+            }
+
             Ok(())
         })
         .on_window_event(|window, event| {

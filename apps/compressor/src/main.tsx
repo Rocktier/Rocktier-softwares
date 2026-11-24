@@ -5,19 +5,22 @@ import { ErrorBoundary } from "./components/ErrorBoundary";
 import "./styles.css";
 
 /*
- * 真材质分档（Lenso 阶段 265）。
+ * 真材质分档（Lenso 阶段 265，阶段 267 改为构建期定档）。
  *
  * 只有 macOS 的窗口是透明的（tauri.macos.conf.json 里 transparent + windowEffects），
  * 桌面光透进来之后，柔光底才该从「冒充壁纸」降级成品牌 tint。Windows/Linux 没有
- * 对应材质，窗口保持不透明，走原来的柔光底 —— 同一个前端 bundle，靠这个属性分开。
+ * 对应材质，窗口保持不透明，走原来的柔光底 —— 同一个前端源码，靠这个属性分开。
  *
- * 为什么用 UA 而不是 Tauri API：这一步必须在**首帧之前**同步完成，否则会闪一下
- * 实底。plugin-os 是异步的，装在 Linux/Windows 上还要多一个平台查询权限；
- * 而这里要判的本来就是一个平台事实，UA 在这个场景下是准确的（WKWebView 必带
- * Macintosh）。CSP 是 script-src 'self'，所以只能放在模块里，不能写内联 script。
+ * 为什么不再嗅探 UA：上一版判 `navigator.userAgent` 含 Macintosh。判对了也一样要
+ * 等到模块执行才能定档（首帧前的时序问题），判错了则是**静默**退回不透明 ——
+ * 用户看到「材质没开」，控制台里一个字都没有，本轮就是这么卡住的。
+ * 现在由 vite 的 define 在构建期注入常量：macOS 包恒为 "vibrancy"，Windows 包恒为 ""，
+ * 不存在运行期判错的余地。
  */
-if (/Macintosh/.test(navigator.userAgent)) {
-  document.documentElement.dataset.material = "vibrancy";
+declare const __MATERIAL__: string;
+
+if (__MATERIAL__) {
+  document.documentElement.dataset.material = __MATERIAL__;
 }
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
