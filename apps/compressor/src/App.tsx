@@ -487,6 +487,18 @@ export default function App() {
     void compress(reset);
   };
 
+  /** 单行重试：只重跑这一行，不动别的完成项和失败项。
+   *  一张 500 个文件的批次里坏了一个，用户不该为了它去重跑剩下的 3 个失败项。 */
+  const retryOne = (path: string) => {
+    if (busyRef.current) return;
+    const current = filesRef.current;
+    const one = current.find((f) => f.path === path);
+    if (!one) return;
+    const reset = { ...one, status: "pending" as const, error: undefined, result: undefined };
+    setFiles(current.map((f) => (f.path === path ? reset : f)));
+    void compress([reset]);
+  };
+
   // One-time wiring: frontend readiness, menu, cold-start file, drag-drop, close guard.
   useEffect(() => {
     const un: UnlistenFn[] = [];
@@ -776,6 +788,16 @@ export default function App() {
                       <span>{t("排队中", "Queued")}</span>
                     )}
                     <div className="row-actions">
+                      {f.status === "error" && !busy ? (
+                        <button
+                          className="row-x"
+                          title={t("重试这个文件", "Retry this file")}
+                          aria-label={t("重试这个文件", "Retry this file")}
+                          onClick={() => retryOne(f.path)}
+                        >
+                          ↻
+                        </button>
+                      ) : null}
                       {f.status === "done" && f.result?.outputPath ? (
                         <button
                           className="row-x"
