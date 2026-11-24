@@ -54,6 +54,104 @@ jobs:
         working-directory: apps/journal
         run: npm run tauri build
 
+      # Journal 是八款里最后一个补签名的：此前 npm run tauri build 直接出 dmg 就发布，
+      # 产物是 ARM64 链接器给的 ad-hoc 签名，下载副本一律被 Gatekeeper 拦。
+      # 放在 Package app.zip 之前，是为了让 zip 里装的也是签过的那份 .app。
+      #
+      # 重打 DMG 是必须的：tauri 打包时 .app 还是 ad-hoc，签完得换回镜像里，
+      # 再对镜像本身签一次，notarytool 提交的才是签名后的整包。
+      - name: Sign the app bundle, notarize it, and repack the DMG
+        env:
+          APPLE_CERT_P12: ${{ secrets.APPLE_CERT_P12 }}
+          APPLE_CERT_PASSWORD: ${{ secrets.APPLE_CERT_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+          # 公证凭据：API Key 不过期，优先；Apple ID + 专用密码只作回退（见 scripts/notarize-dmg.sh）
+          APPLE_API_KEY_P8: ${{ secrets.APPLE_API_KEY_P8 }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+        run: |
+          set -euo pipefail
+          app=$(find "apps/journal/src-tauri/target/release/bundle/macos" \
+            -maxdepth 1 -name '*.app' -print -quit)
+          [ -n "$app" ] || { echo "::error::.app not found"; exit 1; }
+          dmg=$(find "apps/journal/src-tauri/target/release/bundle/dmg" \
+            -name '*.dmg' -print -quit)
+          [ -n "$dmg" ] || { echo "::error::.dmg not found"; exit 1; }
+
+          sign_app=(-s -)
+          if [ -n "${APPLE_CERT_P12:-}" ]; then
+            keychain="$RUNNER_TEMP/rocktier-signing.keychain-db"
+            echo "$APPLE_CERT_P12" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+            security create-keychain -p "" "$keychain"
+            # 6 小时不锁：同一步里还要等 notarytool，15 分钟不活动锁会卡住 DMG 二次签名。
+            security set-keychain-settings -lut 21600 "$keychain"
+            security unlock-keychain -p "" "$keychain"
+            security import "$RUNNER_TEMP/cert.p12" -k "$keychain" \
+              -P "$APPLE_CERT_PASSWORD" -T /usr/bin/codesign
+            security set-key-partition-list -S apple-tool:,apple: -k "" "$keychain" >/dev/null
+            security list-keychains -d user -s "$keychain" $(security list-keychains -d user | tr -d '"')
+            identity=$(security find-identity -v -p codesigning "$keychain" \
+              | awk '/Developer ID Application/ {print $2; exit}')
+            if [ -z "$identity" ]; then
+              echo "::error::APPLE_CERT_P12 is set but contains no Developer ID Application identity."
+              exit 1
+            fi
+            echo "signing as $identity"
+            sign_app=(-s "$identity" --options runtime --timestamp --entitlements apps/journal/src-tauri/Entitlements.plist)
+          else
+            echo "::notice::No Developer ID certificate configured - ad-hoc signing. Downloaded copies will still be flagged by Gatekeeper."
+          fi
+
+          codesign "${sign_app[@]}" -fv --deep "$app"
+          codesign --verify --deep --strict "$app"
+          codesign -dvvv "$app" 2>&1 | grep 'Signature=' || true
+
+          work=$(mktemp -d)
+          hdiutil convert "$dmg" -format UDRW -o "$work/rw.dmg" -quiet
+          mnt="$work/m"
+          mkdir -p "$mnt"
+          hdiutil attach "$work/rw.dmg" -readwrite -nobrowse -mountpoint "$mnt" -quiet
+          rm -rf "$mnt/$(basename "$app")"
+          cp -R "$app" "$mnt/"
+          hdiutil detach "$mnt" -quiet
+          hdiutil convert "$work/rw.dmg" -format UDZO -o "$work/signed.dmg" -quiet
+          mv "$work/signed.dmg" "$dmg"
+          rm -rf "$work"
+
+          if [ -n "${APPLE_CERT_P12:-}" ]; then
+            codesign -s "$identity" --timestamp -fv "$dmg"
+            rc=0
+            bash scripts/notarize-dmg.sh "$dmg" || rc=$?
+            if [ "$rc" -ne 0 ] && [ "$rc" -ne 3 ]; then exit "$rc"; fi
+
+            # 硬断言：dmg / .app 必须是 Developer ID 且带 secure timestamp。
+            # 用 case 而不是 `| grep -q`：pipefail 下 grep 提前退出会让 codesign
+            # 收 SIGPIPE(141)，把「断言通过」误判成失败。
+            dmg_info=$(codesign -dv --verbose=4 "$dmg" 2>&1 || true)
+            app_info=$(codesign -dv --verbose=4 "$app" 2>&1 || true)
+            case "$dmg_info" in *"Authority=Developer ID Application"*) ;; *)
+              echo "::error::DMG signature is missing Developer ID authority"; exit 1 ;; esac
+            case "$dmg_info" in *"Timestamp="*) ;; *)
+              echo "::error::DMG signature has no secure timestamp"; exit 1 ;; esac
+            case "$app_info" in *"Authority=Developer ID Application"*) ;; *)
+              echo "::error::.app signature is missing Developer ID authority"; exit 1 ;; esac
+            case "$app_info" in *"Timestamp="*) ;; *)
+              echo "::error::.app signature has no secure timestamp"; exit 1 ;; esac
+
+            # Gatekeeper 兜底：dmg 是用户实际打开的载体，必须 accepted。
+            spctl -a -t open --context context:primary-signature -vv "$dmg" \
+              || { echo "::error::Gatekeeper rejected the notarized DMG"; exit 1; }
+            # .app 没有独立票据，spctl 走在线查询；只作 warning，避免离线误红。
+            spctl -a -vv "$app" \
+              || echo "::warning::spctl did not accept the .app (no embedded ticket by design - verify online)"
+          else
+            codesign -s - -fv "$dmg"
+            echo "::notice::ad-hoc build: signature assertions and spctl skipped (by design)."
+          fi
+          codesign -dvvv "$dmg" 2>&1 | grep 'Signature=' || true
+
       - name: Package app.zip
         run: |
           set -e
