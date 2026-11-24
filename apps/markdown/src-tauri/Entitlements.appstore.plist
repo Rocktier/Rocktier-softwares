@@ -44,12 +44,23 @@
     <true/>
 
     <!--
-      出站网络。直发版会访问 rocktier.com / api.github.com（授权校验与版本查询）；
-      商店版把「检查更新」与「授权」两个入口从 Help 菜单移除，按设计不再有触发点
-      （运行时抓包实测仍待补，见 findings D-131）。沙箱内不开此项时任何 socket
-      都会被内核拒绝。保留这项能力不等于商店版会发起请求。
+      出站网络：**刻意不给**（2026-11-24 决定，此前是保留）。
+
+      直发版访问 rocktier.com / api.github.com（激活、吊销复检、版本查询），商店版
+      这三条路径的触发点均已不存在：
+        · Help 菜单整块不出现（lib.rs 的 store 分支返回 None），「检查更新」及其上
+          挂的吊销复检没有入口（revalidateLicence 只在点击检查更新时被调用）；
+        · 激活入口由 LicenseDialog 的 isStore 挡掉；
+        · 商店包无自研付费墙（license.rs 的 ENFORCE 只对 direct 生效）。
+      剩下能开链接的地方走系统浏览器（NSWorkspace），不经过本进程的 socket。
+
+      为什么删而不是留：留着，App Privacy 就得按「可能联网」描述，也没法用抓包
+      自证清白，审核员看到一项用不上的能力只会多问一轮。删掉，沙盒内核会直接拒
+      任何 socket ——「零请求」从设计意图变成可验证事实，抓包为空是必然而不是运气。
+
+      哪天商店版真需要联网（例如接 StoreKit 校验），再加回来，并同步改本注释、
+      tauri.appstore.conf.json 的 connect-src、以及 verify-mas-channel.mjs 的
+      sandbox 判据（那条判据现在断言的是「不得出现」）。
     -->
-    <key>com.apple.security.network.client</key>
-    <true/>
 </dict>
 </plist>

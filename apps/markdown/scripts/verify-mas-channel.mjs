@@ -73,12 +73,27 @@ function check(root) {
   );
 
   const ent = read(root, "src-tauri/Entitlements.appstore.plist");
+  /* 2026-11-24 起这项判据**反转**：原断言「有 network.client」，现在断言「没有」。
+     理由见 plist 里那段注释 —— 商店版三条出站路径的触发点全部不存在，
+     留着能力只会让 App Privacy 描述变宽、且无法用抓包自证零请求。
+     删掉之后沙盒内核直接拒 socket，零请求从设计意图变成可验证事实。 */
   add(
     "sandbox",
     /<key>com\.apple\.security\.app-sandbox<\/key>\s*<true\/>/.test(ent) &&
       /com\.apple\.security\.files\.user-selected\.read-write/.test(ent) &&
-      /com\.apple\.security\.network\.client/.test(ent),
-    "沙箱 entitlements：app-sandbox + 用户选中文件可读写 + 出站能力",
+      !/com\.apple\.security\.network\.client/.test(ent),
+    "沙箱 entitlements：app-sandbox + 用户选中文件可读写 + 不给 network.client（刻意断网）",
+  );
+
+  /* 第二道网：沙盒不给 socket，WebView 层也不许开出站。两道都缺一道就等于没断。 */
+  const storeCsp = conf?.app?.security?.csp ?? "";
+  add(
+    "store-csp",
+    !!storeCsp &&
+      /connect-src 'self' ipc:/.test(storeCsp) &&
+      !/rocktier\.com|api\.github\.com/.test(storeCsp) &&
+      !/img-src[^;]*\bhttps:\s/.test(storeCsp),
+    "商店版 CSP：connect-src 只剩 self/ipc，img-src 不含 https: 通配（无 rocktier.com / api.github.com）",
   );
 
   const lib = read(root, "src-tauri/src/lib.rs");
@@ -129,6 +144,9 @@ const CASES = [
   { id: "channel-env", file: "scripts/build-appstore.sh", from: "export ROCKTIER_CHANNEL=store", to: "export ROCKTIER_CHANNEL=direct" },
   { id: "appstore-conf", file: "src-tauri/tauri.appstore.conf.json", from: '"hardenedRuntime": false', to: '"hardenedRuntime": true' },
   { id: "sandbox", file: "src-tauri/Entitlements.appstore.plist", from: "com.apple.security.app-sandbox", to: "com.apple.security.cs.allow-jit" },
+  /* 反转后的判据要能抓住「有人把 network.client 加回来」这种回退，所以对照是插入。 */
+  { id: "sandbox", file: "src-tauri/Entitlements.appstore.plist", from: "    <key>com.apple.security.print</key>", to: "    <key>com.apple.security.network.client</key>\n    <true/>\n    <key>com.apple.security.print</key>" },
+  { id: "store-csp", file: "src-tauri/tauri.appstore.conf.json", from: "connect-src 'self' ipc: http://ipc.localhost;", to: "connect-src 'self' ipc: https://rocktier.com;" },
   {
     id: "help-menu",
     file: "src-tauri/src/lib.rs",
