@@ -1628,6 +1628,11 @@ impl State {
             was_dwg,
             skipped: self.skipped,
             insunits: self.insunits,
+            // The parser works on an already-decoded &str, so it cannot know
+            // the original byte encoding; drawing.rs overrides both fields
+            // from DecodedText after the call.
+            text_encoding: "utf8".to_string(),
+            text_lost_chars: 0,
         };
         Ok((meta, geometry))
     }

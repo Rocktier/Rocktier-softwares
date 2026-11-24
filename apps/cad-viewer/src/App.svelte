@@ -389,6 +389,13 @@
           {t("skipped")} {formatCount(app.scene.meta.skipped)}
         </span>
       {/if}
+      <!-- 只在真的有字符丢失时出现（text_lost_chars > 0），GBK 正常中文图不报。
+           这类图纸以前是静默显示方块，用户以为软件不支持中文。 -->
+      {#if (app.scene.meta.text_lost_chars ?? 0) > 0}
+        <span class="status-item mono status-muted" title={t("textLostHint")}>
+          {t("textLost")} {formatCount(app.scene.meta.text_lost_chars ?? 0)}
+        </span>
+      {/if}
       <span class="status-item mono">{t("zoom")} {app.zoomPct}%</span>
       <span class="status-item mono">{t("segs")} {formatCount(app.scene.meta.segments)}</span>
       <span class="status-item mono">{t("texts")} {formatCount(app.scene.meta.text_count)}</span>

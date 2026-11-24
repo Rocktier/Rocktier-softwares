@@ -73,6 +73,14 @@ export interface SceneMeta {
   skipped: number;
   /** $INSUNITS from the DXF header (0 = unitless / unspecified). */
   insunits?: number;
+  /**
+   * How the drawing text was decoded: `utf8` / `utf8-lossy` / `gbk` /
+   * `gbk-lossy`.  A Chinese AutoCAD export is normally `gbk` — that is not a
+   * problem and must not be surfaced as one.
+   */
+  text_encoding?: string;
+  /** Characters that survived as U+FFFD, i.e. will render as boxes. 0 = intact. */
+  text_lost_chars?: number;
 }
 
 /**

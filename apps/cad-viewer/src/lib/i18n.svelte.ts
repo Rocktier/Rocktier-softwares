@@ -68,6 +68,9 @@ const zh: Dict = {
   skipped: "未绘制图元",
   skippedHint:
     "填充与实体现已绘制；此处统计的是仍未绘制的部分：引线/多重引线、WIPEOUT 遮罩，以及未解析的外部参照块。",
+  textLost: "文字乱码",
+  textLostHint:
+    "有字符既不是 UTF-8 也不是 GBK 能解出来的，图上会显示成方块。常见原因是图纸用了日文 Shift-JIS 或西欧编码，或导出时字符串被截断。本应用只读，不会改动原文件。",
   exportTitle: "导出",
   exportScope: "范围",
   exportScopeDrawing: "整张图纸",
@@ -168,6 +171,9 @@ const en: Dict = {
   skipped: "not drawn",
   skippedHint:
     "Hatch fills and solids now render; this counts what is still undrawn: leaders/multileaders, WIPEOUT masks and unresolved xref blocks.",
+  textLost: "garbled text",
+  textLostHint:
+    "Some characters decoded as neither UTF-8 nor GBK and render as boxes. Usually a Shift-JIS or Western-encoded drawing, or strings truncated on export. The app is read-only and never modifies the source file.",
   exportTitle: "Export",
   exportScope: "Area",
   exportScopeDrawing: "Whole drawing",

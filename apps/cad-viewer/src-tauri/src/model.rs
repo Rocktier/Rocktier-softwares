@@ -94,6 +94,15 @@ pub struct SceneMeta {
     /// $INSUNITS from the DXF header (group 70; 0 = unitless / unspecified).
     /// DWG loads inherit it from the dwg2dxf conversion output.
     pub insunits: i32,
+    /// How the drawing text was decoded: `utf8`, `utf8-lossy`, `gbk`, or
+    /// `gbk-lossy`.  A Chinese AutoCAD export is *genuinely* GBK, so `gbk` on
+    /// its own is normal and must not be raised as a warning — only the
+    /// `-lossy` variants (i.e. `text_lost_chars > 0`) mean characters on the
+    /// drawing may show as boxes.
+    pub text_encoding: String,
+    /// Characters no decoding could recover (U+FFFD that survived).  0 = the
+    /// text came through intact.
+    pub text_lost_chars: u64,
 }
 
 /// Scene blob layout: [magic "RCV1"][u32 meta_len][meta JSON][geometry region].

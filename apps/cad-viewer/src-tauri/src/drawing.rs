@@ -53,15 +53,17 @@ pub fn load_with(path: &Path, report: Reporter) -> Result<(SceneMeta, Vec<u8>), 
         Some("dxf") => {
             let t0 = Instant::now();
             report(2.0, "build", "");
-            let text = read_text(path)?;
+            let decoded = read_text(path)?;
             let (mut meta, geometry) = dxf_ascii::parse_and_build_with_progress(
-                &text,
+                &decoded.text,
                 0,
                 false,
                 0,
                 &|p| report(5.0 + p * 90.0, "parse", ""),
             )?;
             meta.parse_ms = t0.elapsed().as_millis() as u64;
+            meta.text_encoding = decoded.encoding.to_string();
+            meta.text_lost_chars = decoded.lost as u64;
             Ok((meta, geometry))
         }
         Some("dwg") => parse_dwg(path, report),
@@ -72,6 +74,24 @@ pub fn load_with(path: &Path, report: Reporter) -> Result<(SceneMeta, Vec<u8>), 
                 .unwrap_or_else(|| "(无扩展名)".to_string())
         )),
     }
+}
+
+/// Decoded drawing text plus what it cost to get there.
+///
+/// `encoding` is one of `utf8` / `utf8-lossy` / `gbk` / `gbk-lossy`; `lost` is
+/// the number of U+FFFD replacement characters that survived decoding, i.e.
+/// characters the UI will actually show as a box.  A plain `gbk` is the normal
+/// case for a Chinese AutoCAD export, not a defect.
+pub struct DecodedText {
+    pub text: String,
+    pub encoding: &'static str,
+    pub lost: usize,
+}
+
+/// U+FFFD that survived decoding — one per character the UI will show as a box.
+/// A plain `fn` (not a closure) so `&Cow<str>` / `&String` coerce to `&str`.
+fn count_lost(s: &str) -> usize {
+    s.chars().filter(|c| *c == '\u{FFFD}').count()
 }
 
 /// Read a drawing as text.
@@ -87,23 +107,40 @@ pub fn load_with(path: &Path, report: Reporter) -> Result<(SceneMeta, Vec<u8>), 
 ///    instead of trusting the declared code page.
 /// 3. Genuinely GBK (what a Chinese AutoCAD export looks like): nearly every
 ///    non-ASCII byte is invalid UTF-8, so the same measurement sends it here.
-fn decode_drawing_text(bytes: &[u8]) -> String {
+fn decode_drawing_text(bytes: &[u8]) -> DecodedText {
     if let Ok(text) = std::str::from_utf8(bytes) {
-        return text.to_owned();
+        return DecodedText {
+            text: text.to_owned(),
+            encoding: "utf8",
+            lost: 0,
+        };
     }
     let lossy = String::from_utf8_lossy(bytes);
-    let damaged = lossy.chars().filter(|c| *c == '\u{FFFD}').count();
+    let damaged = count_lost(&lossy);
     let non_ascii = lossy.chars().filter(|c| !c.is_ascii()).count();
     // Under 1 % damaged ⇒ the file really is UTF-8 (a real GBK file lands
     // around 60 %, so the margin is enormous either way).
     if non_ascii > 0 && damaged * 100 < non_ascii {
-        return lossy.into_owned();
+        return DecodedText {
+            text: lossy.into_owned(),
+            encoding: if damaged > 0 { "utf8-lossy" } else { "utf8" },
+            lost: damaged,
+        };
     }
-    let (text, _, _) = encoding_rs::GBK.decode(bytes);
-    text.into_owned()
+    let (text, _, had_errors) = encoding_rs::GBK.decode(bytes);
+    let text = text.into_owned();
+    // encoding_rs substitutes U+FFFD for bytes its GBK table cannot map, so
+    // the count is exact; the flag alone still forces a non-zero report in
+    // case a future table version ever emits something else.
+    let lost = if had_errors { count_lost(&text).max(1) } else { 0 };
+    DecodedText {
+        text,
+        encoding: if had_errors { "gbk-lossy" } else { "gbk" },
+        lost,
+    }
 }
 
-fn read_text(path: &Path) -> Result<String, String> {
+fn read_text(path: &Path) -> Result<DecodedText, String> {
     let bytes = std::fs::read(path).map_err(|e| format!("无法读取文件: {e}"))?;
     Ok(decode_drawing_text(&bytes))
 }
@@ -242,13 +279,15 @@ fn parse_dwg(path: &Path, report: Reporter) -> Result<(SceneMeta, Vec<u8>), Stri
     let t1 = Instant::now();
     let text = read_text(&dxf_path);
     let _ = std::fs::remove_file(&dxf_path); // best effort — the text is in memory now
-    let text = text?;
+    let decoded = text?;
 
-    let (mut meta, geometry) = dxf_ascii::parse_and_build_with_progress(&text, 0, true, convert_ms, &|p| {
+    let (mut meta, geometry) = dxf_ascii::parse_and_build_with_progress(&decoded.text, 0, true, convert_ms, &|p| {
         report(35.0 + p * 60.0, "parse", "")
     })?;
     report(96.0, "build", "");
     meta.parse_ms = t1.elapsed().as_millis() as u64;
+    meta.text_encoding = decoded.encoding.to_string();
+    meta.text_lost_chars = decoded.lost as u64;
     Ok((meta, geometry))
 }
 
@@ -259,7 +298,10 @@ mod tests {
     #[test]
     fn clean_utf8_passes_through() {
         let s = "0\nSECTION\n2\nENTITIES\n0\nTEXT\n1\n宋体\n";
-        assert_eq!(decode_drawing_text(s.as_bytes()), s);
+        let d = decode_drawing_text(s.as_bytes());
+        assert_eq!(d.text, s);
+        assert_eq!(d.encoding, "utf8");
+        assert_eq!(d.lost, 0);
     }
 
     #[test]
@@ -268,8 +310,12 @@ mod tests {
         let mut bytes = b"0\nTEXT\n1\n".to_vec();
         bytes.extend_from_slice(&gbk);
         bytes.extend_from_slice(b"\n");
-        let text = decode_drawing_text(&bytes);
-        assert!(text.contains("窗下"), "GBK drawing must decode, got {text:?}");
+        let d = decode_drawing_text(&bytes);
+        assert!(d.text.contains("窗下"), "GBK drawing must decode, got {:?}", d.text);
+        // A Chinese AutoCAD export is *normally* GBK: the flag must say gbk
+        // with nothing lost, so the UI stays quiet instead of crying wolf.
+        assert_eq!(d.encoding, "gbk");
+        assert_eq!(d.lost, 0);
     }
 
     /// LibreDWG splits a multi-byte character when it wraps a string; the
@@ -289,10 +335,27 @@ mod tests {
         for _ in 0..200 {
             bytes.extend_from_slice("建筑、结构".as_bytes());
         }
-        let text = decode_drawing_text(&bytes);
+        let d = decode_drawing_text(&bytes);
         assert!(
-            text.contains("建筑、结构"),
+            d.text.contains("建筑、结构"),
             "the intact UTF-8 must survive one split character"
         );
+        // One split character = 1-2 lost bytes; the point is that it is tiny
+        // and we report the loss instead of silently swallowing it.
+        assert!(d.encoding == "utf8-lossy", "got {}", d.encoding);
+        assert!(d.lost > 0);
+    }
+
+    /// Latin-1 / Shift-JIS look nothing like GBK.  We still hand them to the
+    /// GBK table (there is no third guess worth making), but the flag has to
+    /// admit characters were lost so the UI can say so.
+    #[test]
+    fn undecodable_bytes_are_reported_as_lossy() {
+        let mut bytes = b"0\nTEXT\n1\n".to_vec();
+        bytes.extend_from_slice(&[0xFF, 0xFE, 0xFF, 0xFE, 0xFF]);
+        bytes.push(b'\n');
+        let d = decode_drawing_text(&bytes);
+        assert_eq!(d.encoding, "gbk-lossy", "got {}", d.encoding);
+        assert!(d.lost > 0);
     }
 }
