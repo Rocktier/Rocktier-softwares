@@ -1,0 +1,72 @@
+# 官网校验和自动对账 —— release 一发就去改 checksums.json
+#
+# 为什么要有这条：官网的 SHA-256 墙和下载按钮是两份数据。按钮指向
+# `releases/latest`，哈希却写在静态的 checksums.json 里。发完版没人手动
+# 跑 `npm run checksums:gen`，用户就会下到新版、照旧页面的哈希校验、必然失败。
+# 这条缺陷在 2026-10-31 与 2026-11-13 各复发过一次（verify-checksums.mjs
+# 顶部记着明细），说明靠"记得跑"是靠不住的，只能让事件来触发。
+#
+# 只改 website/checksums.json 一个文件：官网其余页面（首页缩略图、定价、截图
+# 清单）常年有人手改，机器去提交整棵 website/ 会与人工改动打架。
+#
+# 判据在脚本里，不在这里：
+#   gen-checksums.mjs    从 monorepo 的 release 取各产品最新版与 GitHub 公布的
+#                        sha256；某产品尚无 release 时沿用旧条目，绝不写空条目。
+#   verify-checksums.mjs 对账「文件里的版本 vs 线上 latest」，拿不到 latest 判红
+#                        （限流 / 权限问题不许静默当绿），并自检四条对照。
+# 校验失败就红，不静默放行 —— 宁可这次 release 的站内数据晚一天，也不能派发坏哈希。
+
+name: Sync site checksums
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+# 连发两个产品的 release 时串行，避免两次提交互相覆盖（后一次 push 被拒）。
+concurrency:
+  group: site-checksums
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    # ubuntu 就够：只读 API + 改 JSON，不占 macOS 那 5 个并发槽。
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Regenerate checksums.json
+        working-directory: website
+        env:
+          # 不传 token 会撞 60 次/小时的匿名限流，verify 那边会当成「拿不到 latest」判红。
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node tools/gen-checksums.mjs
+
+      - name: Verify against published releases
+        working-directory: website
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node tools/verify-checksums.mjs
+
+      - name: Commit if changed
+        run: |
+          if git diff --quiet -- website/checksums.json; then
+            echo "checksums.json 无变化 —— 这次 release 没有改变任何产品的最新版，跳过提交。"
+            exit 0
+          fi
+          git config user.name  "rocktier-bot"
+          git config user.email "bot@rocktier.com"
+          git add website/checksums.json
+          git commit -m "chore(site): checksums 随 release ${GITHUB_REF_NAME} 刷新"
+          # 期间若有人推了 main，rebase 一次再推；checksums.json 是单文件，冲突面极小。
+          git pull --rebase --autostash origin main
+          git push
