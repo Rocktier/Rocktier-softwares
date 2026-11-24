@@ -38,13 +38,20 @@
 import { readFileSync, readdirSync, existsSync, statSync } from "node:fs";
 import { join } from "node:path";
 
-const SKIP_DIRS = new Set(["node_modules", "dist", "target", "src-tauri", "scripts", ".git", "public"]);
+/* .family-root 是 scripts/family-gate.mjs 跑闸门时造的软链农场（apps/<id> 的别名）。
+   不排除它会把同一款产品数两遍：「apps/compressor」与「.family-root/Rocktier-Compressor」
+   指向同一份代码，于是 1 个死项被报成 2 个（2026-11-24 实测）。 */
+const SKIP_DIRS = new Set(["node_modules", "dist", "target", "src-tauri", "scripts", ".git", "public", ".family-root"]);
 
 /* 按「哪里有 src-tauri」定位产品仓，不按目录名猜 ——
    2026-11-04 起 8 款产品仓均为平铺；下面第二层探测保留为历史嵌套布局的兜底。 */
 function findProducts(base) {
   const out = [];
   for (const name of readdirSync(base)) {
+    /* 点开头的一律跳过：.git / .family-root（闸门自己的软链农场）。
+       农场里的 `Rocktier PDF` 与 `apps/pdf` 是同一份代码，不跳过就会把同一款
+       产品数两遍，死项也跟着翻倍。 */
+    if (name.startsWith(".")) continue;
     const p = join(base, name);
     if (!statSync(p).isDirectory()) continue;
     if (existsSync(join(p, "src-tauri"))) { out.push({ label: name, root: p }); continue; }
@@ -108,7 +115,13 @@ function rustDispatch(rust) {
     for (const mm of s.matchAll(/on_menu_event/g)) {
       const seg = s.slice(mm.index, mm.index + 5000);
       for (const h of seg.matchAll(/"([a-z][a-z0-9_-]*)"\s*=>/g)) matched.add(h[1]);
-      for (const h of seg.matchAll(/event\.id\(\)(?:\.\d)?(?:\.0)?\.\s*as_str\(\)\s*==\s*"([^"]+)"/g)) matched.add(h[1]);
+      /* 逐 id 处理的两种写法都要认：
+         `event.id().as_str() == "x"`（多数款）与 `event.id().as_ref() == "x"`
+         （Compressor 的 win-fullscreen，2026-11-24 补）。
+         只认 as_str 时，as_ref 那处被判成死项 —— 而它就在 on_menu_event 里
+         调 set_fullscreen，代码注释还写着为什么不用 PredefinedMenuItem。
+         闸门报假红比漏报更伤：没人会去认真实存在的死项。 */
+      for (const h of seg.matchAll(/event\.id\(\)(?:\.\d)?(?:\.0)?\.\s*(?:as_str|as_ref)\(\)\s*==\s*"([^"]+)"/g)) matched.add(h[1]);
       for (const h of seg.matchAll(/event\.id\(\)\s*==\s*"([^"]+)"/g)) matched.add(h[1]);
       const pt = seg.match(/emit\(\s*"(menu-action|menu:[a-z0-9-]+)"[^)]*event\.id\(\)/);
       if (pt) passthroughTo = pt[1];

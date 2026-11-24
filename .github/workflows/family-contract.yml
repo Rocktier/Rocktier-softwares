@@ -42,12 +42,15 @@ jobs:
         with:
           node-version: "20"
 
-      # 五道闸门依次跑，第一道红就停（与旧 workflow 的步骤顺序一致）：
-      #   family      22 条判据（tokens 字节一致 / i18n 键对账 / 菜单可达 / Windows 陷阱…）
-      #   token-revert 产品样式里重定义 L0 令牌（登记在案的覆盖只报 ℹ）
-      #   contrast    对比度与浅色档屏蔽、字面色登记
-      #   locale      语言集合四边对账（注册表 = 字典 = 联合 = 生成器）
-      #   macos-hig   窗口/图标/Info.plist/原生命令的静态合规
+      # 八道闸门依次跑，第一道红就停：
+      #   family         22 条判据（tokens 字节一致 / i18n 键对账 / 菜单可达 / Windows 陷阱…）
+      #   token-revert   产品样式里重定义 L0 令牌（登记在案的覆盖只报 ℹ）
+      #   contrast       对比度与浅色档屏蔽、字面色登记
+      #   locale-parity  语言集合四边对账（注册表 = 字典 = 联合 = 生成器）
+      #   macos-hig      窗口/图标/Info.plist/原生命令的静态合规
+      #   dangling-import 悬空 import（扫 0 个文件直接判失败，不许空转绿）
+      #   release-i18n   发版命名 + 语言数 + 默认 en
+      #   menu-click     菜单项逐项有响应路径
       # 脚本自己建 .family-root 软链农场，跑完即删（见 .gitignore）。
-      - name: Run family gate (5 checks)
+      - name: Run family gate (8 checks)
         run: node scripts/family-gate.mjs

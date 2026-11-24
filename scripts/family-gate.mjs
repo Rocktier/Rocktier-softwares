@@ -114,6 +114,16 @@ const GATES = [
   { id: "contrast", file: "contrast-gate.mjs", args: [FARM], crossProduct: true },
   { id: "locale-parity", file: "scan-locale-parity.mjs", args: [FARM], crossProduct: true },
   { id: "macos-hig", file: "macos-hig-check.mjs", args: ["--root", FARM], crossProduct: true },
+  /* ── 2026-11-24 补进来的三道：一直在仓里，但**没有任何工作流调用过** ──
+   * 8 仓各自带 CI 的年代，它们由各仓自己的 workflow 跑；合并后没人接手，就此静默。
+   * 三道现在都实测全绿，接进来是为了让它们继续绿着，而不是等哪天坏了才知道。
+   *   dangling-import 12 条悬空 import（扫描 212 个文件）
+   *   release-i18n    发版命名 + 语言数 + 默认 en（读各仓 workflow 的改名守卫）
+   *   menu-click    菜单项逐项有响应路径（含 Rust 侧 as_str / as_ref 两种写法）
+   * 它们自己按「哪里有 src-tauri」找产品，所以吃的是仓根而不是农场，cwd 由本脚本给 ROOT。 */
+  { id: "dangling-import", file: "scan-dangling-import.mjs", args: [FARM], crossProduct: true },
+  { id: "release-i18n", file: "release-i18n-check.mjs", args: [], crossProduct: true },
+  { id: "menu-click", file: "menu-clickability.mjs", args: [], crossProduct: true },
 ];
 
 const selected = onlyGates.length ? GATES.filter((g) => onlyGates.includes(g.id)) : GATES;

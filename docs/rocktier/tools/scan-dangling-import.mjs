@@ -96,6 +96,18 @@ for (const [id, rel] of Object.entries(REPOS)) {
 
 for (const s of skippedRepos) console.log(`  ⚠ 跳过 ${s}`);
 
+/* 一个文件都没扫到 → **失败**，不是通过。
+ *
+ * 原来这里只看 hits.length：root 传错（比如传了仓根而产品在 .family-root/ 里）时
+ * 扫描器读到 0 个文件，hits 自然是 0，于是打印「合计悬空 import 0 处（已扫 0 个文件）」
+ * 并退出 0。绿得很像通过，实际什么都没看 —— 2026-11-24 实测过这个形状。
+ * 少扫比漏报更危险：漏报至少还有红，空转是连红都不会有。
+ */
+if (scannedFiles === 0) {
+  console.log(`\n✗ 已扫 0 个文件 —— root 传错或产品目录不在预期位置，本次结果无意义`);
+  process.exit(1);
+}
+
 if (hits.length === 0) {
   console.log(`\n合计 悬空 import 0 处（已扫 ${scannedFiles} 个文件）`);
   console.log("提醒：简写属性与多键登记形态本脚本抓不到，仍需 tsc --noEmit 兜底。");
