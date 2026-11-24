@@ -170,9 +170,9 @@ export const en = {
     update: {
       check: 'Check for updates',
       checking: 'Checking…',
-      upToDate: 'You have the latest version.',
-      available: 'Version {v} is available.',
-      failed: 'Could not check right now.',
+      upToDate: "You're up to date",
+      available: 'Version {v} is available',
+      failed: "Couldn't check for updates",
       lastChecked: 'Checked {d}',
       never: 'never',
       download: 'Get {v}',

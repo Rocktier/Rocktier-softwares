@@ -171,9 +171,9 @@ export const zh: Strings = {
     update: {
       check: '检查更新',
       checking: '正在检查…',
-      upToDate: '已是最新版本。',
-      available: '发现新版本 {v}。',
-      failed: '暂时无法检查。',
+      upToDate: '已是最新版本',
+      available: '有新版本 {v}',
+      failed: '检查失败，请稍后再试',
       lastChecked: '上次检查 {d}',
       never: '从未',
       download: '获取 {v}',
