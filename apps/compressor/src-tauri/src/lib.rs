@@ -488,6 +488,7 @@ struct MenuStrings {
     about: &'static str,
     license: &'static str,
     check_updates: &'static str,
+    quit: &'static str,
 }
 
 impl MenuStrings {
@@ -501,7 +502,7 @@ impl MenuStrings {
                 start: "开始压缩", help: "帮助", support: "获取支持",
                 website: "访问 rocktier.com", about: "关于 Rocktier Compressor",
                 check_updates: "检查更新…",
-                license: "许可与激活…",
+                license: "许可与激活…", quit: "退出 Rocktier Compressor",
             },
             "ja" => Self {
                 app: "Rocktier Compressor", file: "ファイル", edit: "編集", view: "表示",
@@ -509,7 +510,7 @@ impl MenuStrings {
                 start: "圧縮を開始", help: "ヘルプ", support: "サポート",
                 website: "rocktier.com を開く", about: "Rocktier Compressor について",
                 check_updates: "アップデートを確認…",
-                license: "ライセンス…",
+                license: "ライセンス…", quit: "Rocktier Compressor を終了",
             },
             "ko" => Self {
                 app: "Rocktier Compressor", file: "파일", edit: "편집", view: "보기",
@@ -517,7 +518,7 @@ impl MenuStrings {
                 start: "압축 시작", help: "도움말", support: "지원 받기",
                 website: "rocktier.com 방문", about: "Rocktier Compressor 정보",
                 check_updates: "업데이트 확인…",
-                license: "라이선스…",
+                license: "라이선스…", quit: "Rocktier Compressor 종료",
             },
             "de" => Self {
                 app: "Rocktier Compressor", file: "Datei", edit: "Bearbeiten", view: "Ansicht",
@@ -525,7 +526,7 @@ impl MenuStrings {
                 start: "Komprimieren starten", help: "Hilfe", support: "Support erhalten",
                 website: "rocktier.com besuchen", about: "Über Rocktier Compressor",
                 check_updates: "Nach Updates suchen…",
-                license: "Lizenz…",
+                license: "Lizenz…", quit: "Rocktier Compressor beenden",
             },
             "es" => Self {
                 app: "Rocktier Compressor", file: "Archivo", edit: "Editar", view: "Ver",
@@ -533,7 +534,7 @@ impl MenuStrings {
                 start: "Empezar a comprimir", help: "Ayuda", support: "Obtener soporte",
                 website: "Visitar rocktier.com", about: "Acerca de Rocktier Compressor",
                 check_updates: "Buscar actualizaciones…",
-                license: "Licencia…",
+                license: "Licencia…", quit: "Salir de Rocktier Compressor",
             },
             "pt" => Self {
                 app: "Rocktier Compressor", file: "Arquivo", edit: "Editar", view: "Exibir",
@@ -541,7 +542,7 @@ impl MenuStrings {
                 start: "Iniciar compressão", help: "Ajuda", support: "Obter suporte",
                 website: "Visitar rocktier.com", about: "Sobre o Rocktier Compressor",
                 check_updates: "Verificar atualizações…",
-                license: "Licença…",
+                license: "Licença…", quit: "Sair do Rocktier Compressor",
             },
             "ar" => Self {
                 app: "Rocktier Compressor", file: "ملف", edit: "تحرير", view: "عرض",
@@ -549,7 +550,7 @@ impl MenuStrings {
                 start: "ابدأ الضغط", help: "مساعدة", support: "الحصول على الدعم",
                 website: "زيارة rocktier.com", about: "حول Rocktier Compressor",
                 check_updates: "التحقق من التحديثات…",
-                license: "الترخيص…",
+                license: "الترخيص…", quit: "إنهاء Rocktier Compressor",
             },
             // English is both the family default and the fallback.
             _ => Self {
@@ -558,7 +559,7 @@ impl MenuStrings {
                 start: "Start Compress", help: "Help", support: "Get Support",
                 website: "Visit rocktier.com", about: "About Rocktier Compressor",
                 check_updates: "Check for Updates…",
-                license: "License…",
+                license: "License…", quit: "Quit Rocktier Compressor",
             },
         }
     }
@@ -600,7 +601,12 @@ fn build_menu(app: tauri::AppHandle, lang: String) -> Result<(), String> {
             #[cfg(target_os = "macos")]
             &PredefinedMenuItem::show_all(&app, None).map_err(|e| e.to_string())?,
             &PredefinedMenuItem::separator(&app).map_err(|e| e.to_string())?,
-            &PredefinedMenuItem::quit(&app, None).map_err(|e| e.to_string())?,
+            // 不用 PredefinedMenuItem::quit：它绕过 CloseRequested 守卫（macOS 走
+            // terminate:、Windows 走 PostQuitMessage），压缩进行中点「退出」会直接退，
+            // 正在写的输出文件留下残包。改为自定义项 → on_menu_event 里 window.close()，
+            // 复用「压缩中先问一句」那条已被验证的通道（与 Markdown / Write 同形）。
+            &MenuItem::with_id(&app, "quit", m.quit, true, Some("CmdOrCtrl+Q"))
+                .map_err(|e| e.to_string())?,
         ],
     ).map_err(|e| e.to_string())?;
 
@@ -724,6 +730,17 @@ pub fn run() {
         // 菜单事件 → 前端动作链（其余八款产品同款写法）。只在这里注册一次：
         // 不能放进 build_menu，那个函数每次重建菜单都会被调用，监听器会累加。
         .on_menu_event(|app, event| {
+            // 菜单「退出」走窗口关闭，而不是 app.exit：后者绕过 CloseRequested 守卫，
+            // 压缩进行中会连问都不问就退。取不到窗口时用 app.exit 兜底，保证不是死键。
+            if event.id().as_ref() == "quit" {
+                match app.get_webview_window("main") {
+                    Some(window) => {
+                        let _ = window.close();
+                    }
+                    None => app.exit(0),
+                }
+                return;
+            }
             // Windows 真全屏（替代 muda 在 Win 上无效的 PredefinedMenuItem::fullscreen）
             if event.id().as_ref() == "win-fullscreen" {
                 if let Some(win) = app.webview_windows().values().next().cloned() {

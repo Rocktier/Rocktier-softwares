@@ -72,7 +72,16 @@ pub fn build(app: &tauri::AppHandle, lang: &str) -> tauri::Result<()> {
             #[cfg(target_os = "macos")]
             &PredefinedMenuItem::hide_others(app, None)?,
             &PredefinedMenuItem::separator(app)?,
-            &PredefinedMenuItem::quit(app, None)?,
+            // 不用 PredefinedMenuItem::quit：它绕过 CloseRequested 守卫（macOS 走 terminate:、
+            // Windows 走 PostQuitMessage），转换进行中点「退出」会直接退，产物留下半成品。
+            // 改为自定义项 → on_menu_event 里 window.close()，复用「转换中先问一句」那条通道。
+            &MenuItem::with_id(
+                app,
+                "quit",
+                l(tr8!("Quit Rocktier Pic2WebP", "退出 Rocktier Pic2WebP", "Rocktier Pic2WebP を終了", "Rocktier Pic2WebP 종료", "Rocktier Pic2WebP beenden", "Salir de Rocktier Pic2WebP", "Sair do Rocktier Pic2WebP", "إنهاء Rocktier Pic2WebP")),
+                true,
+                Some("CmdOrCtrl+Q"),
+            )?,
         ],
     )?;
 

@@ -1307,6 +1307,17 @@ fn initial_file(state: State<InitialFile>) -> Option<String> {
 pub fn run() {
     let app = tauri::Builder::default()
         .on_menu_event(|app, event| {
+            // 菜单「退出」走窗口关闭，而不是 app.exit：后者绕过 CloseRequested 守卫，
+            // 转换进行中会连问都不问就退。取不到窗口时用 app.exit 兜底，保证不是死键。
+            if event.id().0.as_str() == "quit" {
+                match app.get_webview_window("main") {
+                    Some(window) => {
+                        let _ = window.close();
+                    }
+                    None => app.exit(0),
+                }
+                return;
+            }
             // Windows 真全屏（替代 muda 在 Win 上无效的 PredefinedMenuItem::fullscreen）
             if event.id().0.as_str() == "win-fullscreen" {
                 if let Some(win) = app.webview_windows().values().next().cloned() {

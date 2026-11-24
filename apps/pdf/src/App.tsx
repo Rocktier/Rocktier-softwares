@@ -441,6 +441,12 @@ export function App() {
         case 'feedback':
           void openUrl('mailto:hello@rocktier.com');
           break;
+        case 'quit':
+          // 菜单「退出」必须走窗口关闭，才能落到上面的 onCloseRequested 脏数据守卫。
+          // 后端菜单项已从 PredefinedMenuItem::quit 换成自定义 id —— 那个直接
+          // app.exit()，有未保存改动时也是说走就走。
+          void getCurrentWindow().close();
+          break;
         default:
           break;
       }

@@ -73,6 +73,7 @@ struct MenuStrings {
     about: &'static str,
     license: &'static str,
     check_updates: &'static str,
+    quit: &'static str,
 }
 
 impl MenuStrings {
@@ -87,7 +88,7 @@ impl MenuStrings {
                 help: "帮助", find: "查找", actual_size: "实际大小",
                 toggle_theme: "切换日夜模式", website: "官方网站",
                 feedback: "反馈", about: "关于 Rocktier PDF Editor",
-                license: "许可与激活…", check_updates: "检查更新…",
+                license: "许可与激活…", check_updates: "检查更新…", quit: "退出 Rocktier PDF Editor",
             },
             "ja" => Self {
                 open: "開く…", save: "保存", save_as: "名前を付けて保存…",
@@ -96,7 +97,7 @@ impl MenuStrings {
                 help: "ヘルプ", find: "検索", actual_size: "原寸",
                 toggle_theme: "テーマを切り替え", website: "公式サイト",
                 feedback: "フィードバック", about: "Rocktier PDF Editor について",
-                license: "ライセンス…", check_updates: "アップデートを確認…",
+                license: "ライセンス…", check_updates: "アップデートを確認…", quit: "Rocktier PDF Editor を終了",
             },
             "ko" => Self {
                 open: "열기…", save: "저장", save_as: "다른 이름으로 저장…",
@@ -105,7 +106,7 @@ impl MenuStrings {
                 help: "도움말", find: "검색", actual_size: "실제 크기",
                 toggle_theme: "테마 전환", website: "공식 웹사이트",
                 feedback: "피드백", about: "Rocktier PDF Editor 정보",
-                license: "라이선스…", check_updates: "업데이트 확인…",
+                license: "라이선스…", check_updates: "업데이트 확인…", quit: "Rocktier PDF Editor 종료",
             },
             "de" => Self {
                 open: "Öffnen…", save: "Speichern", save_as: "Speichern unter…",
@@ -114,7 +115,7 @@ impl MenuStrings {
                 help: "Hilfe", find: "Suchen", actual_size: "Originalgröße",
                 toggle_theme: "Design wechseln", website: "Website",
                 feedback: "Feedback", about: "Über Rocktier PDF Editor",
-                license: "Lizenz…", check_updates: "Nach Updates suchen…",
+                license: "Lizenz…", check_updates: "Nach Updates suchen…", quit: "Rocktier PDF Editor beenden",
             },
             "es" => Self {
                 open: "Abrir…", save: "Guardar", save_as: "Guardar como…",
@@ -123,7 +124,7 @@ impl MenuStrings {
                 help: "Ayuda", find: "Buscar", actual_size: "Tamaño real",
                 toggle_theme: "Cambiar tema", website: "Sitio web",
                 feedback: "Comentarios", about: "Acerca de Rocktier PDF Editor",
-                license: "Licencia…", check_updates: "Buscar actualizaciones…",
+                license: "Licencia…", check_updates: "Buscar actualizaciones…", quit: "Salir de Rocktier PDF Editor",
             },
             "pt" => Self {
                 open: "Abrir…", save: "Salvar", save_as: "Salvar como…",
@@ -132,7 +133,7 @@ impl MenuStrings {
                 help: "Ajuda", find: "Buscar", actual_size: "Tamanho real",
                 toggle_theme: "Alternar tema", website: "Site",
                 feedback: "Comentários", about: "Sobre o Rocktier PDF Editor",
-                license: "Licença…", check_updates: "Verificar atualizações…",
+                license: "Licença…", check_updates: "Verificar atualizações…", quit: "Sair do Rocktier PDF Editor",
             },
             "ar" => Self {
                 open: "فتح…", save: "احفظ", save_as: "حفظ باسم…",
@@ -141,7 +142,7 @@ impl MenuStrings {
                 help: "مساعدة", find: "ابحث", actual_size: "الحجم الحقيقي",
                 toggle_theme: "تبديل المظهر", website: "الموقع",
                 feedback: "ملاحظات", about: "حول Rocktier PDF Editor",
-                license: "الترخيص…", check_updates: "التحقق من التحديثات…",
+                license: "الترخيص…", check_updates: "التحقق من التحديثات…", quit: "إنهاء Rocktier PDF Editor",
             },
             // English is both the default and the fallback: the family convention
             // is a fixed English default (family.json `defaultLanguage: "en"`),
@@ -153,7 +154,7 @@ impl MenuStrings {
                 help: "Help", find: "Find", actual_size: "Actual Size",
                 toggle_theme: "Toggle Theme", website: "Website",
                 feedback: "Feedback", about: "About Rocktier PDF Editor",
-                license: "License…", check_updates: "Check for Updates…",
+                license: "License…", check_updates: "Check for Updates…", quit: "Quit Rocktier PDF Editor",
             },
         }
     }
@@ -205,7 +206,11 @@ fn build_app_menu(app: &AppHandle, lang: &str, has_doc: bool) -> tauri::Result<(
             #[cfg(target_os = "macos")]
             &PredefinedMenuItem::hide_others(app, None)?,
             &PredefinedMenuItem::separator(app)?,
-            &PredefinedMenuItem::quit(app, None)?,
+            // 不用 PredefinedMenuItem::quit：它绕过前端的 onCloseRequested 脏数据守卫
+            // （macOS 走 terminate:、Windows 走 PostQuitMessage，都不产生窗口关闭请求），
+            // 表单/注释改过之后 ⌘Q 会直接退，那一次改动连问都不问就没了。
+            // 改为自定义项 → 前端点 getCurrentWindow().close()，复用已有守卫。
+            &MenuItem::with_id(app, "quit", m.quit, true, Some("CmdOrCtrl+Q"))?,
         ],
     )?;
 
