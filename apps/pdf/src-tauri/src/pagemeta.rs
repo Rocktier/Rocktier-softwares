@@ -206,7 +206,7 @@ fn encode_text(s: &str) -> Object {
     for unit in s.encode_utf16() {
         out.extend_from_slice(&unit.to_be_bytes());
     }
-    Object::String(out, lopdf::StringFormat::Hex)
+    Object::String(out, lopdf::StringFormat::Hexadecimal)
 }
 
 fn text_of(dict: &Dictionary, key: &[u8]) -> String {
@@ -604,7 +604,7 @@ mod tests {
             panic!()
         };
         let info = doc.get_dictionary(*info_id).unwrap();
-        let Object::String(raw, lopdf::StringFormat::Hex) = info.get(b"Title").unwrap() else {
+        let Object::String(raw, lopdf::StringFormat::Hexadecimal) = info.get(b"Title").unwrap() else {
             panic!("title must be a hex string");
         };
         assert_eq!(&raw[..2], &[0xFE, 0xFF]);

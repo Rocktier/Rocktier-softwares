@@ -1122,7 +1122,8 @@ pub async fn extract_images(
     crate::imgextract::extract_images(&bytes, &pages, &output_dir, &file_stem(&doc.path))
 }
 
-/// Export the given pages stitched vertically into one long PNG image.#[tauri::command]
+/// Export the given pages stitched vertically into one long PNG image.
+#[tauri::command]
 pub async fn export_page_images_long(
     state: State<'_, AppState>,
     indices: Vec<i32>,
