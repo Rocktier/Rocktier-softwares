@@ -13,7 +13,11 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "2.0.0", features = [] }
 
 [dependencies]
-tauri = { version = "2.0", features = [] }
+# macos-private-api：tauri.conf.json 里 macOSPrivateApi=true（真材质要透明窗口）
+# 会在 build script 里校验 feature 白名单。`tauri build` 会按配置自动加，但
+# 裸 `cargo clippy` 不会 —— 不加这一项，CI 的 clippy 步骤会在 build script 阶段失败，
+# 而同一个 commit 的 `tauri build` 却是绿的（阶段 265 踩过一次）。
+tauri = { version = "2.0", features = ["macos-private-api"] }
 tauri-plugin-dialog = "2.0"
 tauri-plugin-fs = "2.0"
 tauri-plugin-opener = "2"
