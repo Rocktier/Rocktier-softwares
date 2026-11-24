@@ -316,7 +316,7 @@ jobs:
         working-directory: apps/compressor/compress-engine
         run: |
           CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -o ../src-tauri/compress-engine-windows.exe .
-          CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -o ../src-tauri/compress-engine-darwin-arm64 .
+          CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -o ../src-tauri/compress-engine-macos .
       - name: Rust clippy
         working-directory: apps/compressor/src-tauri
         run: cargo clippy --all-targets -- -D warnings
