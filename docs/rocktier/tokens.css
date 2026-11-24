@@ -1,0 +1,590 @@
+/* Rocktier 家族设计令牌（L0 母版）——构建期拷贝，各产品不得手改。
+   铁律：[data-theme="light"] 必须定义与 :root 完全相同的令牌集。
+   2026-10-16：--fs-* 字号阶梯与 --sp-* 间距栅格降级为「参考实现」——密度属产品层
+   （UI 规范 §1.2/§2.2），产品可裸写 px；引用令牌时其值仍以本文件为唯一真源。 */
+
+:root,
+[data-theme="dark"] {
+  --bg-primary: #000000;
+  --bg-secondary: #0a0a0a;
+  --bg-elevated: #121212;
+  --bg-card: rgba(255, 255, 255, 0.03);
+  --bg-card-hover: rgba(255, 255, 255, 0.06);
+  --bg-inset: rgba(255, 255, 255, 0.02);
+  --bg-input: rgba(255, 255, 255, 0.04);
+  --border: rgba(255, 255, 255, 0.08);
+  --border-hover: rgba(255, 255, 255, 0.16);
+  --border-strong: rgba(255, 255, 255, 0.38);
+  --text-primary: rgba(255, 255, 255, 0.95);
+  --text-secondary: rgba(255, 255, 255, 0.72);
+  --text-tertiary: rgba(255, 255, 255, 0.58);
+  --accent: #ffffff;
+  --on-accent: #000000;
+  /* 悬停/按下语义（2026-11-03 定稿）：
+     --accent-hover 只用于「本身就是 --accent 实底的控件」（如 .primary / .export-btn），
+     且必须同时把文字设为 --on-accent。它叠在深底上接近白、叠在浅底上接近黑，
+     当「中性悬停底」用会让未翻色的文字消失（实测合成对比 1.1~1.3:1）。
+     中性 hover / active 一律用 --accent-muted + --text-primary。 */
+  --accent-hover: rgba(255, 255, 255, 0.88);
+  --accent-glow: rgba(255, 255, 255, 0.15);
+  --red: #ff4a3d;
+  --red-strong: #cc3a30;
+  --red-soft: #ff6b5e;
+  /* 文字安全红：--red/--red-strong 作为 13px 文字时各有一档不达标
+     （浅档 --red #e64537 on #ffffff = 3.98，暗档 --red-strong #cc3a30 on #141414 = 3.70），
+     不足以单独当文字色（.chip.active 等选中态文字）。--red-ink 两档都 ≥4.5:1
+     （暗档 #ff4a3d on #141414 = 5.53，浅档 #c0392b on #ffffff = 5.44）。描边/圆点仍用 --red。 */
+  --red-ink: #ff4a3d;
+  --on-brand: #ffffff;
+  --accent-brand: var(--red);
+  --danger: #ff4a3d;
+  --warning: #e8912a;
+  /* 成功 = 绿，保留（2026-10-05 最终裁定，此前在「去绿 / 保留绿」之间反复过三次，
+     至此定案：不再改）。对纯黑 8.42:1，深色档无需调整，沿用原值。
+     若将来有人再提「去绿」，请先看浅色档那段注释里的往复记录。 */
+  --success: rgba(48, 209, 88, 0.9);
+  --dot: rgba(255, 255, 255, 0.55);
+  --dot-pattern: radial-gradient(circle, rgba(255, 255, 255, 0.04) 1px, transparent 1px);
+  --dot-size: 20px;
+  --shadow: rgba(0, 0, 0, 0.4);
+  --page-shadow: 0 2px 24px rgba(0, 0, 0, 0.60);
+  /* ── Elevation 四档（2026-10-24 UI 规范 v2.2 §2.3，findings D-71）──────
+     来源：小红书《圆角与阴影，让UI更有层次》——「阴影宁淡勿重」，黑色浓度
+     6%~12%，三层叠加（贴边细影 + 中间过渡 + 远处柔光）比一层重阴影自然。
+     档位：Flat（平面，层次靠边框/底色）/ Raised（静息卡）/ Floating（浮层）
+     / Overlay（模态，配遮罩）。
+     深色档四档全为 none —— 黑阴影压在纯黑底上不可见；深色的层级表达改用
+     --elev-border（1px 浅边框，与玻璃拟态卡的半透边框同源）。
+     阴影不是信息通道（规范 §9）：选中/激活/错误仍须有第二通道。 */
+  --elev-flat: none;
+  --elev-raised: none;
+  --elev-floating: none;
+  --elev-overlay: none;
+  --elev-border: rgba(255, 255, 255, 0.10);
+  /* 按下微缩（规范 §2.3 规则 4）：像被按下去，而非「亮一下」 */
+  --press-scale: 0.98;
+  --scrollbar: rgba(255, 255, 255, 0.10);
+  --scrollbar-hover: rgba(255, 255, 255, 0.20);
+  --selection: rgba(255, 255, 255, 0.15);
+  --radius-sm: 12px;
+  --radius-md: 20px;
+  --radius-lg: 28px;
+  --radius-pill: 999px;
+  --fs-2xs: 10px;
+  --fs-xs: 11px;
+  --fs-sm: 12px;
+  --fs-md: 13px;
+  --fs-lg: 14px;
+  --fs-xl: 22px;
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 20px;
+  --sp-6: 24px;
+  --sp-8: 32px;
+  --font: "Geist", -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI",
+    Roboto, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", Helvetica, Arial,
+    sans-serif;
+  --font-mono: "Geist Mono", "SF Mono", "JetBrains Mono", "Fira Code", ui-monospace,
+    monospace;
+  --ease: cubic-bezier(0.25, 0.1, 0.25, 1);
+  /* 时长四档，单位一律 ms（2026-11-24 收敛）。
+     原先是两套并存：本组 hover/state/enter 用 ms，另一组 fast/normal/slow 用 s。
+     其中 --dur-fast 0.15s 与 --dur-hover 150ms **完全等值**，--dur-slow 零引用，
+     已分别合并与删除。单位混用是真风险：`calc()` 里 ms 与 s 相加会悄悄算错，
+     读代码也得先换算才敢判断快慢。 */
+  --dur-hover: 150ms;
+  --dur-state: 200ms;
+  --dur-normal: 250ms;
+  --dur-enter: 300ms;
+  --titlebar-h: 44px;
+  --toolbar-h: 44px;
+  --statusbar-h: 28px;
+  --rail-w: 56px;
+  --rail-w-open: 208px;
+  /* 中性 hover / active 底色：低强度、不改变文字色（保持 --text-primary）。
+     与 --accent-hover 的分工见深色档 --accent-hover 旁注释。 */
+  --accent-muted: rgba(255, 255, 255, 0.08);
+  --font-sans: "Geist", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, "PingFang SC", "Hiragino Sans GB",
+    "Microsoft YaHei", sans-serif;
+  --text3: rgba(255, 255, 255, 0.5);
+  --mono: "Geist Mono", "SF Mono", "JetBrains Mono", "Fira Code", ui-monospace, Menlo, monospace;
+  --text: rgba(255, 255, 255, 0.95);
+  /* --text-muted 深色档原为 rgba(255,255,255,.30) = **2.46:1**，远低于 AA 正文 4.5:1。
+     而它被**全部 9 个产品**引用（30 处 var()），只有 Compressor 覆盖了它 ——
+     也就是说另外 8 个产品一直在渲染 2.46:1 的「次要文字」。
+     改为 0.58，与同档 --text-tertiary 一致（6.91:1），沿用家族既有阶梯而非另立一套。 */
+  --text-muted: rgba(255, 255, 255, 0.58);
+  --brand: #ff4a3d;
+  --text2: rgba(255, 255, 255, 0.72);
+  --border-mid: rgba(255, 255, 255, 0.10);
+  --radius-xs: 3px;
+  --card: rgba(255, 255, 255, 0.03);
+  --bg-floating: #141414;
+  --bg-surface: #0a0a0a;
+  --bg: #000000;
+  /* --bg2 深色档原为 #f5f5f5 —— 把**浅色档的值**放进了深色块（复制粘贴遗留）。
+     浅色档 --bg2 = #f5f5f5 是对的；深色档应是暗色次级背景，
+     改用与 --bg-secondary 同值 #0a0a0a。 */
+  --bg2: #0a0a0a;
+  --code-comment: #7d8590;
+  --code-keyword: #ff7b72;
+  --code-function: #d2a8ff;
+  --code-type: #ffa657;
+  --card-hover: rgba(255, 255, 255, 0.06);
+  --surface: #141414;
+  --glow-md: 0 0 20px rgba(255, 255, 255, 0.08);
+  --fs-base: 13px;
+  --head-bg: rgba(0, 0, 0, 0.8);
+  --font-serif: "New York", "New York Small", Georgia, "Times New Roman",
+    "Songti SC", "Source Han Serif SC", "Noto Serif CJK SC",
+    "Microsoft YaHei UI", "Microsoft YaHei", "PingFang SC", serif;
+  --code-string: #a5d6ff;
+  --code-number: #79c0ff;
+  --code-variable: #79c0ff;
+  --code-tag: #7ee787;
+  --focus-ring: rgba(255, 255, 255, 0.65);
+  --radius: 12px;
+  --surface-2: #1c1c1c;
+  --warn: rgba(255, 176, 46, 0.9);
+  --sidebar-w: 260px;
+  --accent-warn: #d98a00;
+  --dim-text: rgba(255, 255, 255, 0.58);
+  /* 深色档这两个原值都**看不见**，且方向正好相反（像是在两个块之间贴错了）：
+     --scrollbar-thumb rgba(0,0,0,.18) 对纯黑 = 1.00:1（完全不可见）
+     --brand-dot        #181818        对纯黑 = 1.18:1（几乎不可见）
+   正确方向：深色底上该用**浅色**前景。浅色档那两处同样贴反了，一并对调。 */
+  --scrollbar-thumb: rgba(255, 255, 255, 0.38);
+  --brand-dot: #e8e8e8;
+  --focus-glow: rgba(255, 255, 255, 0.14);
+  --brand-hover: #cc3a30;
+}
+
+[data-theme="light"] {
+
+  /* ── 以下一组是 2026-10-04 补的：浅色档此前把深色档的值逐字拷了过来 ──
+     表现为白底上的白字（1.00:1）、白底上的近黑块、以及看不见的描边。
+     逐项按 WCAG AA 重算：文字 ≥4.5:1，描边落在 --border/--border-hover 档位之间，
+     表面类改为「白或浅灰」而不是反转明度。--code-* 走 GitHub Light 色系
+     （.hljs 背景是 transparent，代码文字直接落在页面底色上）。
+     深色档一个值都没动 —— 铁律是只补浅色档，不许借机改深色。 */
+  --bg-primary: #ffffff;
+  --bg-secondary: #f5f5f5;
+  --bg-elevated: #ffffff;
+  --bg-card: rgba(0, 0, 0, 0.03);
+  --bg-card-hover: rgba(0, 0, 0, 0.06);
+  --bg-inset: rgba(0, 0, 0, 0.02);
+  --bg-input: rgba(0, 0, 0, 0.04);
+  --border: rgba(0, 0, 0, 0.08);
+  --border-hover: rgba(0, 0, 0, 0.16);
+  --border-strong: rgba(0, 0, 0, 0.45);
+  --text-primary: rgba(0, 0, 0, 0.92);
+  --text-secondary: rgba(0, 0, 0, 0.64);
+  --text-tertiary: rgba(0, 0, 0, 0.60);
+  --accent: #000000;
+  --on-accent: #ffffff;
+  /* 语义同深色档 --accent-hover：仅用于配 --on-accent 的 accent 实底控件；
+     浅色档叠加后接近黑，绝不能当通用悬停底。 */
+  --accent-hover: rgba(0, 0, 0, 0.88);
+  --accent-glow: rgba(0, 0, 0, 0.12);
+  --red: #e64537;
+  --red-strong: #c0392b;
+  --red-soft: #ff6b5e;
+  --red-ink: #c0392b;
+  --on-brand: #ffffff;
+  --accent-brand: var(--red);
+  /* 浅色档 --danger 原为 #e64537 = 白底 3.98:1、#f5f5f5 3.65:1，达不到 AA 正文 4.5:1。
+     而 --danger 被**7 个产品、23 处当文字色**用，且多为小字：
+       Pic2WebP .retry-all        10px  ← 单文件失败后唯一的退路
+       Sign     .verify-checks li.bad  12.5px ← 「签名无效」的每一条校验项
+       Pic2WebP .license-error / Journal .password-strength-label.weak 等
+     #cc3527 = 白底 5.11:1、#f5f5f5 4.69:1，是实测最小的达标值。
+     与同档 --warning #c0392b（5.44:1）同一档位，色相差极小，不影响「红=错误」的语义。
+     深色档维持 #ff4a3d（对纯黑 6.30:1，无需调整）。
+     注意 **--red 不改** —— 它是品牌色（--accent-brand: var(--red)），改了会动品牌观感。*/
+  --danger: #b8342a;
+  --warning: #c0392b;
+  /* 浅色档成功绿 = #1c7f46（2026-10-05 最终裁定：保留绿，只修对比度）。
+     对白底 5.03:1、对 --bg-secondary #f5f5f5 4.62:1，两者都达AA 正文 4.5:1。
+
+     ⚠️ 这个值被反复改过三轮，往复记录在此，避免第四次：
+       10-02 拍板 A「保留绿」→ 值 rgba(34,178,77,.9)，白底仅 2.78:1
+       10-03 压暗到 #1f8a4c —— 白底 4.38:1，仍差 0.12 不达标（当时误判为「接近达标」放行）
+       10-05 拍板「去绿」（深 #ffffff / 浅 #000000），靠 ✓ 形状与文案承载语义
+       10-05 **最终裁定：回到绿**，但不是原值，而是达AA 的 #1c7f46
+     保留绿的理由：--danger 仍是红，若成功也去黑，「失败」会比「成功」更显眼；
+     且 --success 的13 处使用点多数是 10–12px 小字（Sign 的「签名有效」横幅、
+     OCR 完成提示、Pic2WebP 的「节省 4.2 MB」），绿必须压到真达 AA 才可用。*/
+  --success: #1c7f46;
+  --dot: rgba(0, 0, 0, 0.55);
+  --dot-pattern: radial-gradient(circle, rgba(0, 0, 0, 0.05) 1px, transparent 1px);
+  --dot-size: 20px;
+  --shadow: rgba(0, 0, 0, 0.08);
+  --page-shadow: 0 2px 20px rgba(0, 0, 0, 0.16);
+  /* Elevation 四档（规范 v2.2 §2.3）：浅色档三层叠加阴影，浓度 ≤12% */
+  --elev-flat: none;
+  --elev-raised: 0 1px 2px rgba(0, 0, 0, 0.04), 0 4px 12px rgba(0, 0, 0, 0.05);
+  --elev-floating: 0 1px 2px rgba(0, 0, 0, 0.04), 0 4px 12px rgba(0, 0, 0, 0.06),
+    0 12px 32px rgba(0, 0, 0, 0.08);
+  --elev-overlay: 0 1px 2px rgba(0, 0, 0, 0.06), 0 8px 24px rgba(0, 0, 0, 0.10),
+    0 24px 64px rgba(0, 0, 0, 0.12);
+  /* 浅色档浮层/模态的层级边框（比常规 --border 重一档，给对话框定义） */
+  --elev-border: rgba(0, 0, 0, 0.10);
+  --press-scale: 0.98;
+  --scrollbar: rgba(0, 0, 0, 0.15);
+  --scrollbar-hover: rgba(0, 0, 0, 0.25);
+  --selection: rgba(0, 0, 0, 0.12);
+  --radius-sm: 12px;
+  --radius-md: 20px;
+  --radius-lg: 28px;
+  --radius-pill: 999px;
+  --fs-2xs: 10px;
+  --fs-xs: 11px;
+  --fs-sm: 12px;
+  --fs-md: 13px;
+  --fs-lg: 14px;
+  --fs-xl: 22px;
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 20px;
+  --sp-6: 24px;
+  --sp-8: 32px;
+  --font: "Geist", -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI",
+    Roboto, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", Helvetica, Arial,
+    sans-serif;
+  --font-mono: "Geist Mono", "SF Mono", "JetBrains Mono", "Fira Code", ui-monospace,
+    monospace;
+  --ease: cubic-bezier(0.25, 0.1, 0.25, 1);
+  /* 时长四档，单位一律 ms（2026-11-24 收敛）。
+     原先是两套并存：本组 hover/state/enter 用 ms，另一组 fast/normal/slow 用 s。
+     其中 --dur-fast 0.15s 与 --dur-hover 150ms **完全等值**，--dur-slow 零引用，
+     已分别合并与删除。单位混用是真风险：`calc()` 里 ms 与 s 相加会悄悄算错，
+     读代码也得先换算才敢判断快慢。 */
+  --dur-hover: 150ms;
+  --dur-state: 200ms;
+  --dur-normal: 250ms;
+  --dur-enter: 300ms;
+  --titlebar-h: 44px;
+  --toolbar-h: 44px;
+  --statusbar-h: 28px;
+  --rail-w: 56px;
+  --rail-w-open: 208px;
+  /* 语义同深色档 --accent-muted：中性 hover / active 低强度底，文字保持 --text-primary。 */
+  --accent-muted: rgba(0, 0, 0, 0.06);
+  --font-sans: "Geist", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, "PingFang SC", "Hiragino Sans GB",
+    "Microsoft YaHei", sans-serif;
+  --text3: rgba(0, 0, 0, 0.58);
+  --mono: "Geist Mono", "SF Mono", "JetBrains Mono", "Fira Code", ui-monospace, Menlo, monospace;
+  --text: rgba(0, 0, 0, 0.95);
+  --text-muted: rgba(0, 0, 0, 0.58);
+  --brand: #ff4a3d;
+  --text2: rgba(0, 0, 0, 0.72);
+  --border-mid: rgba(0, 0, 0, 0.14);
+  --radius-xs: 3px;
+  --card: rgba(0, 0, 0, 0.03);
+  --bg-floating: #ffffff;
+  --bg-surface: #f5f5f5;
+  --bg: #ffffff;
+  --bg2: #f5f5f5;
+  --code-comment: #57606a;
+  --code-keyword: #cf222e;
+  --code-function: #8250df;
+  --code-type: #953800;
+  --card-hover: rgba(0, 0, 0, 0.06);
+  --surface: #ffffff;
+  --glow-md: 0 0 20px rgba(0, 0, 0, 0.08);
+  --fs-base: 13px;
+  --head-bg: rgba(255, 255, 255, 0.8);
+  --font-serif: "New York", "New York Small", Georgia, "Times New Roman",
+    "Songti SC", "Source Han Serif SC", "Noto Serif CJK SC",
+    "Microsoft YaHei UI", "Microsoft YaHei", "PingFang SC", serif;
+  --code-string: #0a3069;
+  --code-number: #0550ae;
+  --code-variable: #953800;
+  --code-tag: #116329;
+  --focus-ring: rgba(0, 0, 0, 0.45);
+  --radius: 12px;
+  --surface-2: #f5f5f5;
+  --warn: #8a5a00;
+  --sidebar-w: 260px;
+  --accent-warn: #8a5a00;
+  --dim-text: rgba(0, 0, 0, 0.58);
+  /* 浅色档：深色前景才看得见（原先两处与深色档贴反了） */
+  --scrollbar-thumb: rgba(0, 0, 0, 0.45);
+  --brand-dot: #181818;
+  --focus-glow: rgba(0, 0, 0, 0.12);
+  --brand-hover: #cc3a30;
+}
+
+*::after {
+  transition:
+    background-color var(--dur-state) var(--ease),
+    border-color var(--dur-state) var(--ease),
+    color var(--dur-state) var(--ease),
+    box-shadow var(--dur-state) var(--ease),
+    transform var(--dur-hover) var(--ease);
+}
+
+/* 数字、路径、进度、文件大小一律等宽对齐 */
+.num,
+.status-bar,
+.file-path,
+.progress-value {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+/* 键盘焦点：全局可见，鼠标点击不显示 */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+:focus:not(:focus-visible) {
+  outline: none;
+}
+
+/* 尊重系统减弱动态。用 0.01ms 而非 none —— 保留 transitionend，
+   否则依赖动画结束回调的进度逻辑会卡死。 */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ── 品牌红点：呼吸动画（激活 / 进行中）───────────────────────────────── */
+
+@keyframes dotpulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.4;
+  }
+}
+
+.dot-live {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--red);
+  animation: dotpulse 3s var(--ease) infinite;
+  flex: none;
+}
+
+/* 红点不得是状态的唯一编码 —— 必须同时有形状、文案或描边变化。
+   详见 v2 规范 §9 状态编码表。 */
+.dot-idle {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--border-strong);
+  flex: none;
+}
+/* ── 图标按钮 / 主题切换（家族唯一实现）─────────────────────────────────
+ *
+ * 2026-10-03 统一。此前 9 个产品有 6 套写法：
+ *   PDF .btn.btn-icon / MD .tbar-btn.theme-btn / Write .tbar-btn.ghost-ic.theme-btn
+ *   Pic2WebP #theme-toggle / CAD .btn.ghosty / Journal .sidebar-theme-toggle
+ *   OCR #theme / Compressor（无主题系统）/ Sign .sidebar-theme-toggle
+ * 视觉互不相同，用户跨产品时认不出这是同一个按钮。
+ *
+ * 规范：28×28、透明底、hover 显底显边（v2 §6.4）。
+ * 命中区用 ::after 撑到 40×40 —— 28px 低于无障碍建议的最小点击区，
+ * 靠伪元素补足而不改变视觉尺寸。
+ *
+ * 状态机 2026-11-15 起为两态：light ⇄ dark（用户令：全家族取消「跟随系统」，
+ * 原 §6.5 三态循环退役）。
+ * 按钮必须带 aria-label（§10硬性），且**不得只用图标表达状态**：
+ * 加 data-mode 属性，配 title 说明当前是「浅色 / 深色」。
+ */
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  cursor: pointer;
+  position: relative;
+  transition: background var(--dur-hover) var(--ease),
+    border-color var(--dur-hover) var(--ease), color var(--dur-hover) var(--ease);
+  flex: none;
+}
+
+.icon-btn:hover {
+  background: var(--bg-card-hover);
+  border-color: var(--border);
+  color: var(--text-primary);
+}
+
+.icon-btn:active {
+  background: var(--bg-card);
+}
+
+/* 特异性保险（2026-10-22 原语收编时补）：
+ * OCR 的 index.html 有一条全局 `button:hover:not(:disabled)`（0,2,1），
+ * 加载在 tokens.css 之后，会静默吃掉上面的 `.icon-btn:hover`（0,2,0）——
+ * 主题按钮的 hover 曾在 OCR 里失效，产品侧被迫写 `button.icon-btn:hover`
+ * 特异度 hack 兜底（注释自称「必须带上 button 前缀抬回同一档」）。
+ * 母版直接抬到 (0,3,1)：对没有全局 button 规则的产品，这两条与裸规则
+ * 等价（禁用态本就不该有 hover / active 反馈）；OCR 的 hack 随之删除，
+ * 原语从此只有一份定义。 */
+button.icon-btn:hover:not(:disabled) {
+  background: var(--bg-card-hover);
+  border-color: var(--border);
+  color: var(--text-primary);
+}
+
+button.icon-btn:active:not(:disabled) {
+  background: var(--bg-card);
+}
+
+/* 视觉 28px，命中区 40px（满足无障碍最小点击区而不放大视觉尺寸） */
+.icon-btn::after {
+  content: "";
+  position: absolute;
+  width: 40px;
+  height: 40px;
+  transform: translate(-50%, -50%);
+  left: 50%;
+  top: 50%;
+}
+
+/* 图标本身：统一 16px、stroke 走 currentColor、禁止继承文本颜色 */
+.icon-btn svg {
+  width: 16px;
+  height: 16px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  pointer-events: none;
+}
+
+/* ── 档位指示（light / dark 两档必须**肉眼可分**）────────────────────
+ *
+ * 2026-10-04 修两处（历史）：
+ *
+ * 1) 此前 light 与 dark 两档共用同一条规则 —— 同色同形，循环到哪一档都看不出来，
+ *    只有 title/aria-label 里有（而 title 要 hover 才出现）。现在用**填充图案**
+ *    区分：light 实心点 / dark 半实心（auto 的空心环随三态一并退役）。
+ *    5px 下形状差异读不出来，填充差异读得出来 —— 这是选图案而非选形状的原因。
+ *
+ * 2) 角标此前用 --red，与 .dot-live 撞车：同一个红点在一处表示「运行中」、
+ *    在另一处表示「当前档位」。语义必须解耦。角标是**信息**不是**告警**，
+ *    红色带危险/品牌暗示，主题档位不该抢这个语义 —— 统一走中性灰，
+ *    把 --red 留给 .dot-live（活跃）与 .btn-danger（危险）。
+ */
+.icon-btn[data-mode]::before {
+  content: "";
+  position: absolute;
+  right: 2px;
+  bottom: 2px;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  /* 兜底色 = dark 档。若某产品忘了写 data-mode 的具体值，
+     至少显示成一个有效的档位，而不是一个红点。 */
+  background: var(--text-tertiary);
+  flex: none;
+}
+
+/* light（浅色）：实心 */
+.icon-btn[data-mode="light"]::before {
+  background: var(--text-tertiary);
+}
+
+/* dark（深色）：左半实心 —— 与 light 的全实心不同 */
+.icon-btn[data-mode="dark"]::before {
+  background: linear-gradient(
+    to right,
+    var(--text-tertiary) 0 50%,
+    transparent 50% 100%
+  );
+  border: 1px solid var(--text-tertiary);
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+ * .badge-license —— 家族统一的许可/试用徽标原语（2026-10-25 审计 D-78）
+ *
+ * 审计发现同一枚徽标在 9 款里出现 6 种颜色（--red/--danger/--warn/#c0392b/灰）
+ * × 6 种尺寸（91×17 至 37×18），且全部低于 WCAG 2.5.8 的 24×24 最小命中区。
+ *
+ * 语义裁定：徽标只在许可**不处于正常态**（试用中/过期/未激活）时出现，
+ * 它是一枚"需要行动"的告示，统一走 --danger —— 浅档 #b8342a = 5.02:1、
+ * 暗档 #ff4a3d = 5.53:1，两档均过 AA。不再保留 warn/中性变体：
+ * 一个组件一种样子，变体面越大漂移越快。
+ *
+ * 按钮兼容：大部分产品把它渲染成 <button>（点击进入许可面板），
+ * 少数渲染成 <span>。这里给全 button 态（hover/focus-visible/disabled），
+ * <span> 用法自动忽略不可用的伪类，不受影响。
+ * 每款产品的替换方式：删掉各自的 .license-chip/.badge-license 本地定义，
+ * 保留类名，让样式唯一来源于本文件。
+ * ───────────────────────────────────────────────────────────────────────── */
+.badge-license {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  box-sizing: border-box;
+  /* 24×24 = WCAG 2.5.8 AA 最小命中区。此前 6 种实现全部不达标。 */
+  min-width: 24px;
+  min-height: 24px;
+  padding: 2px 10px;
+  border: 1px solid var(--danger);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--danger);
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  cursor: pointer;
+  user-select: none;
+}
+
+.badge-license:hover {
+  background: var(--bg-card-hover);
+}
+
+.badge-license:focus-visible {
+  outline: 2px solid var(--accent-glow);
+  outline-offset: 1px;
+}
+
+.badge-license:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+/* 显隐必须继续可用 hidden 属性切换：本原语的 display:inline-flex 是作者样式，
+   不加这条会盖过 UA 的 [hidden]{display:none}，徽标将永远显示。 */
+.badge-license[hidden] {
+  display: none;
+}
+
+/* 徽标旁常配一枚小图标（锁/警告），继承徽标色，10px 视觉尺寸。 */
+.badge-license svg {
+  width: 10px;
+  height: 10px;
+  margin-right: 4px;
+  flex: none;
+}

@@ -1,0 +1,53 @@
+# Rocktier 家族契约闸门 —— monorepo 唯一执行点
+#
+# 为什么执行点在这里（2026-11-24 定案）：
+#   原来是私有台账仓 rocktier-docs 的 family-contract.yml：先 clone 8 个产品仓平铺到
+#   family/，再跑 5 道闸门。monorepo 合并后那 8 个仓全部删除，这条链路两处同时失效：
+#
+#     ① clone 全部 404（布局没了）；
+#     ② 更早一步就挂了 —— 私有仓 Actions 额度耗尽，job 从未启动
+#        （annotation：「recent account payments have failed or your spending limit
+#        needs to be increased」）。11-22 起每次 cron 都是红，而红的是账单，不是判据。
+#
+#   于是「闸门全绿」这件事长期无人验证。现在判据、契约、产品在同一个公开仓，
+#   ubuntu 分钟数不计量，没有理由再放在私有仓。
+#
+# 契约唯一副本：docs/rocktier/（原在台账仓 docs/rocktier/）。旧设计的「9 份副本漂移」
+# 前提随 8 仓合一自动消失 —— 一个仓只能有一份。
+#
+# 判据本身一行没改：22 条闸门仍按 `Rocktier PDF` 这类旧目录名找产品，
+# scripts/family-gate.mjs 用符号链接农场把 apps/<id> 映射成旧名，布局对新判据透明。
+
+name: Family contract
+
+on:
+  push:
+    paths:
+      - "docs/rocktier/**"
+      - "apps/**"
+      - "scripts/family-gate.mjs"
+      - ".github/workflows/family-contract.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  family-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      # 五道闸门依次跑，第一道红就停（与旧 workflow 的步骤顺序一致）：
+      #   family      22 条判据（tokens 字节一致 / i18n 键对账 / 菜单可达 / Windows 陷阱…）
+      #   token-revert 产品样式里重定义 L0 令牌（登记在案的覆盖只报 ℹ）
+      #   contrast    对比度与浅色档屏蔽、字面色登记
+      #   locale      语言集合四边对账（注册表 = 字典 = 联合 = 生成器）
+      #   macos-hig   窗口/图标/Info.plist/原生命令的静态合规
+      # 脚本自己建 .family-root 软链农场，跑完即删（见 .gitignore）。
+      - name: Run family gate (5 checks)
+        run: node scripts/family-gate.mjs

@@ -1,0 +1,34 @@
+{
+  "$why": [
+    "登记在案的有意覆盖（2026-11-24 立）。scan-token-revert 的原始判据是「产品样式在 import 母版之后",
+    "又重定义 L0 令牌 = 回退」，2026-10-13 时存量清零。此后两件事让这条判据不再成立：",
+    "① D-158 玻璃材质（2026-11-15）：glass.css 把 --toolbar-h / --sidebar-w 提到 52 / 220，",
+    "   是 chrome 层的规格本身，不是把母版改旧；",
+    "② Pic2WebP 的 macOS 数值层（macos.css）：文件头已写明「在数值层覆盖母版令牌，语义名不改」，",
+    "   单款重设计不能靠改母版完成，否则同时改掉另外八款。",
+    "所以闸门改成两档：**登记过的覆盖**记为 ℹ 照常打印（数字涨了看得见），**没登记的**照样让 CI 红。",
+    "禁止为了变绿往这里加条目 —— 先问清「这是覆盖还是把母版值抄回了旧值」。",
+    "判据口径：products 为 \"*\" 时对全家族生效；file 按相对产品根的路径**后缀**匹配；",
+    "tokens 为 \"*\" 时该文件的全部覆盖都放行（仅限整层数值层这种已书面声明的场景）。"
+  ],
+  "allowed": [
+    {
+      "products": ["*"],
+      "file": "glass.css",
+      "tokens": ["--toolbar-h", "--sidebar-w"],
+      "reason": "Lenso 玻璃 chrome：工具栏 52px、侧栏 220px 是玻璃壳的规格，母版 44/260 服务于非玻璃壳的产品。D-158。"
+    },
+    {
+      "products": ["markdown"],
+      "file": "src/styles/app.css",
+      "tokens": ["--toolbar-h", "--sidebar-w"],
+      "reason": "同上。MD 是最早落地玻璃壳的档，glass 令牌直接写在 app.css 而非独立 glass.css。"
+    },
+    {
+      "products": ["pic2webp"],
+      "file": "src/styles/macos.css",
+      "tokens": ["*"],
+      "reason": "macOS 数值层：文件头声明的既定做法 —— 只覆盖数值、语义名不动，供单款重设计。整文件放行，闸门对该文件的令牌涨跌只报 ℹ 不判红。"
+    }
+  ]
+}

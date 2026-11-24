@@ -1,0 +1,680 @@
+{
+  "$comment": "Rocktier 家族决策表 v3 — 机器可读。CI (npm run family:check) 读本文件。方法论与理由见 docs/rocktier/DECISIONS.md",
+  "$intake_note": "2026-10-02 晚自 Windows 机传入入库，已按家族最新拍板对账（明细见 DECISIONS.md §8）：①SQ 码保留（删则锁死 PDF 在售激活）；②Compressor 已于 10-01 收编为第 9 款（撤销砍除提案，v0.1.2 五包已发）；③Write identifier 裁定为已上架例外；④『跟随系统语言』『全局 theme 键』两项待拍板。",
+  "specVersion": "3.0",
+  "tokensFile": "docs/rocktier/tokens.css",
+  "contractVersion": "2026-10-03",
+  "$ruling_2026_10_05": "①--success 维持绿色（深 rgba(48,209,88,0.9) / 浅 #1c7f46）——「终裁去绿（白/黑）」提案经复核不采纳，L0 母版与 9 产品均为绿，无需分发；②微软商店渠道弃用（store env 待移除）；③契约真源唯一 = rocktier-docs（PDF 仓库内副本已删 6e389f5）",
+  "$ruling_2026_10_28": "Sign 并入 PDF 1.1.0：sign-engine（Go）迁入 PDF 仓，PKCS#7 增量签名、证书库与旧数据迁移都在 PDF 里。Sign 的退场截至本条记录尚未执行（2026-10-28 修复轮核对：1.1.0 安装包未产出、未发布；官网撤下仅在 rocktier.com 工作树完成、尚未发布；GitHub Release 资产删除与仓库归档均未执行，等真机验收闸门，逐项状态见 dissolved.sign.action）。1.1.0 发布并完成退场后，家族在售产品由 9 款变 8 款：PDF、Markdown、Write、Pic2WebP、CAD Viewer、OCR、Journal、Compressor。已同步：products（pdf 状态 v1.1.0-pending-release、sign 状态 dissolved）、dissolved 追加 sign、featureOwnership 的签名归属改 pdf、mergeVerdict 的旧拒绝标 superseded、sharedBase 各层 consumers 的款数、L6 的 ACCEPTED_PRODUCTS 现值。不回改：带日期的旧叙述（本条以上各 $ 注释、globalRules.$locales_2026_10_13、uiLayers 的 rationale、L1_fonts.note、compressor 与 pic2webp 条目里的『第 9 款』）记的是当时的实测面，产品线数一律以本条与 products 为准。2026-10-29 续记：用户已整仓删除 GitHub 上的 Rocktier/Rocktier-Sign，47 个 Release 资产随之消失、不可恢复；本条中『Release 资产删除与仓库归档均未执行』一句因此失效，退场现状改见 products.sign.status 与 dissolved.sign.action，其余论断不变。同日 1.1.0 已发布，本条中『1.1.0 安装包未产出、未发布』与『pdf 状态 v1.1.0-pending-release』同理只作当时记录，现值见 products.pdf。",
+  "$freeze_2026_10_29": "Journal 冻结（非退场）：2026-10-29 用户裁定 Journal 功能停更，只接安全与数据损坏修复；仓库、发布、官网入口、在售状态全部保留。理由：①下载量不是理由 —— 同日 gh api 实测 Release 资产下载计数 OCR 29 / Journal 34 / Write 35，Journal 并非最低；②真正的不对称是数据只在本产品里 —— .rkd 是 AES-256-GCM 加密容器，export 产出的备份 ZIP 内容仍加密，砍掉等于用户的日记失去唯一入口。评估过并入别的产品（明文日期文件即放弃加密承诺；把 vault 搬进能打开任意 .md 的应用违反合并规则 2 信任模型一致性）与把 Write 改名 Writer 覆盖 journal/novel 两场景（novel 已覆盖，改名零功能收益且波及站点与仓库名），均不采纳。落地：rocktier.com/journal.html 加维护模式提示（jr.maintenance）；本条另见 products.journal.status 与 freezeNote。",
+  "brand": {
+    "spelling": "Rocktier",
+    "forbiddenSpellings": [
+      "ROCKTIER",
+      "RockTIER",
+      "rocktier",
+      "RockTier"
+    ],
+    "namingRule": "Rocktier + 一个体现功能的单词，首字母大写",
+    "productNameStaysEnglish": true,
+    "slogan": "Fast, private, built to last",
+    "pillars": [
+      "Performance",
+      "Privacy",
+      "Durability"
+    ]
+  },
+  "globalRules": {
+    "storageKeyNamespace": "rocktier.",
+    "langStorageKey": "rocktier.lang",
+    "themeStorageKey": "rocktier.theme",
+    "defaultLanguage": "en",
+    "followSystemLocale": true,
+    "followSystemTheme": true,
+    "defaultTheme": "dark",
+    "$pendingDecision": "followSystemLocale=true 与 themeStorageKey=rocktier.theme（全局共享键）为 v3 初稿提议：前者与家族现行『默认英文不跟随系统』冲突（PDF/Pic2Webp/Journal 等已实现），后者与已上线的产品作用域键 rocktier.journal.theme 冲突（全局键会跨应用同步主题，正是撞键教训的镜像）。两项均待用户拍板，拍板前各产品维持现状。",
+    "allowedLocales": [
+      "en",
+      "zh"
+    ],
+    "extendedLocales": [
+      "en",
+      "zh"
+    ],
+    "shellDefaults": "S",
+    "$locales_2026_10_13": "2026-10-13 用户拍板：全家族语言收敛为 en/zh 两种。理由（第一性原理）：① 全部 9 款产品的非中英语种都是未审校机翻基线（Compressor 的 scripts/i18n/*.mjs 注释自述「C 方案：机翻基线」），家族准则既禁机翻直出上库，继续分发等于把违反自家规则的产物卖给付费用户，比纯英文更糟（英文人人能读，错译折损专业信任）；② 家族内部语言集合本就不一致：Write 9 门（多一个 fr）、其余 8 门、官网 8 门、Compressor 声明了 zh 但 i18n-strings.ts 里根本没有 zh 块（实测 22.5KB 中只有 ja/ko/de/es/pt/ar 六块）；③ 零埋点意味着那 6 门产生过任何收入无法证明，维护成本（8 倍译文面、占位符对账、ja/ko 顺序互换类静默错译）却是已反复支付的真实成本；④ 主力市场英语区（2026-09-13 聚焦海外），专业工具用户读英文。移除 ar 同时消除整类 RTL 布局缺陷。内置多语言架构（L2_i18n）保留不变，后续有审校能力再逐门加回。 ⚠️ 2026-10-14 更正：原文①写作「6 款产品」、②写作「Journal/OCR/Pic2WebP 仅中英」，两处均为误判——前者漏了 OCR 与 Pic2WebP（它们各有 8 门），后者把三款都说成只有中英（实为 Journal 8 门已收敛、OCR 与 Pic2WebP 各 8 门未收敛）。错因是只按自己预期的文件名与声明形式去搜（export const LOCALES / src/i18n/index.ts），而 OCR 的 ui/lang.js、Pic2WebP 的 src/i18n.js、Write 的 UI_LANGS 三种形态都不匹配。裁定方向不变，依据已按实测重述。 ✅ 2026-10-15 收口：全家族 9 款产品与官网均已收敛为 en/zh —— Write / OCR / Pic2WebP 为最后三款（当日完成，各自 family-check 的 i18n 对账 PASS）；同日修复 PDF 的收敛遗漏（locales.ts 注册表仍为 8 门而字典仅 en/zh 两门，工具栏选择器 6 项静默落英文），release-i18n-check 的语言基线同步由 8 改为 2。 🔴 2026-10-15 续（同日晚些时候，收敛后复查；其中一条记述当晚已追改，追改记录见下）：三件同源残留，全部已修——① Compressor 档位中文从未存在：档位文案只走 PROFILE_I18N 查表、无内联兜底，而 b88c9f3 把档位迁进查表时只迁了 6 门机翻，en/zh 就是那时丢的，中文用户的档位名一直是英文。已从 e1ce9ca（「消灭双语混排」提交）的手写文案找回，新建 scripts/i18n-profiles/zh.mjs。② MD / Sign / PDF / CAD / Journal 五款的 scripts/gen-i18n.mjs 仍带 LANGS=[ja,ko,de,es,pt,ar]，跑一次生成器即复活已删字典；已按 Compressor 先例清空并加拒绝生成非 en/zh 的守卫。③ Sign 的 translations 每键仍带 6 个死语言字段（504 行未审校机翻），已剥离、Dict 类型收窄为 en/zh。另：Compressor 的 i18n-strings.ts 在 10-14 清了 LANGS 后从未重跑生成器，504 行死机翻原封不动随包分发，已重跑清掉。 ⟠ 追改记录（当晚）：初稿写道「Compressor 选中文显示英文、静默故障 8 天、survive 了 10-14 收敛复查」——**该修复不在本轮**：2802de6（10-14）已在调用点层修好（lang === \"zh\" ? zh : lookup(...)），本地仓库落后两个提交，我看到的是旧码。bug 历史属实（10-07 01d21c3 引入，_zh 参数被整个丢弃，zh 块从未生成，三级兜底伪装成正常英文），但持续时间是 7 天且修复早于本轮。教训：动手前先 git fetch 看清 HEAD..origin/main；写进契约的错事实要从所有出处追改。防复发：新增第 17 条闸门 locale-parity（docs/rocktier/tools/scan-locale-parity.mjs，挂 family-contract.yml），对账「选择器注册表 = 字典 = 类型联合 = 生成器 LANGS」四边，并为 Compressor 定三条专属判据（字典边取 PROFILE_I18N 且 en/zh 齐全；App.tsx 与 LicenseDialog.tsx 的 t() 闭包不许把 zh 参数命名成 _zh 丢弃、也不许走查表不给 zh 分支；STRINGS 允许为空对象）。变异测试 6 种故障形状全部能响。教训记 findings D-26/D-27。"
+  },
+  "uiLayers": {
+    "$comment": "两层契约（2026-10-16 用户方向落纸；解释见 docs/ROCKTIER-UI规范-v2.md §1.2）。familyLayer=不可让且有强制点；productLayer=明确放开、UI 上不背家族一致性包袱；清单之外的 UI 事项默认属产品层。",
+    "familyLayer": [
+      {
+        "area": "对比度 / a11y 底线",
+        "rule": "WCAG AA、焦点环可见、prefers-reduced-motion 支持",
+        "rationale": "品类最佳（Typora/Obsidian/Ulysses）在键盘与对比度上不及格，逐产品对标会把已修好的退回去",
+        "enforcedBy": ["contrast-gate.mjs", "family-check: font-theme-focus-tabularnums-present / reduced-motion-block-present"]
+      },
+      {
+        "area": "令牌单一真源",
+        "rule": "令牌值只在 docs/rocktier/tokens.css 定义；产品副本去注释、空白归一后与母版一致；[data-theme=light] 令牌集与 :root 完全一致",
+        "rationale": "--danger 改母版一处即 9 款 × 4 种底色全达标；拆 9 份副本下次要改 27+ 处",
+        "enforcedBy": ["family-check: tokens-snapshot-diff / light-theme-token-parity"]
+      },
+      {
+        "area": "存储键命名空间",
+        "rule": "全部持久化键以 rocktier. 开头",
+        "rationale": "9 款同机共存互不踩；键名被用户数据依赖，发版后改不起",
+        "enforcedBy": ["family-check: storage-key-namespace / first-frame-storage-key"]
+      },
+      {
+        "area": "i18n 契约",
+        "rule": "语言集与默认语言四边对账、en/zh 键双向对账、html lang 初始与同步、占位符完整（UI 规范 §8）",
+        "rationale": "错语言文案是最显眼的破绽，且跨文件最容易悄悄脱节",
+        "enforcedBy": ["scan-locale-parity.mjs", "family-check: no-literal-user-strings / html-lang-initial / html-lang-sync"]
+      }
+    ],
+    "productLayer": {
+      "$comment": "明确放开：不设家族闸门，产品按品类最佳自决。",
+      "items": [
+        "布局与信息密度",
+        "交互形态（点击/拖放/快捷键/悬停行为）",
+        "品类特定 UX（阅读模式/导出形态/编辑器行为等）",
+        "字号与间距密度（--fs-* / --sp-* 为参考实现，产品可裸写 px；引用时值仍以 tokens.css 为真源）"
+      ]
+    }
+  },
+  "$sharedBase_comment": "共享底座分层。L0/L1/L2 是新产品开工的强制前置；L3-L6 按需。详见 DECISIONS.md §3",
+  "sharedBase": {
+    "L0_tokens": {
+      "kind": "css",
+      "source": "docs/rocktier/tokens.css",
+      "distribution": "构建期拷贝（各产品 src/styles/tokens.css 为生成物，不得手改）",
+      "consumers": [
+        "全部 8 款（口径＝Sign 退场**完成后**的现役款数；截至本条退场未完成（仓已删，官网未发布），见 dissolved.sign.action 与 $ruling_2026_10_28）"
+      ],
+      "evidence": "现有令牌漂移：--dot 有 5 个值；--bg-secondary 浅色档 3 个值；--accent-brand 四家全缺",
+      "status": "ready"
+    },
+    "L1_fonts": {
+      "kind": "binary-assets",
+      "source": "docs/rocktier/fonts/",
+      "files": [
+        "Geist-Variable.woff2",
+        "GeistMono-Variable.woff2",
+        "OFL.txt"
+      ],
+      "bytesSavedPerProduct": 141020,
+      "consumers": [
+        "全部 8 款（口径＝Sign 退场**完成后**的现役款数；截至本条退场未完成（仓已删，官网未发布），见 dissolved.sign.action 与 $ruling_2026_10_28）"
+      ],
+      "$consumers_note_2026_10_28": "字体去重待办里的「10 份 md5 相同副本」是并入前实测，Sign 退场后需重新清点，此处不回改数字以免与当时的实测混同。",
+      "distribution": "构建期拷贝到各产品 src/fonts/",
+      "note": "OFL.txt 必须随字体一同分发（SIL OFL 合规）。9/29 铺开后 9 款中仅 Compressor 仍缺 OFL.txt，且其 THIRD-PARTY-NOTICES.md 引用了不存在的路径",
+      "status": "ready"
+    },
+    "L2_i18n": {
+      "kind": "ts",
+      "exports": [
+        "LanguageProvider",
+        "useI18n",
+        "useT",
+        "translate",
+        "detectLocale",
+        "interpolate"
+      ],
+      "rules": [
+        "唯一实现，禁止各产品自行实现",
+        "切换语言必须重渲染全部界面，含弹窗/Toast/状态栏/原生菜单",
+        "启动即设 document.documentElement.lang，切换即改",
+        "插值必须用 /\\{(\\w+)\\}/g（带 g）",
+        "支持函数值文案（OCR 场景需要）",
+        "缺失键 dev 模式 console.error，生产降级 en，再兜底返回 key",
+        "切换时调用 build_menu(lang) 重建原生菜单"
+      ],
+      "evidence": "实测 8 产品 7 套键命名；4 种互斥检测策略；Sign 与 Journal 撞键 rj-theme；OCR 从不设 html lang；Sign 插值无 g",
+      "consumers": [
+        "MD",
+        "Write",
+        "PDF",
+        "Journal",
+        "CAD",
+        "Sign",
+        "OCR",
+        "Pic2Webp",
+        "Compressor"
+      ],
+      "$consumers_note_2026_10_28": "清单里 Sign 记录的是 2026-10 底座审计时的接入面（Sign 确实实现了 L2）。2026-10-28 Sign 并入 PDF 1.1.0 后退场；截至本条记录，仓库尚未归档，Release 资产删除与官网发布均未完成（见 dissolved.sign.action），其 L2 实现随 PDF 的同一份底座走；1.1.0 发布并完成退场后，在售产品的接入面按 8 款算，见 $ruling_2026_10_28。2026-10-29 续记：远端仓已整仓删除（本机副本仍在），本条中『仓库尚未归档、资产删除未完成』一句失效。",
+      "status": "spec-ready"
+    },
+    "L3_theme": {
+      "kind": "ts",
+      "exports": [
+        "ThemeProvider",
+        "useTheme"
+      ],
+      "rules": [
+        "唯一实现，跟随系统 + 手动覆盖",
+        "首帧防闪烁：index.html 内联脚本先落 data-theme，React 挂载前生效",
+        "切换时设 document.documentElement.setAttribute('data-theme', theme)",
+        "存储键必须 rocktier.theme"
+      ],
+      "evidence": "MD/Write/Journal 三份 useTheme 近乎重复（1806/1809/2259 B）；Sign 浅色主题漏 5 个令牌致白底白滚动条",
+      "consumers": [
+        "全部 8 款（口径＝Sign 退场**完成后**的现役款数；截至本条退场未完成（仓已删，官网未发布），见 dissolved.sign.action 与 $ruling_2026_10_28）"
+      ],
+      "status": "spec-ready"
+    },
+    "L4_markdown": {
+      "kind": "ts",
+      "exports": [
+        "parseMarkdown",
+        "renderMarkdown",
+        "htmlToMarkdown",
+        "extractHeadings",
+        "searchHighlight",
+        "countWords"
+      ],
+      "files": [
+        "markdown.ts",
+        "htmlToMarkdown.ts",
+        "markdown.css",
+        "katex-woff2.css"
+      ],
+      "zeroRiskEvidence": "markdown.ts 12545 B 与 htmlToMarkdown.ts 4579 B 在 MD 与 Write 之间 MD5 完全一致（fork 产物）",
+      "consumers": [
+        "Markdown",
+        "Write"
+      ],
+      "notes": "抽包零风险：两文件逐字节相同。katex-woff2.css 两边差异大（22675 vs 7330），需先定以哪边为准",
+      "status": "extractable-now"
+    },
+    "L5_menu": {
+      "kind": "rust",
+      "exports": [
+        "build_menu"
+      ],
+      "rule": "唯一实现；按 UI 语言重建原生菜单；family.json 为菜单项单一来源",
+      "evidence": "menu.rs 重复 4 处：Journal 8130 B / OCR 5044 B / Pic2Webp 4572 B / CAD 3633 B",
+      "consumers": [
+        "MD",
+        "Write",
+        "PDF",
+        "Journal",
+        "CAD",
+        "Sign",
+        "OCR",
+        "Pic2Webp",
+        "Compressor"
+      ],
+      "$consumers_note_2026_10_28": "同 L2：Sign 在清单里记的是审计时的接入面，2026-10-28 起退场，菜单实现留在 PDF 仓；在售产品的接入面按 8 款算，见 $ruling_2026_10_28。",
+      "status": "spec-ready"
+    },
+    "L6_license": {
+      "kind": "rust",
+      "exports": [
+        "verify_receipt",
+        "read_valid_receipt",
+        "status_from",
+        "allows_write"
+      ],
+      "design": "Ed25519 回执，应用内嵌公钥离线验签",
+      "rules": [
+        "唯一实现，5+ 产品共用同一套校验",
+        "ACCEPTED_PRODUCTS 从 family.json 读取，禁止硬编码",
+        "PDF 产品码 = PD（2026-10-03 用户拍板由 SQ 改名，依据 MS Store 与官网直售零成交=零存量；license.rs 与官网双 map 同批落地。2026-10-05 终裁确认维持；端到端待真实交易验证）"
+      ],
+      "evidence": "现仅 PDF 有 license.rs；ACCEPTED_PRODUCTS=[\"SQ\",\"FL\"] 中 SQ 是已下架的 Squeeze",
+      "$accepted_products_2026_10_28": "Sign 并入 PDF 后，PDF 的 ACCEPTED_PRODUCTS 现为 [\"PD\",\"SG\",\"FL\"]（Rocktier PDF/src-tauri/src/license.rs）：SG 是 Sign 的单品码，老用户手里的 SG 回执在 PDF 里等同 PD，不新增产品码、签名能力不额外收费。上面 evidence 里的 [\"SQ\",\"FL\"] 是本文件早于 2026-10-03 PD 改名的旧记录，保留作历史。",
+      "status": "extractable-now",
+      "priority": 1,
+      "rationale": "唯一变现闸门，抽完 5 个产品立刻可收费"
+    }
+  },
+  "shellTiers": {
+    "S": {
+      "maxTools": 5,
+      "layout": "toolbar",
+      "commandPalette": false,
+      "rail": false
+    },
+    "M": {
+      "maxTools": 12,
+      "layout": "rail",
+      "commandPalette": false,
+      "rail": true
+    },
+    "L": {
+      "maxTools": null,
+      "layout": "rail",
+      "commandPalette": true,
+      "rail": true,
+      "maxRailItems": 7
+    }
+  },
+  "toolCategories": {
+    "convert": {
+      "placement": "rail",
+      "pattern": "modal",
+      "labelRequired": true,
+      "confirm": true
+    },
+    "edit": {
+      "placement": "rail",
+      "pattern": "inline",
+      "labelRequired": false,
+      "confirm": false
+    },
+    "secure": {
+      "placement": "rail",
+      "pattern": "modal",
+      "labelRequired": true,
+      "confirm": true
+    },
+    "view": {
+      "placement": "toolbar",
+      "pattern": "toggle",
+      "labelRequired": false,
+      "confirm": false
+    }
+  },
+  "$methodology_comment": "功能归属判定：先问『这个能力的服务对象是谁』，再问『它和宿主产品的用户是不是同一个人』。四条硬规则见 DECISIONS.md §2",
+  "featureOwnership": [
+    {
+      "capability": "PDF 压缩（qpdf + imagepass）",
+      "owner": "pdf",
+      "reason": "输入输出都是 PDF，宿主即 PDF 工具箱",
+      "evidence": "2026-09-20 已从 PDF-Squeeze 并入，压缩率实测达标",
+      "movedFrom": "pdf-squeeze"
+    },
+    {
+      "capability": "PDF 视觉水印/图章",
+      "owner": "pdf",
+      "reason": "纯视觉覆盖，pdfium 直接绘制",
+      "evidence": "pdf.rs:504 add_signature() 放透明 PNG；PDF 全仓库无 PKCS7/ByteString/SubFilter/ByteRange",
+      "correction": "⚠️ 我曾误判此处与 Sign 重复，已核实为两个不同能力",
+      "$evidence_update_2026_10_28": "evidence 后半句记的是 2026-10-05 的实测面，当时 PDF 确实无 PKCS#7。现 PDF 仓已迁入 sign-engine（Go sidecar）具备 PKCS#7 增量签名，该句已不成立；两个能力各自独立这一判定不变，图章仍是视觉覆盖，密码学签名走 sidecar。"
+    },
+    {
+      "capability": "密码学数字签名 + 证书管理",
+      "owner": "pdf",
+      "reason": "签名与「打开/编辑同一份 PDF」是同一个用户动作的两端；拆成两个 App 等于让用户在两个窗口之间来回",
+      "evidence": "sign-engine 迁入 PDF 仓，PKCS#7 增量签名由 Go sidecar 完成（PDF 1.1.0）",
+      "movedFrom": "sign",
+      "decision": "2026-10-28 并入 PDF；此前『保持独立』的判定被取代"
+    },
+    {
+      "capability": "图片格式转换与批量压缩",
+      "owner": "pic2webp",
+      "reason": "输入输出都是独立图片文件",
+      "evidence": "Pic2Webp 视觉最佳参照、已在售；语言已随家族收敛为 en/zh",
+      "absorbs": "（已撤销）原随砍 Compressor 提案；Compressor 已保留为第 9 款，图片压缩留在 Compressor"
+    },
+    {
+      "capability": "OCR / 可搜索 PDF 生成",
+      "owner": "ocr",
+      "reason": "虽输出 PDF，但服务对象是『扫描件用户』不是『PDF 编辑用户』；合并会同时拉低两者定位",
+      "marketGap": "竞品 Readiris $49 / ABBYY $199，$9.99-19.99 是结构性空档",
+      "decision": "保持独立，只共享 L0-L6 底座"
+    },
+    {
+      "capability": "Markdown 编辑 + 实时预览",
+      "owner": "markdown",
+      "reason": "分屏预览 + 侧栏大纲，服务技术/笔记用户",
+      "evidence": "仅 Sidebar.tsx 独有；家族最成熟产品，有单元测试"
+    },
+    {
+      "capability": "长篇写作（单栏专注 / 章节树 / 多标签 / DOCX）",
+      "owner": "write",
+      "reason": "单栏去预览 vs MD 的分屏，产品定义互斥；合并会破坏双方",
+      "evidence": "Write 8 个独有组件共 24 KB；仅 5 个组件共用；与 MD 底层 2 文件 MD5 完全一致",
+      "decision": "保持独立，靠 L4 共享底座复用底层，不做产品合并"
+    },
+    {
+      "capability": "加密日记保险箱",
+      "owner": "journal",
+      "reason": "信任模型独立：签名工具需持私钥，日记要求『谁也碰不到』，同体会互相摧毁",
+      "evidence": "审计确认；曾建议 Private(Sign+Journal) 方案已否决",
+      "$note_2026_10_28": "Sign 并入 PDF 后，持私钥的产品换成 PDF（sign-engine 加系统钥匙串）。本条冲突判定原样适用于 PDF 与 Journal，不因 Sign 退场而消失：两者仍不同体。"
+    },
+    {
+      "capability": "CAD/DXF/DWG 看图",
+      "owner": "cad-viewer",
+      "reason": "零重叠，竞品 DWGSee $69，价格天花板最高",
+      "status": "已在售 240 市场"
+    },
+    {
+      "capability": "Office( docx/pptx/xlsx ) 文档内图片瘦身",
+      "owner": "pdf",
+      "reason": "与 PDF 内图片重编码是同一技术，仅容器不同（ZIP+XML vs PDF 对象）；复用 compress.rs + imagepass.rs，是增量不是重写",
+      "status": "deferred",
+      "condition": "等 PDF 付费验证通过后再做；不新建产品",
+      "note": "Office 格式本质是 ZIP+XML，里面就是普通 PNG/JPEG，用同一套 mozjpeg/libwebp 即可"
+    }
+  ],
+  "products": [
+    {
+      "id": "pdf",
+      "displayName": "Rocktier PDF",
+      "repo": "Rocktier/Rocktier-PDF",
+      "identifier": "Rocktier.RocktierPDF",
+      "stack": "Tauri2+React",
+      "shell": "L",
+      "tools": 21,
+      "license": "MIT",
+      "bundled": [
+        "pdfium(BSD-3)",
+        "qpdf(Apache-2.0)",
+        "mozjpeg(BSD-3)",
+        "sign-engine(digitorus/pdfsign, Go, BSD-2-Clause)"
+      ],
+      "pricing": {
+        "store": 4.99,
+        "direct": 9.99
+      },
+      "status": "v1.1.2-released",
+      "$status_note_2026_10_28": "pending-release 的口径（2026-10-28 修复轮）：1.1.0 版本号已写入 src-tauri/Cargo.toml、src-tauri/tauri.conf.json、package.json 三处，但安装包未产出、未发布，故不写 released；发布后改回 v1.1.0-released，同时官网 checksums.json 需用 tools/gen-checksums.mjs 重生成（属 rocktier.com 侧的发版动作）。2026-10-29 已按此口径收口：tag v1.1.0 的 Release run 40834644129 成功，8 个资产（dmg×3、msi、exe、msix、msixbundle、app.zip×2）已转为正式发布；官网 checksums.json 已重新生成并指向 v1.1.0。另：本条目原值 v1.0.20-released; store-submitted 中的 store-submitted（微软商店通道）语义已随本轮改写移除，依据是 $ruling_2026_10_05 ②（2026-10-05 裁定微软商店渠道弃用），是有意删除，不是漏写。",
+      "$sign_2026_10_28": "1.1.0 起内置数字签名（证书管理 / 签名 / 验签），承接退场的 Sign：sign-engine 随包分发，Sign 的证书库与私钥启动时复制式迁移，SG 回执等同 PD，签名不额外收费。",
+      "$tools_note_2026_10_28": "tools = 21（2026-10-29 调，此前 20）。口径与依据：契约里的 tools 是数量级标记，不是可枚举清单 —— PDF 前端从未有声明式工具表（Toolbar.tsx 是散装按钮，App.tsx:63 的 Dialog 联合也不是工具全集），所以「什么算一个 tool」在本仓无定义，逐项重数会引入无法复核的新数字。本次只做已发生的增量：20（并入前 v1.0.30 的契约值）+ 1（数字签名，唯一新增的用户可见能力：证书管理 / 签名 / 验签，入口 App.tsx 的 digital-sign 对话框与 Toolbar 签名按钮）= 21。2026-10-29 裁定「发布前保持 20」的前提已消失：1.1.0 于 2026-10-29 发布，官网 checksums.json 已指向 v1.1.0，客户装得到 21 而不是装不到。",
+      "base": [
+        "L0",
+        "L1",
+        "L2",
+        "L3",
+        "L5",
+        "L6"
+      ]
+    },
+    {
+      "id": "markdown",
+      "displayName": "Rocktier Markdown",
+      "repo": "Rocktier/Rocktier-MD",
+      "identifier": "Rocktier.RocktierMarkdown",
+      "stack": "Tauri2+React",
+      "shell": "M",
+      "license": "MIT",
+      "pricing": {
+        "store": 4.99,
+        "direct": 6.99
+      },
+      "status": "v1.0.20-released; store-submitted",
+      "base": [
+        "L0",
+        "L1",
+        "L2",
+        "L3",
+        "L4",
+        "L5",
+        "L6"
+      ],
+      "notes": "家族最成熟，i18n 全量接线，有单元测试，是其他产品的参照实现"
+    },
+    {
+      "id": "write",
+      "displayName": "Rocktier Write",
+      "repo": "Rocktier/Rocktier-Write",
+      "identifier": "com.rocktier.write",
+      "stack": "Tauri2+React",
+      "shell": "M",
+      "license": "MIT",
+      "pricing": {
+        "direct": 12.99
+      },
+      "status": "v1.4.14-released",
+      "base": [
+        "L0",
+        "L1",
+        "L2",
+        "L3",
+        "L4",
+        "L5",
+        "L6"
+      ],
+      "notes": "7 语言；Mac App Store 构建已支持。⚠️ src-tauri/src/paddle.rs（**已于 Paddle 取消时清理**） 是死代码且有致命缺陷（明文 license 落盘；无环境变量时任意 ≥8 字符串即激活）——接入付费墙必须用 PDF license.rs（Ed25519 回执）方案并删除 paddle.rs，绝不可把 paddle.rs 接上前端（UX 报告 §B.0）。identifier com.rocktier.write 经 2026-10-02 复核裁定为已上架例外（v1.1.11 已上架，改名代价大于收益），保留"
+    },
+    {
+      "id": "pic2webp",
+      "displayName": "Rocktier Pic2WebP",
+      "repo": "Rocktier/pic2webp",
+      "identifier": "Rocktier.RocktierPic2WebP",
+      "stack": "Tauri2+VanillaJS",
+      "shell": "S",
+      "license": "MIT",
+      "pricing": {
+        "store": 4.99,
+        "direct": 4.99
+      },
+      "status": "v1.9.20-released; live-in-store",
+      "base": [
+        "L0",
+        "L1",
+        "L2",
+        "L5"
+      ],
+      "notes": "视觉落地最佳参照；语言已收敛为 en/zh。vanilla JS 只能接 L0/L1/L2 的降级形态"
+    },
+    {
+      "id": "cad-viewer",
+      "displayName": "Rocktier CAD Viewer",
+      "repo": "Rocktier/Rocktier-CAD-Viewer",
+      "identifier": "Rocktier.RocktierCADViewer",
+      "stack": "Tauri2+Svelte5",
+      "shell": "M",
+      "license": "MIT",
+      "bundled": [
+        "libredwg-dwg2dxf(GPL-3.0-or-later, 独立进程)"
+      ],
+      "pricing": {
+        "store": 4.99,
+        "direct": 14.99
+      },
+      "status": "v0.2.16-released; live-in-store-240-markets",
+      "base": [
+        "L0",
+        "L1",
+        "L2",
+        "L3",
+        "L5",
+        "L6"
+      ],
+      "p0": "已修（bce8c54，中英许可证对齐 MIT + ezdxf 署名）"
+    },
+    {
+      "id": "ocr",
+      "displayName": "Rocktier OCR",
+      "repo": "Rocktier/Rocktier-OCR",
+      "identifier": "Rocktier.RocktierOCR",
+      "stack": "Tauri2+VanillaJS+Rust",
+      "shell": "S",
+      "license": "MIT",
+      "bundled": [
+        "onnxruntime",
+        "ppocrv5-onnx(Apache-2.0)"
+      ],
+      "pricing": {
+        "direct": 14.99
+      },
+      "status": "v0.2.13-released; store-submitted",
+      "base": [
+        "L0",
+        "L1",
+        "L2",
+        "L5",
+        "L6"
+      ],
+      "notes": "最高潜力：英文 char F1 97.5% 已验证"
+    },
+    {
+      "id": "journal",
+      "displayName": "Rocktier Journal",
+      "repo": "Rocktier/Rocktier-Journal",
+      "identifier": "Rocktier.RocktierJournal",
+      "stack": "Tauri2+React+Tiptap",
+      "shell": "M",
+      "license": "MIT",
+      "pricing": {
+        "direct": 9.99
+      },
+      "status": "v0.2.16-released",
+      "base": [
+        "L0",
+        "L1",
+        "L2",
+        "L3",
+        "L5",
+        "L6"
+      ],
+      "mustStayStandalone": true,
+      "p0": "i18n/锁屏硬编码已修（9e68c70）；P0-10/11/12 已修（6e4df12，v0.2.5）。2026-10-29 复核两条遗留均已关闭：export↔restore 有真实单测（vault.rs:1428 `export_restore_roundtrip_recovers_entries_and_key_material`、:1718 v2 信封），index.html 防闪脚本已改读 `rocktier.journal.theme`",
+      "freezeNote": "2026-10-29 用户裁定冻结（非退场、非删仓）：功能停更，只接安全与数据损坏修复。理由见 $freeze_2026_10_29"
+    },
+    {
+      "id": "compressor",
+      "displayName": "Rocktier Compressor",
+      "repo": "Rocktier/Rocktier-Compressor",
+      "identifier": "Rocktier.RocktierCompressor",
+      "stack": "Tauri2+React+Go引擎",
+      "shell": "S",
+      "license": "TBD（README 曾写 Commercial，未定）",
+      "pricing": {
+        "store": 4.99,
+        "direct": 9.99
+      },
+      "status": "v0.1.15-released",
+      "base": [
+        "L0",
+        "L1",
+        "L5"
+      ],
+      "notes": "2026-10-01 收编为第 9 款：前端重写（默认英文+持久化、menu-action、关窗守卫、拖放/文件夹、Geist）、CI 用 PDF 范式 + 发版闸门；P0-16/17/18 已修（0c50c76/fc187e9）。遗留见 task_plan 阶段 8C（xlsx/pdf 忽略参数、覆盖确认、浅色主题、OFL.txt）"
+    },
+    {
+      "id": "sign",
+      "displayName": "Rocktier Sign",
+      "repo": "Rocktier/Rocktier-Sign",
+      "identifier": "Rocktier.RocktierSign",
+      "stack": "Tauri2+React",
+      "shell": "S",
+      "license": "MIT",
+      "pricing": {
+        "direct": 9.99,
+        "$historical": "9.99 是 Sign 停售前的直销价，保留不删（2026-10-29 裁定）：老 SG 用户退款与旧订单核对要用，删历史事实不可逆、标注成本为零。停售后不再对外展示，不代表当前可购。"
+      },
+      "status": "retired (2026-10-28 merged into pdf; 2026-10-29 GitHub 仓已整仓删除，Release 资产随之消失且不可恢复；1.1.0 已于 2026-10-29 发布，官网撤下已提交待推送；本机工作副本已删除，逐项见 dissolved.sign.action)",
+      "retired": true,
+      "retiredAt": "2026-10-29",
+      "retiredNote": "远端仓删除后本条目只作历史核对：identifier / repo / pricing 供老 SG 回执、退款与旧订单核对继续使用，不再参与 family:check 的 repo-present 判据（见该文件主流程对 products[].retired 的处理）。本机 Rocktier Sign 工作副本已于 2026-10-29 删除（含 .git 全历史 21 MB）；删前用 git bundle --all 存档到 ~/Downloads/rocktier-sign-2026-10-29.bundle（14 MB，含 16 个 tag，git bundle verify 通过），存废由用户定。",
+      "base": [
+        "L0",
+        "L1",
+        "L2",
+        "L3",
+        "L5",
+        "L6"
+      ],
+      "mustStayStandalone": false,
+      "mustStayStandaloneNote": "原为 true（2026-10-05 判定：PKI 域独立）。2026-10-28 Sign 并入 PDF 1.1.0，该判定被 featureOwnership 的新决策取代；Journal 的 mustStayStandalone 不受影响，信任模型冲突仍在。",
+      "p1": "撞键已修（8507dba，改用 rocktier.journal.theme）；P0-13/14 已修（33befbd，v0.1.3 私钥入系统钥匙串 + 验证三态）。其余遗留见 task_plan 阶段 8C",
+      "notes": "2026-10-28 并入 PDF 1.1.0：sign-engine（Go）迁入 PDF 仓做 PKCS#7 增量签名，证书与旧数据由 PDF 启动时复制式迁移，SG 回执在 PDF 的 ACCEPTED_PRODUCTS 里等同 PD。原「密码学签名域独立」判定已失效（见 featureOwnership 与 dissolved）。曾被误判为 PDF 的重复实现，已核实更正：视觉图章与密码学签名始终是两个能力"
+    }
+  ],
+  "dissolved": [
+    {
+      "id": "pdf-squeeze",
+      "reason": "Ghostscript AGPL-3.0 与 MIT 冲突，2026-09-18 已下架；压缩能力已并入 PDF",
+      "residualCleanup": "SQ→PD 已落地（2026-10-05 终裁确认维持）；官网残留（/pdf-squeeze URL 301、Squeeze 文案、子图标文件名）清理待做",
+      "action": "清理残留引用"
+    },
+    {
+      "id": "toss",
+      "reason": "跨网络传输与家族『数据只留在设备上』根基冲突，2026-09-25 已终止",
+      "action": "仓库归档保留，不再开发"
+    },
+    {
+      "id": "sign",
+      "reason": "数字签名并入 PDF 1.1.0（同一引擎、同一证书库）；签名随 PDF 免费，SG 回执继续有效",
+      "action": "退场进度（2026-10-29 续）：1.1.0＝已发布（事实见 products.pdf 的 status / $status_note），Sign 的能力在客户可装的版本里真正落地；官网撤下＝rocktier.com 工作树已改完并提交 786cff2，尚未推送；GitHub 仓＝2026-10-29 已整仓删除（用户执行），47 个 Release 资产随仓一并消失、不可恢复，原计划的『资产删除』与『仓库归档』两步因此作废；本机 Rocktier Sign 工作副本＝2026-10-29 已删除，删前 bundle 存档于 ~/Downloads/rocktier-sign-2026-10-29.bundle。遗留风险：删仓发生在 1.1.0 真机验收（多页 PDF 的 -page 落点）之前，若该验收不达标，已没有可回退的已发布 Sign 产物，只能修 PDF"
+    }
+  ],
+  "$mergeVerdict_comment": "结论：不合并任何产品。用共享底座替代产品合并。理由见 DECISIONS.md §4（该节已随 2026-10-28 改判追加带日期注记，原判定文字未重写，与本条互指自洽）。2026-10-28 更新：该结论的唯一例外是 Sign 并入 PDF 1.1.0（见 dissolved 与 mergeVerdict.rejected 的 superseded；截至本条 1.1.0 待发布，退场动作逐项状态见 dissolved.sign.action）；拒绝记录本身保留，因为它记录的 2026-10-05 判定当时的依据是真实的",
+  "mergeVerdict": {
+    "mergeAnyProducts": false,
+    "rejected": [
+      {
+        "proposal": "Doc (PDF + Markdown)",
+        "rejected": true,
+        "reason": "Markdown 编辑与 PDF 操作是两个不同工作，且 OCR 也输出 PDF，合并后边界不清"
+      },
+      {
+        "proposal": "Pic (Pic2WebP + OCR)",
+        "rejected": true,
+        "reason": "技术同源（图像编解码）但用户不同；且『OCR』是关键词，埋进 Pic 等于放弃搜索入口"
+      },
+      {
+        "proposal": "Private (Sign + Journal)",
+        "rejected": true,
+        "reason": "信任模型冲突：签名工具须持私钥，日记要求谁也碰不到，同体互相摧毁"
+      },
+      {
+        "proposal": "Sign 并入 PDF",
+        "rejected": true,
+        "reason": "我曾误判 PDF 的 StampDialog 与 Sign 的 uploadSig 重复。核实后确认：PDF 的 stamp 是视觉水印（pdf.rs:504 放 PNG），Sign 是密码学签名（ring:: ×9）。PDF 全仓库无 PKCS7/ByteString/SubFilter/ByteRange，不具备签名能力",
+        "superseded": "2026-10-28",
+        "supersededReason": "当时拒绝的唯一理由是 PDF 不具备 PKCS#7 能力；本版把 sign-engine 迁入 PDF 仓正是补上这一条，因此该拒绝失效。"
+      },
+      {
+        "proposal": "Write 并入 Markdown",
+        "rejected": true,
+        "reason": "产品定义互斥（单栏专注 vs 分屏预览）；Write 已 v1.1.11 发布，合并=丢弃已有商店素材。底层 2 文件已 MD5 一致，抽包零风险即可复用"
+      }
+    ]
+  },
+  "newProductAdmission": {
+    "$comment": "新产品开工前必须过这五关。详见 DECISIONS.md §5",
+    "checklist": [
+      "① 这个能力的服务对象，和某个现有产品的用户是同一批人吗？是 → 加进那个产品；否 → 独立产品",
+      "② 它和现有产品的信任模型一致吗？不一致 → 绝不同体",
+      "③ Shell 档位判定：工具 ≤5 → S；6-12 → M；≥13 → L（需命令面板 + Rail ≤7）",
+      "④ 落位查 toolCategories 表，convert 类必须走 Modal 且需确认",
+      "⑤ 必须接 L0+L1+L2，通过 family:check 才允许合并"
+    ],
+    "hardRules": [
+      "新产品必须以 Rocktier 开头 + 一个单词",
+      "新产品不得自建 tokens.css（从 L0 拷贝）",
+      "新产品不得自建字体（从 L1 拷贝，含 OFL.txt）",
+      "新产品不得自实现 i18n / theme（必须用 L2 / L3）",
+      "新产品必须选用 family.json 中已有的 locale，不得单方面新增",
+      "identifier 新产品必须为 Rocktier.Rocktier<Product>；Write 的 com.rocktier.write 为已上架例外（2026-10-02 复核裁定保留）"
+    ]
+  },
+  "pricing": {
+    "model": "one-time-purchase",
+    "noSubscription": true,
+    "familyBundleUSD": 29.99,
+    "grandfathering": true,
+    "evidence": "findings.md 已实证：单品 $4.99 / 全家桶 $19.99 压在市场底部。CAD 竞品 DWGSee $69；OCR 竞品 Readiris $49 / ABBYY $199；Write 竞品 Ulysses $59/yr",
+    "$sign_merge_2026_10_28": "Sign 并入 PDF 后：签名随 PDF 提供、不额外收费（PDF 的 ACCEPTED_PRODUCTS 已含 SG，老 SG 回执等同 PD；FL 全家桶本就含 PDF，自动覆盖）。两项属业务决定，本文件不代拍：① familyBundleUSD 29.99 对应的桶内组成由 9 款变 8 款，价格与官网口径是否随之调整；② products.sign 条目保留的 pricing.direct 9.99 是下架前的历史价，是否从台账摘除。",
+    "note": "2026-10-03 用户拍板保守档，direct 价已对齐且官网 /pricing 分级展示 live。⚠️ 2026-10-06 终裁：**Paddle 全线取消**，收款通道改由 Creem 承担（审核已过）；原「Paddle 预计审核不过」一节作废、微软商店渠道弃用（当它不存在——B-P6 的 ROCKTIER_CHANNEL=store 作废，已加的 workflow env 待移除，否则 msix 直装免付费墙）→ **变现主通道 = Creem（2026-10-06 审核已过）**，官网展示价与收款一致性在 Creem 接入时一次对齐。竞品锚：CAD DWGSee $69 / OCR Readiris $49 / Write Ulysses $59/yr"
+  },
+  "ciChecks": [
+    "tokens-snapshot-diff",
+    "light-theme-token-parity",
+    "icon-btn-single-source",
+    "i18n-key-reconciliation",
+    "no-literal-user-strings",
+    "first-frame-storage-key",
+    "storage-key-namespace",
+    "html-lang-sync",
+    "font-theme-focus-tabularnums-present",
+    "license-statement-consistency",
+    "rail-item-count",
+    "reduced-motion-block-present",
+    "identifier-naming-convention",
+    "directory-name-matches-contract",
+    "about-menu-metadata",
+    "menu-action-has-frontend-handler",
+    "error-text-localized",
+    "locale-parity",
+    "html-lang-initial",
+    "markup-i18n-default-lang"
+  ],
+  "$windows_checks_comment": "第 13-15 条来自 2026-10-03 Windows 商店审核的一批真实问题；第 16 条（first-frame-storage-key）来自 2026-10-04 的键改名收尾。共性：macOS 完全正常，只有 Windows 暴露，且静默失败（不报错、不崩溃、只是点了没反应），因此跨平台 CI 抓不到，只能靠契约闸门拦。实现见 docs/rocktier/tools/checks-windows.mjs。第 17 条（locale-parity，2026-10-15 新增）不属 Windows 批次：它挡的是「语言菜单里有这个语言、点进去是英文」——PDF（10-14 注册表 8 门 vs 字典 2 门）与 Compressor 的档位查表缺 zh（b88c9f3 迁档位进查表时只迁 6 门机翻，en/zh 就是那时丢的，中文用户的档位名一直是英文、无人修过）各踩过一次，且都是静默失败。实现见 docs/rocktier/tools/scan-locale-parity.mjs，挂在 family-contract.yml，变异测试 6 种形状全部能响。另注：Compressor 界面级中文曾在 10-07~10-14 间静默回落英文（01d21c3 引入 _zh 丢弃、2802de6 修复于调用点层），本闸门的闭包检查防它退回去。第 18-19 条（html-lang-initial / markup-i18n-default-lang，2026-10-15 深夜新增）挡的是 i18n 的**静态面**：JS 执行前或执行失败时用户看到的是 HTML 里写死的内容——Pic2Webp 与 CAD 的 <html lang=\"zh-CN\"> 让读屏器用中文语音读英文界面，OCR 与 Pic2Webp 的 data-i18n 兜底是中文（英文用户首帧看到中文）。运行时闸门抓不到这类问题（JS 一旦跑起来就被覆盖），只能查静态文件，故并入 family-check。实现见 docs/rocktier/tools/family-check.mjs 第 6b/6c 判据；副本分发用 docs/rocktier/tools/sync-family-gates.mjs（产品仓各存一份 family-check / scan-token-revert，实测 18 对里 9 处漂移后才补的这条命令）。已知盲区见 findings D-28：no-literal-user-strings 只防中文漏进英文界面，不防双语产品里硬编码英文（Sign 验证页整页判决书曾因此漏网）；「JSX 裸文本节点」闸门经全家族实测信噪比不足，不上闸门、记为人工审计项。"
+}
