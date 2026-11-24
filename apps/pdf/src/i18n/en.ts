@@ -20,6 +20,9 @@ export const en = {
     exportLongImage: 'Long image',
     imageify: 'Image-only PDF',
     imagesToPdf: 'Images to PDF',
+    extractImages: 'Extract embedded images',
+    crop: 'Crop pages',
+    metadata: 'Document properties',
     sign: 'Stamp',
     digitalSign: 'Digital signature',
     security: 'Password protection',
@@ -172,6 +175,35 @@ export const en = {
     cancel: 'Cancel',
     done: 'Form updated',
     page: 'Page {n}',
+  },
+
+  crop: {
+    title: 'Crop pages',
+    scopeSelected: 'Applies to the {count} selected page(s). Other pages stay unchanged.',
+    scopeAll: 'Applies to all {count} page(s).',
+    top: 'Top',
+    bottom: 'Bottom',
+    left: 'Left',
+    right: 'Right',
+    result: 'Result {width} × {height} pt (from {from} pt)',
+    tooMuch: 'The margins are wider than the page, so nothing would be left.',
+    failed: 'Could not crop this document.',
+    cancel: 'Cancel',
+    run: 'Crop',
+  },
+
+  metadata: {
+    title: 'Document properties',
+    loading: 'Reading properties…',
+    loadFailed: 'Could not read the document properties.',
+    fieldTitle: 'Title',
+    fieldAuthor: 'Author',
+    fieldSubject: 'Subject',
+    fieldKeywords: 'Keywords',
+    keywordsHint: 'Separate with commas',
+    failed: 'Could not save the properties.',
+    cancel: 'Cancel',
+    save: 'Save',
   },
 
   security: {
@@ -343,6 +375,9 @@ export const en = {
     longImage: 'Long image saved — {name}',
     imagePdf: 'Image-only PDF saved — {name}',
     imagesPdf: 'Created {name}',
+    imagesExtracted: 'Extracted {count} image(s)',
+    imagesExtractedPartial: 'Extracted {count} image(s), {skipped} unsupported',
+    imagesNone: 'No embedded images on the selected pages',
     // 破折号而不是冒号：见 dsignReady 上面对 family-check 取键正则的说明。
     signed: 'Signed — {name}',
     // 值里不出现 ASCII 冒号（family-check 的取键正则会把「某词 + 半角冒号」读成一个

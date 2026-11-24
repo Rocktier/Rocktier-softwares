@@ -4,6 +4,7 @@
 mod commands;
 mod compress;
 mod formclear;
+mod imgextract;
 mod imagepass;
 /// 家族内唯一的产品标识，用作试用记录的副存储命名空间。
 ///
@@ -17,6 +18,8 @@ mod license;
 mod trial;
 // PDF → Markdown：结构推断内核（纯逻辑，单测覆盖），取字符在 pdf_to_markdown
 mod mdconv;
+// 页面裁剪与文档属性：/CropBox 与 Info 字典的 lopdf 改写（见模块说明）
+mod pagemeta;
 mod pdf;
 // PDF → Markdown：取字符与调度（结构推断在 mdconv）
 mod pdf_to_md;
@@ -496,6 +499,10 @@ fn main() {
             commands::stamp_document,
             commands::export_page_images,
             commands::export_page_images_long,
+            commands::extract_images,
+            commands::crop_pages,
+            commands::document_metadata,
+            commands::set_document_metadata,
             commands::images_to_pdf,
             commands::pdf_to_image_pdf,
             commands::pdf_to_markdown,

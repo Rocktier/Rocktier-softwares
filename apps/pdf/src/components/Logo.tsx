@@ -174,6 +174,33 @@ export const IconImagesToPdf = ({ size = 16 }: IconProps) => (
   </svg>
 );
 
+/** 提取内嵌图片：画框里一张照片 + 右下角向外的箭头（"把原图拿出来"）。 */
+export const IconExtractImage = ({ size = 16 }: IconProps) => (
+  <svg {...base(size)}>
+    <rect x="1.5" y="2.5" width="8.5" height="7" rx="1" />
+    <path d="M1.5 8 3.8 6.2 6 8" />
+    <circle cx="4.3" cy="5" r=".7" />
+    <path d="M11 6.4v6.2M8.8 10.6 11 12.8l2.2-2.2" />
+  </svg>
+);
+
+/** 裁剪：两个 L 形角尺（图形界里最通行的裁剪符号）。 */
+export const IconCrop = ({ size = 16 }: IconProps) => (
+  <svg {...base(size)}>
+    <path d="M4.6 1.5v9.9h9.9" />
+    <path d="M1.5 4.6h9.9v9.9" />
+  </svg>
+);
+
+/** 文档属性：圆圈 + i。 */
+export const IconInfo = ({ size = 16 }: IconProps) => (
+  <svg {...base(size)}>
+    <circle cx="8" cy="8" r="6" />
+    <path d="M8 7.4v3.4" />
+    <path d="M8 5.1v.01" />
+  </svg>
+);
+
 /**
  * Markdown 徽标：圆角框 + M + 向下箭头。
  *

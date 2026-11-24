@@ -2,12 +2,15 @@ import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { open as openDialog, save as saveDialog } from '@tauri-apps/plugin-dialog';
 import type {
+  CropMargins,
   DocumentInfo,
+  ExtractSummary,
   MarkdownConversion,
   FormFieldInfo,
   MarkupKind,
   MarkupRect,
   PathResult,
+  PdfMetadata,
   RedactOutcome,
   RedactRegion,
   RenderedPage,
@@ -375,8 +378,7 @@ export async function exportPageImages(
 }
 
 /** Export the given pages stitched vertically into one long PNG image. */
-export async function exportPageImagesLong(
-  indices: number[],
+export async function exportPageImagesLong(  indices: number[],
   outputPath: string,
   width: number
 ): Promise<PathResult> {
@@ -391,6 +393,31 @@ export async function imagesToPdf(paths: string[], outputPath: string): Promise<
 /** Convert the open document into an image-only PDF (text layer removed). */
 export async function pdfToImagePdf(outputPath: string, width: number): Promise<PathResult> {
   return invoke<PathResult>('pdf_to_image_pdf', { outputPath, width });
+}
+
+/* ── 内嵌图片 / 裁剪 / 文档属性 ─────────────────────────────────── */
+
+/**
+ * 提取指定页里**内嵌的原图**，写进 `outputDir`。
+ * 与 `exportPageImages` 不是一回事：那个渲染页面，这个取图像对象的原始数据。
+ */
+export async function extractImages(indices: number[], outputDir: string): Promise<ExtractSummary> {
+  return invoke<ExtractSummary>('extract_images', { indices, outputDir });
+}
+
+/** 裁掉指定页四边留白（PDF 点，按显示方向）。空数组 = 全部页。 */
+export async function cropPages(indices: number[], margins: CropMargins): Promise<DocumentInfo> {
+  return invoke<DocumentInfo>('crop_pages', { indices, margins });
+}
+
+/** 读 Info 字典里的四个标准字段。 */
+export async function documentMetadata(): Promise<PdfMetadata> {
+  return invoke<PdfMetadata>('document_metadata');
+}
+
+/** 写回四个标准字段；空字符串表示删除该键。 */
+export async function setDocumentMetadata(metadata: PdfMetadata): Promise<DocumentInfo> {
+  return invoke<DocumentInfo>('set_document_metadata', { metadata });
 }
 
 /* ── Native dialogs ─────────────────────────────────────────────── */

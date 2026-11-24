@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Crop pages** — trims margins on the selected pages (or on every page when
+  nothing is selected). Margins are given in the orientation you actually see,
+  so cropping the left edge of a rotated scan trims the left edge. The new
+  `/CropBox` takes effect immediately and is a single undo step.
+- **Document properties** — edit Title / Author / Subject / Keywords. Text is
+  written as UTF-16 so non-Latin titles survive; clearing a field removes the
+  entry instead of storing a blank one.
+- **Extract embedded images** — pulls the original image objects out of the
+  PDF (JPEG and JPEG 2000 byte-for-byte, 8-bit grey / RGB / with-mask as PNG).
+  This is not "Export images": that one renders pages, this one keeps the
+  original pixels. Encodings we cannot decode safely are counted in the toast
+  rather than written out wrong.
+
 ## [1.2.2] — 2026-11-21
 
 ### Fixed

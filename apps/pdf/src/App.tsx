@@ -13,6 +13,8 @@ import { RedactBar } from './components/RedactBar';
 import { RedactDialog } from './components/RedactDialog';
 import { SecurityDialog } from './components/SecurityDialog';
 import { CompressDialog } from './components/CompressDialog';
+import { CropDialog } from './components/CropDialog';
+import { MetadataDialog } from './components/MetadataDialog';
 import { MarkdownDialog } from './components/MarkdownDialog';
 import { LicenseDialog } from './components/LicenseDialog';
 import { SplitDialog } from './components/SplitDialog';
@@ -71,6 +73,8 @@ type Dialog =
   | 'security'
   | 'form'
   | 'compress'
+  | 'crop'
+  | 'metadata'
   | 'markdown'
   | 'license'
   | 'digital-sign'
@@ -795,6 +799,31 @@ export function App() {
     }
   }, [notify, pdf, t]);
 
+  // 提取内嵌原图：与上面的「导出图片」不是一回事 —— 那个渲染页面，这个取原图像素。
+  // 选中页优先，没有选中就是整份文档；输出到用户挑的文件夹。
+  const extractEmbeddedImages = useCallback(async () => {
+    if (!pdf.doc) return;
+    const dir = await pickDirectory();
+    if (!dir) return;
+    const pages = pdf.selected.length > 0 ? pdf.selected : pdf.doc.pages.map((p) => p.index);
+    const { summary, error } = await pdf.extractEmbedded(pages, dir);
+    if (!summary) {
+      if (error) notify(error, true);
+      return;
+    }
+    // 0 张不是"失败"，而是"这份 PDF 里没有可提取的位图"——纯文字稿就是这样。
+    if (summary.written === 0) {
+      notify(t('toast.imagesNone'), true);
+      return;
+    }
+    notify(
+      summary.skipped > 0
+        ? t('toast.imagesExtractedPartial', { count: summary.written, skipped: summary.skipped })
+        : t('toast.imagesExtracted', { count: summary.written })
+    );
+    void revealInFinder(summary.dir);
+  }, [notify, pdf, t]);
+
   const applyMarkup = useCallback(
     async (rect: MarkupRect) => {
       if (!markupTool || markupTool === 'note' || markupTool === 'sign' || markupTool === 'dsign') {
@@ -1068,6 +1097,9 @@ export function App() {
         onStamp={() => setDialog('stamp')}
         onExportImages={exportImages}
         onExportLongImage={exportLongImage}
+        onExtractImages={extractEmbeddedImages}
+        onCrop={() => setDialog('crop')}
+        onMetadata={() => setDialog('metadata')}
             onImageify={runImageify}
         onImagesToPdf={runImagesToPdf}
         onSign={chooseSignature}
@@ -1242,6 +1274,21 @@ export function App() {
             pdf.applyDoc(info);
             notify(t('form.done'));
           }}
+        />
+      ) : null}
+      {dialog === 'crop' && doc ? (
+        <CropDialog
+          doc={doc}
+          selected={pdf.selected}
+          onClose={() => setDialog(null)}
+          onRun={pdf.crop}
+        />
+      ) : null}
+      {dialog === 'metadata' && doc ? (
+        <MetadataDialog
+          onClose={() => setDialog(null)}
+          onLoad={pdf.loadMetadata}
+          onRun={pdf.saveMetadata}
         />
       ) : null}
       {/* 数字签名对话框。两处挂载细节都是有意为之：

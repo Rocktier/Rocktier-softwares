@@ -1,13 +1,17 @@
 import { useCallback, useMemo, useState } from 'react';
 import {
   closeDocument,
+  cropPages,
   deletePages,
+  documentMetadata,
+  extractImages,
   extractPages,
   mergeDocuments,
   movePage,
   openDocument,
   rotatePages,
   saveDocument,
+  setDocumentMetadata,
   splitDocument,
   stampDocument,
   addMarkup,
@@ -20,9 +24,12 @@ import {
 import { clearRenderCache } from '../services/renderCache';
 import { fileStem } from '../services/engine';
 import type {
+  CropMargins,
   DocumentInfo,
+  ExtractSummary,
   MarkupKind,
   MarkupRect,
+  PdfMetadata,
   RedactOutcome,
   RedactRegion,
   SaveResult,
@@ -287,8 +294,51 @@ export function usePdf() {
     [applyDoc]
   );
 
-  /** Force every lazily rendered page to redraw (e.g. after a form change). */
-  const refresh = useCallback(() => {
+  /* ── 裁剪 / 文档属性 / 内嵌图片 ───────────────────────────────── */
+
+  /**
+   * 裁掉指定页四边留白。空间上是对页面几何的改动，所以走 applyDoc ——
+   * 渲染缓存必须清，否则缩略图还会显示未裁剪的旧位图。
+   */
+  const crop = useCallback(
+    async (
+      indices: number[],
+      margins: CropMargins
+    ): Promise<{ ok: boolean; error: string | null }> => {
+      const { value: info, error } = await run(() => cropPages(indices, margins));
+      if (info) applyDoc(info);
+      return { ok: info !== null, error };
+    },
+    [applyDoc, run]
+  );
+
+  /** 提取内嵌原图。只写文件、不动文档，所以不 applyDoc。 */
+  const extractEmbedded = useCallback(
+    async (
+      indices: number[],
+      outputDir: string
+    ): Promise<{ summary: ExtractSummary | null; error: string | null }> => {
+      const { value, error } = await run(() => extractImages(indices, outputDir));
+      return { summary: value, error };
+    },
+    [run]
+  );
+
+  const loadMetadata = useCallback(async (): Promise<PdfMetadata | null> => {
+    const { value } = await run(() => documentMetadata());
+    return value;
+  }, [run]);
+
+  const saveMetadata = useCallback(
+    async (metadata: PdfMetadata): Promise<{ info: DocumentInfo | null; error: string | null }> => {
+      const { value: info, error } = await run(() => setDocumentMetadata(metadata));
+      if (info) applyDoc(info);
+      return { info, error };
+    },
+    [applyDoc, run]
+  );
+
+  /** Force every lazily rendered page to redraw (e.g. after a form change). */  const refresh = useCallback(() => {
     clearRenderCache();
     setRevision((r) => r + 1);
   }, []);
@@ -330,6 +380,10 @@ export function usePdf() {
       note,
       signature,
       redact,
+      crop,
+      extractEmbedded,
+      loadMetadata,
+      saveMetadata,
       stepHistory,
       refresh,
       clearError,
@@ -358,6 +412,10 @@ export function usePdf() {
       note,
       signature,
       redact,
+      crop,
+      extractEmbedded,
+      loadMetadata,
+      saveMetadata,
       stepHistory,
       refresh,
       clearError,

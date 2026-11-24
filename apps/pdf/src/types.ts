@@ -200,3 +200,32 @@ export interface VerifyReport {
   summary: string;
   signers: SignerInfo[];
 }
+
+/* ── 页面裁剪 / 文档属性 / 内嵌图片（阶段 264）─────────────────────── */
+
+/** 裁剪留白，单位 PDF 点，按**显示方向**给（用户看到的左/上/右/下）。 */
+export interface CropMargins {
+  top: number;
+  right: number;
+  bottom: number;
+  left: number;
+}
+
+/** Info 字典里四个可编辑字段；空串表示删除该键。 */
+export interface PdfMetadata {
+  title: string;
+  author: string;
+  subject: string;
+  keywords: string;
+}
+
+/**
+ * 内嵌图片提取结果。
+ * `skipped` = 编码不受支持（CCITT / JBIG2 / 调色板 …），`duplicates` = 同一张图被多页复用。
+ */
+export interface ExtractSummary {
+  written: number;
+  skipped: number;
+  duplicates: number;
+  dir: string;
+}

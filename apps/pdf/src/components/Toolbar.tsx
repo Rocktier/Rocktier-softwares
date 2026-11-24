@@ -3,10 +3,13 @@ import { useI18n, useT } from '../i18n';
 import type { AnnotTool, DocumentInfo } from '../types';
 import {
   IconCompress,
+  IconCrop,
   IconExportImages,
+  IconExtractImage,
   IconForm,
   IconHighlight,
   IconImagesToPdf,
+  IconInfo,
   IconLock,
   IconLongImage,
   IconMarkdown,
@@ -49,8 +52,12 @@ interface ToolbarProps {
   onStamp: () => void;
   onExportImages: () => void;
   onExportLongImage: () => void;
+  /** 提取页面里内嵌的原图（与"导出图片"渲染页面是两件事）。 */
+  onExtractImages: () => void;
   onImageify: () => void;
   onImagesToPdf: () => void;
+  onCrop: () => void;
+  onMetadata: () => void;
   onSign: () => void;
   /** 数字签名（密码学）—— 与上面那个图片印章是两回事。 */
   onDigitalSign: () => void;
@@ -94,8 +101,11 @@ export function Toolbar({
   onStamp,
   onExportImages,
   onExportLongImage,
+  onExtractImages,
   onImageify,
   onImagesToPdf,
+  onCrop,
+  onMetadata,
   onSign,
   onDigitalSign,
   signEngineAvailable,
@@ -462,6 +472,17 @@ export function Toolbar({
                 <IconLongImage />
                 {t('toolbar.exportLongImage')}
               </button>
+              {/* 「导出图片」把页面渲染成图，「提取内嵌图片」取的是原图像素 —— 
+                  名字必须能一眼分开，否则用户会以为同一件事有两个入口。 */}
+              <button
+                className="menu-item"
+                role="menuitem"
+                onClick={pick(onExtractImages)}
+                disabled={!doc || busy}
+              >
+                <IconExtractImage />
+                {t('toolbar.extractImages')}
+              </button>
               <button
                 className="menu-item"
                 role="menuitem"
@@ -479,6 +500,25 @@ export function Toolbar({
               >
                 <IconImagesToPdf />
                 {t('toolbar.imagesToPdf')}
+              </button>
+              {/* 两项都是"整份文档的属性"，与上面的逐页操作不是一类，放末尾。 */}
+              <button
+                className="menu-item"
+                role="menuitem"
+                onClick={pick(onCrop)}
+                disabled={!doc || busy}
+              >
+                <IconCrop />
+                {t('toolbar.crop')}
+              </button>
+              <button
+                className="menu-item"
+                role="menuitem"
+                onClick={pick(onMetadata)}
+                disabled={!doc || busy}
+              >
+                <IconInfo />
+                {t('toolbar.metadata')}
               </button>
             </div>
           ) : null}

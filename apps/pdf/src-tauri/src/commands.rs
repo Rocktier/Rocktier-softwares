@@ -9,6 +9,7 @@ use std::path::PathBuf;
 use pdfium_render::prelude::*;
 use tauri::{AppHandle, Manager, State};
 
+use crate::pagemeta::{CropMargins, PdfMetadata};
 use crate::pdf::{
     degrees_of, doc_info, init_pdfium, parse_ranges, render_page as render_page_impl,
     rotation_of, DocumentInfo, FormFieldInfo, MarkupKind, MarkupRect, PathResult, RedactRegion,
@@ -308,12 +309,43 @@ pub async fn close_document(state: State<'_, AppState>) -> CmdResult<()> {
 /// Keeps the history bounded — a 40-step buffer of a 20 MB PDF is enough.
 fn push_undo(doc: &mut OpenDoc) {
     if let Ok(bytes) = doc.document.save_to_bytes() {
-        doc.undo.push(bytes);
-        if doc.undo.len() > 40 {
-            doc.undo.remove(0);
-        }
-        doc.redo.clear();
+        push_undo_bytes(doc, bytes);
     }
+}
+
+/// 已经拿到快照时的入口（走 lopdf 改写的命令都先自己存了一份旧字节，
+/// 再存一次等于把同一份 PDF 编码两遍 —— 大文件上是实打实的秒级浪费）。
+fn push_undo_bytes(doc: &mut OpenDoc, bytes: Vec<u8>) {
+    doc.undo.push(bytes);
+    if doc.undo.len() > 40 {
+        doc.undo.remove(0);
+    }
+    doc.redo.clear();
+}
+
+/// 把内存文档的字节交给 lopdf 改写，再把结果重载回 pdfium。
+///
+/// 顺序是刻意的：**先改写、先重载，最后才把旧字节推进撤销栈**。
+/// 任何一步失败，内存里的文档与撤销栈都还是原样 —— 用户看到的错误是
+/// 「裁剪失败」，而不是「裁剪失败，而且撤销多了一步什么都不做的历史」。
+fn rewrite_in_place<F>(app: &AppHandle, doc: &mut OpenDoc, rewrite: F) -> CmdResult<()>
+where
+    F: FnOnce(&[u8]) -> Result<Vec<u8>, String>,
+{
+    let before = doc
+        .document
+        .save_to_bytes()
+        .map_err(|e| format!("Cannot read the document: {e}"))?;
+    let after = rewrite(&before)?;
+    let pdfium = init_pdfium(app)?;
+    let reloaded = pdfium
+        .load_pdf_from_byte_vec(after, None)
+        .map_err(|e| format!("Cannot reload the edited PDF: {e}"))?;
+
+    push_undo_bytes(doc, before);
+    doc.document = reloaded;
+    doc.dirty = true;
+    Ok(())
 }
 
 #[tauri::command]
@@ -486,6 +518,75 @@ pub async fn move_page(
         }
     }
     doc.dirty = true;
+    doc_info(&doc.document, &doc.path, true, doc.read_only)
+}
+
+/* ── Page box & document properties（lopdf 改写，见 pagemeta.rs）───── */
+
+/// 把前端传来的 0 基页码换成 1 基（lopdf 的口径），空数组表示全部页。
+fn page_numbers(indices: &[i32], total: i32) -> CmdResult<Vec<u32>> {
+    let mut out = Vec::with_capacity(indices.len());
+    for &i in indices {
+        if i < 0 || i >= total {
+            return Err(format!("Page {} is out of range", i + 1));
+        }
+        out.push(i as u32 + 1);
+    }
+    Ok(out)
+}
+
+/// 裁掉指定页四边的一圈留白（单位 PDF 点，按显示方向）。
+#[tauri::command]
+pub async fn crop_pages(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    indices: Vec<i32>,
+    margins: CropMargins,
+) -> CmdResult<DocumentInfo> {
+    ensure_write_allowed()?;
+    let mut guard = state.doc.lock().map_err(|e| e.to_string())?;
+    let doc = guard.as_mut().ok_or_else(|| "No document is open".to_string())?;
+    ensure_editable(doc)?;
+
+    let total = doc.document.pages().len();
+    let pages = page_numbers(&indices, total)?;
+    // 四边都是 0 等于没裁：别为一次空操作留一步撤销记录。
+    if margins.top == 0.0 && margins.right == 0.0 && margins.bottom == 0.0 && margins.left == 0.0 {
+        return doc_info(&doc.document, &doc.path, doc.dirty, doc.read_only);
+    }
+    rewrite_in_place(&app, doc, |bytes| {
+        crate::pagemeta::apply_crop(bytes, &pages, margins)
+    })?;
+    doc_info(&doc.document, &doc.path, true, doc.read_only)
+}
+
+/// 读 Info 字典里的四个标准字段。
+#[tauri::command]
+pub async fn document_metadata(state: State<'_, AppState>) -> CmdResult<PdfMetadata> {
+    let guard = state.doc.lock().map_err(|e| e.to_string())?;
+    let doc = guard.as_ref().ok_or_else(|| "No document is open".to_string())?;
+    let bytes = doc
+        .document
+        .save_to_bytes()
+        .map_err(|e| format!("Cannot read the document: {e}"))?;
+    crate::pagemeta::read_metadata(&bytes)
+}
+
+/// 写回四个标准字段（空字符串 = 删除该键）。
+#[tauri::command]
+pub async fn set_document_metadata(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    metadata: PdfMetadata,
+) -> CmdResult<DocumentInfo> {
+    ensure_write_allowed()?;
+    let mut guard = state.doc.lock().map_err(|e| e.to_string())?;
+    let doc = guard.as_mut().ok_or_else(|| "No document is open".to_string())?;
+    ensure_editable(doc)?;
+
+    rewrite_in_place(&app, doc, |bytes| {
+        crate::pagemeta::write_metadata(bytes, &metadata)
+    })?;
     doc_info(&doc.document, &doc.path, true, doc.read_only)
 }
 
@@ -1001,8 +1102,27 @@ pub async fn export_page_images(
     crate::pdf::export_pages_as_png(&doc.document, &sorted, &output_dir, &file_stem(&doc.path), width)
 }
 
-/// Export the given pages stitched vertically into one long PNG image.
+/// 提取页面里内嵌的原图（不是渲染页面）。只读文档也能用 —— 它是导出。
 #[tauri::command]
+pub async fn extract_images(
+    state: State<'_, AppState>,
+    indices: Vec<i32>,
+    output_dir: String,
+) -> CmdResult<crate::imgextract::ExtractSummary> {
+    ensure_write_allowed()?;
+    let guard = state.doc.lock().map_err(|e| e.to_string())?;
+    let doc = guard.as_ref().ok_or_else(|| "No document is open".to_string())?;
+
+    let total = doc.document.pages().len();
+    let pages = page_numbers(&indices, total)?;
+    let bytes = doc
+        .document
+        .save_to_bytes()
+        .map_err(|e| format!("Cannot read the document: {e}"))?;
+    crate::imgextract::extract_images(&bytes, &pages, &output_dir, &file_stem(&doc.path))
+}
+
+/// Export the given pages stitched vertically into one long PNG image.#[tauri::command]
 pub async fn export_page_images_long(
     state: State<'_, AppState>,
     indices: Vec<i32>,
