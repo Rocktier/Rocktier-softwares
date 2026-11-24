@@ -463,6 +463,26 @@ fn list_files(dir: String) -> Result<Vec<String>, String> {
     Ok(out)
 }
 
+/// Windows 专属「切换全屏」文案。
+///
+/// macOS 走 `PredefinedMenuItem::fullscreen`，标题由 AppKit 自己本地化；Windows 上
+/// muda 的 fullscreen 落进 `_ => {}` 点了没反应，只能换成自定义项 `win-fullscreen`，
+/// 标题就得自己翻。整块按 windows 编译，macOS 侧不留死代码。
+#[cfg(target_os = "windows")]
+fn fullscreen_label(lang: &str) -> &'static str {
+    match lang.split(['-', '_']).next().unwrap_or("") {
+        "zh" => "切换全屏",
+        "ja" => "全画面表示の切り替え",
+        "ko" => "전체 화면 전환",
+        "de" => "Vollbild umschalten",
+        "fr" => "Basculer en plein écran",
+        "es" => "Alternar pantalla completa",
+        "pt" => "Alternar ecrã inteiro",
+        "ar" => "تبديل ملء الشاشة",
+        _ => "Toggle Full Screen",
+    }
+}
+
 /// Menu labels for one language.
 ///
 /// Same approach as the other five products' menus: a struct per language
@@ -477,7 +497,6 @@ struct MenuStrings {
     app: &'static str,
     file: &'static str,
     edit: &'static str,
-    view: &'static str,
     window: &'static str,
     add_files: &'static str,
     add_folder: &'static str,
@@ -497,7 +516,7 @@ impl MenuStrings {
         let code = lang.split(['-', '_']).next().unwrap_or("");
         match code {
             "zh" => Self {
-                app: "Rocktier Compressor", file: "文件", edit: "编辑", view: "显示",
+                app: "Rocktier Compressor", file: "文件", edit: "编辑",
                 window: "窗口", add_files: "添加文件…", add_folder: "添加文件夹…",
                 start: "开始压缩", help: "帮助", support: "获取支持",
                 website: "访问 rocktier.com", about: "关于 Rocktier Compressor",
@@ -505,7 +524,7 @@ impl MenuStrings {
                 license: "许可与激活…", quit: "退出 Rocktier Compressor",
             },
             "ja" => Self {
-                app: "Rocktier Compressor", file: "ファイル", edit: "編集", view: "表示",
+                app: "Rocktier Compressor", file: "ファイル", edit: "編集",
                 window: "ウインドウ", add_files: "ファイルを追加…", add_folder: "フォルダーを追加…",
                 start: "圧縮を開始", help: "ヘルプ", support: "サポート",
                 website: "rocktier.com を開く", about: "Rocktier Compressor について",
@@ -513,7 +532,7 @@ impl MenuStrings {
                 license: "ライセンス…", quit: "Rocktier Compressor を終了",
             },
             "ko" => Self {
-                app: "Rocktier Compressor", file: "파일", edit: "편집", view: "보기",
+                app: "Rocktier Compressor", file: "파일", edit: "편집",
                 window: "창", add_files: "파일 추가…", add_folder: "폴더 추가…",
                 start: "압축 시작", help: "도움말", support: "지원 받기",
                 website: "rocktier.com 방문", about: "Rocktier Compressor 정보",
@@ -521,7 +540,7 @@ impl MenuStrings {
                 license: "라이선스…", quit: "Rocktier Compressor 종료",
             },
             "de" => Self {
-                app: "Rocktier Compressor", file: "Datei", edit: "Bearbeiten", view: "Ansicht",
+                app: "Rocktier Compressor", file: "Datei", edit: "Bearbeiten",
                 window: "Fenster", add_files: "Dateien hinzufügen…", add_folder: "Ordner hinzufügen…",
                 start: "Komprimieren starten", help: "Hilfe", support: "Support erhalten",
                 website: "rocktier.com besuchen", about: "Über Rocktier Compressor",
@@ -529,7 +548,7 @@ impl MenuStrings {
                 license: "Lizenz…", quit: "Rocktier Compressor beenden",
             },
             "es" => Self {
-                app: "Rocktier Compressor", file: "Archivo", edit: "Editar", view: "Ver",
+                app: "Rocktier Compressor", file: "Archivo", edit: "Editar",
                 window: "Ventana", add_files: "Añadir archivos…", add_folder: "Añadir carpeta…",
                 start: "Empezar a comprimir", help: "Ayuda", support: "Obtener soporte",
                 website: "Visitar rocktier.com", about: "Acerca de Rocktier Compressor",
@@ -537,7 +556,7 @@ impl MenuStrings {
                 license: "Licencia…", quit: "Salir de Rocktier Compressor",
             },
             "pt" => Self {
-                app: "Rocktier Compressor", file: "Arquivo", edit: "Editar", view: "Exibir",
+                app: "Rocktier Compressor", file: "Arquivo", edit: "Editar",
                 window: "Janela", add_files: "Adicionar arquivos…", add_folder: "Adicionar pasta…",
                 start: "Iniciar compressão", help: "Ajuda", support: "Obter suporte",
                 website: "Visitar rocktier.com", about: "Sobre o Rocktier Compressor",
@@ -545,7 +564,7 @@ impl MenuStrings {
                 license: "Licença…", quit: "Sair do Rocktier Compressor",
             },
             "ar" => Self {
-                app: "Rocktier Compressor", file: "ملف", edit: "تحرير", view: "عرض",
+                app: "Rocktier Compressor", file: "ملف", edit: "تحرير",
                 window: "نافذة", add_files: "إضافة ملفات…", add_folder: "إضافة مجلد…",
                 start: "ابدأ الضغط", help: "مساعدة", support: "الحصول على الدعم",
                 website: "زيارة rocktier.com", about: "حول Rocktier Compressor",
@@ -554,7 +573,7 @@ impl MenuStrings {
             },
             // English is both the family default and the fallback.
             _ => Self {
-                app: "Rocktier Compressor", file: "File", edit: "Edit", view: "View",
+                app: "Rocktier Compressor", file: "File", edit: "Edit",
                 window: "Window", add_files: "Add Files…", add_folder: "Add Folder…",
                 start: "Start Compress", help: "Help", support: "Get Support",
                 website: "Visit rocktier.com", about: "About Rocktier Compressor",
@@ -639,20 +658,11 @@ fn build_menu(app: tauri::AppHandle, lang: String) -> Result<(), String> {
         ],
     ).map_err(|e| e.to_string())?;
 
-    // macOS 原生全屏有效；Windows 上 muda 的 fullscreen 落进 `_ => {}` 点了无
-    // 反应，改用自定义 win-fullscreen 项，由 on_menu_event 调 set_fullscreen。
-    let view_menu = Submenu::with_items(
-        &app,
-        m.view,
-        true,
-        &[
-            #[cfg(target_os = "macos")]
-            &PredefinedMenuItem::fullscreen(&app, None).map_err(|e| e.to_string())?,
-            #[cfg(target_os = "windows")]
-            &MenuItem::with_id(&app, "win-fullscreen", "Toggle Full Screen", true, None::<&str>).map_err(|e| e.to_string())?,
-        ],
-    ).map_err(|e| e.to_string())?;
-
+    /* 这里原本还有一个 View 菜单，内容只有 fullscreen —— 与下面 Window 菜单里的同一项
+       重复登记（macOS 两份 PredefinedMenuItem::fullscreen，Windows 两份同 id 的
+       win-fullscreen，点哪个都一样，纯冗余）。家族另外七款都把全屏放 Window，View
+       留给「查找 / 侧栏 / 主题」，而 Compressor 这三样都没有（主题是工具栏按钮），
+       View 是个空壳，删掉即与家族同形。 */
     let window_menu = Submenu::with_items(
         &app,
         m.window,
@@ -660,10 +670,12 @@ fn build_menu(app: tauri::AppHandle, lang: String) -> Result<(), String> {
         &[
             &PredefinedMenuItem::minimize(&app, None).map_err(|e| e.to_string())?,
             &PredefinedMenuItem::separator(&app).map_err(|e| e.to_string())?,
+            // macOS 原生全屏有效；Windows 上 muda 的 fullscreen 落进 `_ => {}` 点了
+            // 没反应，改用自定义 win-fullscreen，由 on_menu_event 调 set_fullscreen。
             #[cfg(target_os = "macos")]
             &PredefinedMenuItem::fullscreen(&app, None).map_err(|e| e.to_string())?,
             #[cfg(target_os = "windows")]
-            &MenuItem::with_id(&app, "win-fullscreen", "Toggle Full Screen", true, None::<&str>).map_err(|e| e.to_string())?,
+            &MenuItem::with_id(&app, "win-fullscreen", fullscreen_label(&lang), true, None::<&str>).map_err(|e| e.to_string())?,
         ],
     ).map_err(|e| e.to_string())?;
 
@@ -701,11 +713,11 @@ fn build_menu(app: tauri::AppHandle, lang: String) -> Result<(), String> {
     let menu = match help_menu.as_ref() {
         Some(help) => Menu::with_items(
             &app,
-            &[&app_menu, &file_menu, &edit_menu, &view_menu, &window_menu, help],
+            &[&app_menu, &file_menu, &edit_menu, &window_menu, help],
         ),
         None => Menu::with_items(
             &app,
-            &[&app_menu, &file_menu, &edit_menu, &view_menu, &window_menu],
+            &[&app_menu, &file_menu, &edit_menu, &window_menu],
         ),
     }
     .map_err(|e| e.to_string())?;

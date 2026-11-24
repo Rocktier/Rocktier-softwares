@@ -33,13 +33,26 @@ use tauri::{AppHandle, Emitter};
 
 use state::AppState;
 
-/// Builds the family-standard menu (App / File / Edit / View / Window / Help).
+/// Windows 专属「切换全屏」文案。
 ///
-/// Called by the frontend after mount and again whenever the UI language
-/// changes. Custom items are forwarded to the frontend as a `menu-action`
-/// event; predefined items are localised by the OS and keep their own
-/// accelerators. Undo/redo are custom because the document — not the webview —
-/// owns the edit history.
+/// macOS 走 `PredefinedMenuItem::fullscreen`，标题由 AppKit 自己本地化；Windows 上
+/// muda 的 fullscreen 落进 `_ => {}` 点了没反应，只能换成自定义项 `win-fullscreen`，
+/// 标题就得自己翻。整块按 windows 编译，macOS 侧不留死代码。
+#[cfg(target_os = "windows")]
+fn fullscreen_label(lang: &str) -> &'static str {
+    match lang.split(['-', '_']).next().unwrap_or("") {
+        "zh" => "切换全屏",
+        "ja" => "全画面表示の切り替え",
+        "ko" => "전체 화면 전환",
+        "de" => "Vollbild umschalten",
+        "fr" => "Basculer en plein écran",
+        "es" => "Alternar pantalla completa",
+        "pt" => "Alternar ecrã inteiro",
+        "ar" => "تبديل ملء الشاشة",
+        _ => "Toggle Full Screen",
+    }
+}
+
 /// Menu labels for one language.
 ///
 /// Why a struct instead of the previous `l(zh, en)` closure:
@@ -285,7 +298,7 @@ fn build_app_menu(app: &AppHandle, lang: &str, has_doc: bool) -> tauri::Result<(
             #[cfg(target_os = "macos")]
             &PredefinedMenuItem::fullscreen(app, None)?,
             #[cfg(target_os = "windows")]
-            &MenuItem::with_id(app, "win-fullscreen", "Toggle Full Screen", true, None::<&str>)?,
+            &MenuItem::with_id(app, "win-fullscreen", fullscreen_label(lang), true, None::<&str>)?,
         ],
     )?;
 

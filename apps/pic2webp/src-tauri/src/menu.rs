@@ -24,6 +24,26 @@ fn pick(lang: &str, items: &[(&'static str, &'static str)]) -> &'static str {
         .unwrap_or(items[0].1)
 }
 
+/// Windows 专属「切换全屏」文案。
+///
+/// macOS 走 `PredefinedMenuItem::fullscreen`，标题由 AppKit 自己本地化；Windows 上
+/// muda 的 fullscreen 落进 `_ => {}` 点了没反应，只能换成自定义项 `win-fullscreen`，
+/// 标题就得自己翻。整块按 windows 编译，macOS 侧不留死代码。
+#[cfg(target_os = "windows")]
+fn fullscreen_label(lang: &str) -> &'static str {
+    match lang.split(['-', '_']).next().unwrap_or("") {
+        "zh" => "切换全屏",
+        "ja" => "全画面表示の切り替え",
+        "ko" => "전체 화면 전환",
+        "de" => "Vollbild umschalten",
+        "fr" => "Basculer en plein écran",
+        "es" => "Alternar pantalla completa",
+        "pt" => "Alternar ecrã inteiro",
+        "ar" => "تبديل ملء الشاشة",
+        _ => "Toggle Full Screen",
+    }
+}
+
 pub fn build(app: &tauri::AppHandle, lang: &str) -> tauri::Result<()> {
     let l = |items: &[(&'static str, &'static str)]| pick(lang, items);
 
@@ -126,7 +146,7 @@ pub fn build(app: &tauri::AppHandle, lang: &str) -> tauri::Result<()> {
             #[cfg(target_os = "macos")]
             &PredefinedMenuItem::fullscreen(app, None)?,
             #[cfg(target_os = "windows")]
-            &MenuItem::with_id(app, "win-fullscreen", "Toggle Full Screen", true, None::<&str>)?,
+            &MenuItem::with_id(app, "win-fullscreen", fullscreen_label(lang), true, None::<&str>)?,
         ],
     )?;
 

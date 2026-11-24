@@ -554,6 +554,26 @@ fn clear_recovery(app: tauri::AppHandle, path: String) -> Result<(), String> {
     Ok(())
 }
 
+/// Windows 专属「切换全屏」文案。
+///
+/// macOS 走 `PredefinedMenuItem::fullscreen`，标题由 AppKit 自己本地化；Windows 上
+/// muda 的 fullscreen 落进 `_ => {}` 点了没反应，只能换成自定义项 `win-fullscreen`，
+/// 标题就得自己翻。整块按 windows 编译，macOS 侧不留死代码。
+#[cfg(target_os = "windows")]
+fn fullscreen_label(lang: &str) -> &'static str {
+    match lang.split(['-', '_']).next().unwrap_or("") {
+        "zh" => "切换全屏",
+        "ja" => "全画面表示の切り替え",
+        "ko" => "전체 화면 전환",
+        "de" => "Vollbild umschalten",
+        "fr" => "Basculer en plein écran",
+        "es" => "Alternar pantalla completa",
+        "pt" => "Alternar ecrã inteiro",
+        "ar" => "تبديل ملء الشاشة",
+        _ => "Toggle Full Screen",
+    }
+}
+
 /// 构建原生应用菜单（对齐 macOS 优秀编辑器的惯例：文件/编辑/显示/窗口）。
 /// 由前端在挂载后按当前 UI 语言调用，语言切换时可重建。
 /// 自定义项的点击经 on_menu_event 转成 "menu-action" 事件发给前端；
@@ -675,7 +695,7 @@ fn build_app_menu(app: &tauri::AppHandle, lang: &str) -> tauri::Result<()> {
             #[cfg(target_os = "macos")]
             &PredefinedMenuItem::fullscreen(app, None)?,
             #[cfg(target_os = "windows")]
-            &MenuItem::with_id(app, "win-fullscreen", "Toggle Full Screen", true, None::<&str>)?,
+            &MenuItem::with_id(app, "win-fullscreen", fullscreen_label(lang), true, None::<&str>)?,
         ],
     )?;
 
@@ -727,6 +747,11 @@ fn build_app_menu(app: &tauri::AppHandle, lang: &str) -> tauri::Result<()> {
 ///
 /// Unknown codes fall back to English rather than panicking, so a stale
 /// `localStorage` value degrades to a usable menu.
+///
+/// 文案里的字面 `&` 必须写成 `&&`：muda 在 macOS 侧走 `strip_mnemonic`，单个
+/// `&` 会被直接删掉（"Find & Replace" 显示成 "Find  Replace"）；Windows 侧
+/// Win32 把 `&` 之后那个字母当加速键吞掉，还会给菜单塞一个 Alt+字母。`&&`
+/// 两个平台都还原成一个真 `&`。
 struct MenuStrings {
     new: &'static str,
     open: &'static str,
@@ -786,7 +811,7 @@ impl MenuStrings {
                 new: "Neu", open: "Öffnen…", save: "Speichern", save_as: "Speichern unter…",
                 export_pdf: "Als PDF exportieren…",
                 export_html: "Als eigenständige HTML exportieren…", file: "Datei", edit: "Bearbeiten",
-                find: "Suchen & Ersetzen", view: "Ansicht", toggle_sidebar: "Seitenleiste umschalten",
+                find: "Suchen && Ersetzen", view: "Ansicht", toggle_sidebar: "Seitenleiste umschalten",
                 toggle_theme: "Design wechseln", window: "Fenster", help: "Hilfe",
                 website: "Website", feedback: "Feedback",
                 about: "Über Rocktier Markdown", check_updates: "Nach Updates suchen…", license: "Lizenz…", quit: "Beenden",
@@ -823,7 +848,7 @@ impl MenuStrings {
                 new: "New", open: "Open…", save: "Save", save_as: "Save As…",
                 export_pdf: "Export PDF…",
                 export_html: "Export Standalone HTML…", file: "File", edit: "Edit",
-                find: "Find & Replace", view: "View", toggle_sidebar: "Toggle Sidebar",
+                find: "Find && Replace", view: "View", toggle_sidebar: "Toggle Sidebar",
                 toggle_theme: "Toggle Theme", window: "Window", help: "Help",
                 website: "Website", feedback: "Feedback",
                 about: "About Rocktier Markdown", check_updates: "Check for Updates…", license: "License…", quit: "Quit",

@@ -503,6 +503,26 @@ fn tr(
     }
 }
 
+/// Windows 专属「切换全屏」文案。
+///
+/// macOS 走 `PredefinedMenuItem::fullscreen`，标题由 AppKit 自己本地化；Windows 上
+/// muda 的 fullscreen 落进 `_ => {}` 点了没反应，只能换成自定义项 `win-fullscreen`，
+/// 标题就得自己翻。整块按 windows 编译，macOS 侧不留死代码。
+#[cfg(target_os = "windows")]
+fn fullscreen_label(lang: &str) -> &'static str {
+    match lang.split(['-', '_']).next().unwrap_or("") {
+        "zh" => "切换全屏",
+        "ja" => "全画面表示の切り替え",
+        "ko" => "전체 화면 전환",
+        "de" => "Vollbild umschalten",
+        "fr" => "Basculer en plein écran",
+        "es" => "Alternar pantalla completa",
+        "pt" => "Alternar ecrã inteiro",
+        "ar" => "تبديل ملء الشاشة",
+        _ => "Toggle Full Screen",
+    }
+}
+
 fn build_app_menu(app: &tauri::AppHandle, lang: &str) -> tauri::Result<()> {
     let new_i = MenuItem::with_id(app, "new", tr(lang, "New", "新建", "新規", "새 문서", "Nouveau", "Neu", "Nuevo", "Novo"), true, Some("CmdOrCtrl+N"))?;
     let open_i = MenuItem::with_id(app, "open", tr(lang, "Open…", "打开…", "開く…", "열기…", "Ouvrir…", "Öffnen…", "Abrir…", "Abrir…"), true, Some("CmdOrCtrl+O"))?;
@@ -592,7 +612,10 @@ fn build_app_menu(app: &tauri::AppHandle, lang: &str) -> tauri::Result<()> {
         Some("CmdOrCtrl+\\"),
     )?;
     let theme_i = MenuItem::with_id(app, "toggle-theme", tr(lang, "Toggle Theme", "切换日夜模式", "テーマ切り替え", "테마 전환", "Basculer le thème", "Thema umschalten", "Alternar tema", "Alternar tema"), true, None::<&str>)?;
-    let find_i = MenuItem::with_id(app, "find", tr(lang, "Find & Replace", "查找替换", "検索と置換", "찾기 및 바꾸기", "Rechercher et remplacer", "Suchen & Ersetzen", "Buscar y reemplazar", "Procurar e substituir"), true, Some("CmdOrCtrl+F"))?;
+    // 文案里的字面 `&` 必须写成 `&&`：muda 在 macOS 侧走 strip_mnemonic，单个 `&`
+    // 会被直接删掉（"Find & Replace" 显示成 "Find  Replace"）；Windows 侧 Win32 把
+    // `&` 之后那个字母当加速键吞掉，还会给菜单塞一个 Alt+字母。`&&` 两边都还原成真 `&`。
+    let find_i = MenuItem::with_id(app, "find", tr(lang, "Find && Replace", "查找替换", "検索と置換", "찾기 및 바꾸기", "Rechercher et remplacer", "Suchen && Ersetzen", "Buscar y reemplazar", "Procurar e substituir"), true, Some("CmdOrCtrl+F"))?;
     let view_menu = Submenu::with_items(
         app,
         tr(lang, "View", "显示", "表示", "보기", "Affichage", "Ansicht", "Ver", "Ver"),
@@ -612,7 +635,7 @@ fn build_app_menu(app: &tauri::AppHandle, lang: &str) -> tauri::Result<()> {
             #[cfg(target_os = "macos")]
             &PredefinedMenuItem::fullscreen(app, None)?,
             #[cfg(target_os = "windows")]
-            &MenuItem::with_id(app, "win-fullscreen", "Toggle Full Screen", true, None::<&str>)?,
+            &MenuItem::with_id(app, "win-fullscreen", fullscreen_label(lang), true, None::<&str>)?,
         ],
     )?;
 

@@ -10,7 +10,7 @@
 
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { runMenuCheck } from "./menu-clickability-lib.mjs";
+import { runMenuCheck, findBareAmpersand } from "./menu-clickability-lib.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
 const VERBOSE = process.argv.includes("--verbose");
@@ -41,4 +41,17 @@ console.log(m.deadAll === 0
   ? "  ✅ 全部菜单项都有响应路径"
   : `  ❌ ${m.deadAll} 个菜单项点了没有任何反应`);
 console.log("");
-process.exit(m.deadAll === 0 ? 0 : 1);
+
+/* 第二道判据（同一支闸门）：文案里的裸 `&`。理由见 lib 里 findBareAmpersand 的注释。
+   与「点得动」无关，但同属「菜单条在用户眼里坏没坏」，所以并在这里一起报。 */
+const amp = findBareAmpersand(ROOT);
+if (amp.length) {
+  console.log(`  ❌ ${amp.length} 处菜单文案含未转义的单个 &（必须写 &&，否则两个平台都会吞掉它）：`);
+  for (const h of amp) console.log(`     ${h.product}  ${h.file.split("/apps/").pop()}:${h.line}  ${h.text}`);
+  console.log("");
+} else {
+  console.log("  ✅ 没有未转义的 & 文案");
+  console.log("");
+}
+
+process.exit(m.deadAll === 0 && amp.length === 0 ? 0 : 1);

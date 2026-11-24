@@ -172,4 +172,33 @@ export function runMenuCheck(familyRoot) {
   return { rows, deadAll: rows.reduce((n, r) => n + r.dead.length, 0), products: products.length };
 }
 
+/* ── 附加检查：菜单文案里的裸 `&` ──
+
+   2026-11-25 逐项复核双平台菜单时发现的坑，两边表现不一样但都错：
+     · macOS：muda 走 `strip_mnemonic`，单个 `&` 直接被删 —— "Find & Replace"
+       在菜单里显示成 "Find  Replace"（双空格）。不报错、不崩，只是难看；
+     · Windows：Win32 把 `&` 后面那个字母当加速键，`&` 自己不显示，还给菜单
+       塞一个 Alt+字母（"Find & Replace" → Alt+R 指向这一项）。
+   两边都对的写法是 `&&`（macOS 的 strip_mnemonic 先把 `&&` 占位再还原成一个
+   `&`；Win32 认 `&&` 为字面 `&`）。
+
+   只认「空格 + & + 空格」，因为裸扫单个 `&` 会被 `&amp;`、`>&2`、`&self`
+   这类淹掉 —— 判据一吵就没人看了（glossary-check 88 处就是这个下场）。 */
+export function findBareAmpersand(familyRoot) {
+  const hits = [];
+  for (const { label, root } of findProducts(familyRoot)) {
+    for (const { f, s } of readAll(filesUnder(join(root, "src-tauri"), ".rs"))) {
+      s.split("\n").forEach((line, i) => {
+        if (/^\s*\/\//.test(line)) return;
+        for (const m of line.matchAll(/"((?:[^"\\]|\\.)*)"/g)) {
+          if (/\s&\s/.test(m[1]) && !m[1].includes("&&")) {
+            hits.push({ product: label, file: f, line: i + 1, text: line.trim().slice(0, 120) });
+          }
+        }
+      });
+    }
+  }
+  return hits;
+}
+
 export { findProducts, filesUnder, menuItemIds, rustDispatch, frontendCases };
