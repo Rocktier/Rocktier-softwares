@@ -337,9 +337,12 @@ export default function App() {
 
   // Per-file compress loop driven from the frontend: real progress (current
   // file + N/M) and a working cancel, without any Rust-side threading.
-  const compress = async () => {
+  //
+  // overrideFiles 只给「重试失败项」用：那条路径刚 setFiles 重置状态，
+  // 而 filesRef 要等下一次渲染才跟上，直接读 ref 会把刚清掉的 error 又跑一遍。
+  const compress = async (overrideFiles?: FileItem[]) => {
     if (busyRef.current) return;
-    const pending = filesRef.current.filter((f) => f.status !== "done");
+    const pending = (overrideFiles ?? filesRef.current).filter((f) => f.status !== "done");
     if (pending.length === 0) {
       setStatus(t("没有待压缩文件", "No files to compress"));
       return;
@@ -458,6 +461,30 @@ export default function App() {
     setStatus(msg);
     busyRef.current = false;
     setBusy(false);
+  };
+
+  /**
+   * 只重跑失败项，已完成的不动。
+   *
+   * 为什么需要独立入口：compress() 的 pending 判据是 `status !== "done"`，
+   * 所以失败项本来就会被再点「开始压缩」带上 —— 但那会连同所有排队项一起跑，
+   * 用户拿不准会不会把已经压好的 300 个再压一遍（不会，但界面没告诉他）。
+   * 一个明确写着「重试 3 个失败项」的按钮，比让用户猜安全。
+   *
+   * 重置 error / result 两个字段：不重置 result 的话，右栏「已节省」会把
+   * 上一轮失败的残留算进去。
+   */
+  const retryFailed = () => {
+    if (busyRef.current) return;
+    const current = filesRef.current;
+    const failed = current.filter((f) => f.status === "error");
+    if (failed.length === 0) return;
+    const reset = current.map((f) =>
+      f.status === "error" ? { ...f, status: "pending" as const, error: undefined, result: undefined } : f,
+    );
+    setFiles(reset);
+    // 传 reset 而不是等 setFiles 生效：filesRef 要下一次渲染才更新。
+    void compress(reset);
   };
 
   // One-time wiring: frontend readiness, menu, cold-start file, drag-drop, close guard.
@@ -677,7 +704,7 @@ export default function App() {
                 <span>{t("PDF、Word、Excel、PPT、JPG、PNG、TIFF", "PDF, Word, Excel, PPT, JPG, PNG, TIFF")}</span>
               </span>
             </button>
-            <button className="primary" disabled={pendingCount === 0 || busy} onClick={compress}>
+            <button className="primary" disabled={pendingCount === 0 || busy} onClick={() => compress()}>
               {busy ? t("压缩中…", "Compressing…") : t("开始压缩", "Compress")}
             </button>
           </div>
@@ -850,6 +877,15 @@ export default function App() {
             </span>
             <span className="cap">{summaryCap}</span>
           </section>
+
+          {/* 只重跑失败项。有失败才出现 —— 常态下多一个按钮只是噪音，
+              而压缩失败（加密 PDF、损坏文件）恰恰是最需要「再来一次」的场景：
+              此前只能整批重压，用户不知道已完成的那 300 个会不会被重做。 */}
+          {!busy && errorCount > 0 ? (
+            <button className="secondary retry-failed" onClick={retryFailed}>
+              {t(`重试 ${errorCount} 个失败项`, `Retry ${errorCount} failed`)}
+            </button>
+          ) : null}
         </aside>
       </div>
 
