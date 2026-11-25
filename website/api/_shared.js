@@ -85,8 +85,11 @@ function verifyCode(code, secret) {
    查函数，每接一个渠道就多一张表 —— 而 Paddle 下线时其中一张注定要删。
    改成以产品码为主键后，**加渠道 = 每行多一个字段**，不会有第二张表。
 
-   产品码是应用内license.rs 认的东西（PD / WP / MD / CV / OC / WR / JI /
-   SG / CO / FL），各应用只认自己的码 + FL，所以它是天然的稳定主键。 */
+   产品码是应用内license.rs 认的东西（PD / WP / MD / CV / OC / WR / JO /
+   SG / CO / FL），各应用只认自己的码 + FL，所以它是天然的稳定主键。
+   Journal 是 JO 不是 JI：客户端 `apps/journal/src-tauri/src/license.rs:94` 从 2026-10
+   起就烤进 `["JO","FL"]`，已装机用户不会随官网改动更新——目录键只能迁就客户端，
+   反过来改客户端等于让存量用户全体激活失败（同 SQ→PD 改名事故）。 */
 var CATALOG = {
   PD: { label: "Rocktier PDF",        price: "9.99",
         creem: "prod_29kyJdztcwhkCkI6eoXvCe",
@@ -107,7 +110,7 @@ var CATALOG = {
         creem: "prod_5p01aS1VOcdH9rqtozt9O5", paypal: null },
   WR: { label: "Rocktier Write",      price: "12.99",
         creem: "prod_GnHgkbJt8ahSjYcImdEBl",  paypal: null },
-  JI: { label: "Rocktier Journal",    price: "9.99",
+  JO: { label: "Rocktier Journal",    price: "9.99",
         creem: "prod_3a135PdLzq7CerGOSA6NSm", paypal: null },
   SG: { label: "Rocktier Sign",       price: "9.99",
         creem: "prod_6GZMSHYC0paDLKguyWC1Et", paypal: null },

@@ -34,7 +34,8 @@ const shared = require("../api/_shared.js");
 const activate = require("../api/activate.js");
 
 /* ── 像 webhook 那样发一个码 ── */
-const product = "SQ";
+/* 产品码必须走官网 CATALOG 现用值（PDF 已从 SQ 改名 PD），否则夹具验的是死码 */
+const product = "PD";
 const txn = "txn_fixture_" + Date.now();
 const code = shared.makeCode(product, txn, process.env.LICENSE_SECRET);
 

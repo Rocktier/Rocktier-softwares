@@ -29,8 +29,12 @@
     "test:creem-webhook": "node tools/test-creem-webhook.mjs",
     "verify:keypair": "node tools/verify-keypair.mjs",
     "verify:redirect": "node tools/verify-real-redirect.mjs",
+    "verify:product-codes": "node tools/verify-product-codes.mjs",
 
-    "check": "npm run check:placeholders && npm run check:content && npm run check:site && npm run check:secrets",
+    "beta:codes": "node tools/beta-codegen.mjs",
+    "beta:codes:selftest": "node tools/beta-codegen.mjs --selftest",
+
+    "check": "npm run check:placeholders && npm run check:content && npm run check:site && npm run check:secrets && npm run verify:product-codes",
     "test": "npm run test:audit-diff && npm run test:consent && npm run test:revocation"
   }
 }

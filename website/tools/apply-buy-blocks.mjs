@@ -27,7 +27,7 @@ const PRODUCTS = {
   "ocr.html":        { code: "OC", prod: "prod_5p01aS1VOcdH9rqtozt9O5", price: "14.99", ns: "ocr", paypal: null, platform: true },
   "write.html":      { code: "WR", prod: "prod_GnHgkbJt8ahSjYcImdEBl",  price: "12.99", ns: "wr",  paypal: null, platform: true },
   "compressor.html": { code: "CO", prod: "prod_7LNvNTzDcfIAP2RyNjKOg7", price: "9.99",  ns: "co",  paypal: null, platform: true },
-  "journal.html":    { code: "JI", prod: "prod_3a135PdLzq7CerGOSA6NSm", price: "9.99",  ns: "ji",  paypal: null, platform: true },
+  "journal.html":    { code: "JO", prod: "prod_3a135PdLzq7CerGOSA6NSm", price: "9.99",  ns: "ji",  paypal: null, platform: true },
   /* Sign 2026-10-28 裁定并入 PDF 1.1.0（见 family.json $ruling_2026_10_28），官网
      卡片已撤、sign.html 只剩跳转页。条目**保留但不参与装块**：一旦有人重跑本脚本，
      没有这道守卫就会把 Creem 购买区块塞回一个已声明「moved into PDF」的页面，
