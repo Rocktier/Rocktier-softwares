@@ -45,7 +45,9 @@ jobs:
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
         with:
-          targets: x86_64-pc-windows-msvc
+          # 多架构 bundle（2026-11-25）：msixbundle 此前只有 x64，arm64 机器只能靠仿真。
+          # CLI 的 --arch 用简写 x64/arm64，Rust 目标名才是 x86_64-/aarch64-。
+          targets: x86_64-pc-windows-msvc, aarch64-pc-windows-msvc
 
       - name: Cache Rust build
         uses: swatinem/rust-cache@v2
@@ -82,33 +84,28 @@ jobs:
             echo "  $f ${size} bytes"
           done
 
-      - name: Build MSIX (store channel)
+      - name: Build MSIX (store channel, x64 + arm64)
         working-directory: apps/pic2webp
-        run: npx tauri-windows-bundle build --runner npm --verbose
+        run: npx tauri-windows-bundle build --runner npm --arch x64,arm64 --verbose
 
-      - name: Verify store package
+      - name: Verify store package (x64 + arm64 bundle)
         run: |
           set -euo pipefail
           mkdir -p artifacts
           # 不吞错误：产物找不到就让 CI 红，不静默上传空目录。
           find apps/pic2webp/src-tauri/target/msix -maxdepth 1 \( -name '*.msix' -o -name '*.msixbundle' \) \
             -exec cp {} artifacts/ \;
-          test "$(find artifacts -name '*.msix*' | wc -l)" -gt 0 || {
-            echo "::error::no MSIX produced"; exit 1; }
 
-          # 从真实包内读清单（不是只看生成物），核对身份与能力声明。
-          pkg=$(find artifacts -name '*.msix' -not -name '*.msixbundle' | head -1)
-          test -n "$pkg" || { echo "::error::no .msix (only bundle?)"; exit 1; }
-          unzip -p "$pkg" AppxManifest.xml > artifacts/AppxManifest.xml
+          # 多架构断言（2026-11-25）：以前只装 x64，msixbundle 里就一份包，arm64 机靠仿真。
+          # 两个 msix 缺一即红 —— 不做「有几份传几份」的宽容，否则退回单架构也照样绿。
+          msix_count=$(find artifacts -name '*.msix' -not -name '*.msixbundle' | wc -l | tr -d ' ')
+          test "$msix_count" -eq 2 || {
+            echo "::error::期望 2 个 .msix（x64 + arm64），实际 $msix_count"; exit 1; }
+          bundle_count=$(find artifacts -name '*.msixbundle' | wc -l | tr -d ' ')
+          test "$bundle_count" -eq 1 || {
+            echo "::error::期望 1 个 .msixbundle，实际 $bundle_count（--arch 是否漏了 arm64？）"; exit 1; }
 
-          grep -Fq 'Name="Rocktier.RocktierPic2WebP"' artifacts/AppxManifest.xml || {
-            echo "::error::Identity Name mismatch"; exit 1; }
-          grep -Fq 'Publisher="CN=4EA39D7A-401B-4D56-98D0-8ECB1F2B8DF7"' artifacts/AppxManifest.xml || {
-            echo "::error::Publisher mismatch"; exit 1; }
-          grep -Fq 'Capability Name="runFullTrust"' artifacts/AppxManifest.xml || {
-            echo "::error::runFullTrust missing"; exit 1; }
-          if grep -Fq 'internetClient' artifacts/AppxManifest.xml; then
-            echo "::error::unexpected internetClient capability"; exit 1; fi
+          VERSION=$(node -p "require('./apps/pic2webp/src-tauri/tauri.conf.json').version")
 
           # 配置里声明的每个扩展名都必须在清单里真的出现（2026-11-25）：
           # 1.9.21 六组 fileAssociations 共用同一个 name，AppxManifest 只留下最后
@@ -120,17 +117,40 @@ jobs:
             if (!exts.length) { console.error("no fileAssociations declared"); process.exit(1); }
             console.log(exts.join("\n"));
           ' > artifacts/expected-exts.txt
-          while IFS= read -r ext; do
-            grep -Fq "FileType=\".${ext}\"" artifacts/AppxManifest.xml || {
-              echo "::error::AppxManifest 缺 .${ext} 关联 —— 配置声明了，包里没有"; exit 1; }
-          done < artifacts/expected-exts.txt
-          echo "file associations in manifest: $(wc -l < artifacts/expected-exts.txt)"
 
-          VERSION=$(node -p "require('./apps/pic2webp/src-tauri/tauri.conf.json').version")
-          grep -Fq "Version=\"${VERSION}.0\"" artifacts/AppxManifest.xml || {
-            echo "::error::Version mismatch (expected ${VERSION}.0)"; exit 1; }
+          seen_arch=""
+          for pkg in $(find artifacts -name '*.msix' -not -name '*.msixbundle'); do
+            base=$(basename "$pkg" .msix)
+            m="artifacts/manifest-${base}.xml"
+            unzip -p "$pkg" AppxManifest.xml > "$m"
+            arch=$(sed -n 's/.*ProcessorArchitecture="\([^"]*\)".*/\1/p' "$m" | head -1)
+            echo "── ${base}: ProcessorArchitecture=${arch}"
+            seen_arch="${seen_arch} ${arch}"
 
-          printf 'ROCKTIER_CHANNEL=store\nIdentity Name=Rocktier.RocktierPic2WebP\n' \
+            grep -Fq 'Name="Rocktier.RocktierPic2WebP"' "$m" || {
+              echo "::error::${base}: Identity Name mismatch"; exit 1; }
+            grep -Fq 'Publisher="CN=4EA39D7A-401B-4D56-98D0-8ECB1F2B8DF7"' "$m" || {
+              echo "::error::${base}: Publisher mismatch"; exit 1; }
+            grep -Fq 'Capability Name="runFullTrust"' "$m" || {
+              echo "::error::${base}: runFullTrust missing"; exit 1; }
+            if grep -Fq 'internetClient' "$m"; then
+              echo "::error::${base}: unexpected internetClient capability"; exit 1; fi
+            grep -Fq "Version=\"${VERSION}.0\"" "$m" || {
+              echo "::error::${base}: Version mismatch (expected ${VERSION}.0)"; exit 1; }
+
+            while IFS= read -r ext; do
+              grep -Fq "FileType=\".${ext}\"" "$m" || {
+                echo "::error::${base}: AppxManifest 缺 .${ext} 关联 —— 配置声明了，包里没有"; exit 1; }
+            done < artifacts/expected-exts.txt
+          done
+
+          echo "$seen_arch" | grep -qw x64 || {
+            echo "::error::bundle 里没有 x64 包（seen:${seen_arch}）"; exit 1; }
+          echo "$seen_arch" | grep -qw arm64 || {
+            echo "::error::bundle 里没有 arm64 包（seen:${seen_arch}）"; exit 1; }
+          echo "file associations per package: $(wc -l < artifacts/expected-exts.txt)"
+
+          printf 'ROCKTIER_CHANNEL=store\nIdentity Name=Rocktier.RocktierPic2WebP\nArchitectures=x64,arm64\n' \
             > artifacts/STORE-CHANNEL.txt
           ls -la artifacts
 
