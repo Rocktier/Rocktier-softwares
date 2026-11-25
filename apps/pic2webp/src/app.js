@@ -564,12 +564,21 @@ function updateStatusbar() {
   const allDone = files.every((f) => f.status === "done" || f.status === "skipped" || f.status === "failed");
   if (allDone && stats) {
     // 计数直接取统计面板上的真实值（updateStats 刚写入的），不二次计算
-    statusText.textContent = t("statusbar-done", {
-      ok: statSuccess ? statSuccess.textContent : "0",
-      skip: statSkip ? statSkip.textContent : "0",
-      fail: statFail ? statFail.textContent : "0",
-      saved: statSaved ? statSaved.textContent : "0 B",
-    });
+    const ok = statSuccess ? statSuccess.textContent : "0";
+    const skip = statSkip ? statSkip.textContent : "0";
+    const fail = statFail ? statFail.textContent : "0";
+    const saved = statSaved ? statSaved.textContent : "0 B";
+    // 只拼非零段（2026-11-25 窄窗实测）：640 pt 宽时整串会以省略号收尾，而
+    // 「· 0 skipped · 0 failed」正好占掉那一段 —— 最该被看见的失败数反而被截掉。
+    // 报三个 0 在任何宽度都是噪音；失败紧随成功之后，缩到最窄也先看得见它。
+    const parts = [];
+    if (ok !== "0") parts.push(t("statusbar-final-ok", { n: ok }));
+    if (fail !== "0") parts.push(t("statusbar-final-fail", { n: fail }));
+    if (skip !== "0") parts.push(t("statusbar-final-skip", { n: skip }));
+    if (saved !== "0 B") parts.push(t("statusbar-final-saved", { saved }));
+    statusText.textContent = parts.length
+      ? t("statusbar-final", { parts: parts.join(" · ") })
+      : t("statusbar-idle");
     return;
   }
   statusText.textContent = t("statusbar-ready", { n: files.length });

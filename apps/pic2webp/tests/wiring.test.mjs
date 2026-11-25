@@ -132,3 +132,28 @@ test("导出按钮与重试按钮同显同隐", () => {
   const hides = [...SRC.matchAll(/exportFailedBtn\.hidden\s*=/g)].length;
   assert.ok(hides >= 2, `export-failed-btn 只在 ${hides} 处显隐，重置与 convert-done 没都覆盖`);
 });
+
+// ─── 状态栏汇总只报非零段（2026-11-25 窄窗实测）────────────────────
+//
+// 实测 640 pt 宽：整串被省略号截掉，而「· 0 skipped · 0 failed」正好吃掉那段，
+// 最该看见的失败数反而看不到。判据两条：非零过滤必须存在、失败必须排在跳过之前。
+
+test("状态栏汇总必须只拼非零段，且失败排在跳过前", () => {
+  const b = block("function updateStatus");
+  assert.match(b, /if \(ok !== "0"\)/, "成功数没做非零过滤");
+  assert.match(b, /if \(fail !== "0"\)/, "失败数没做非零过滤");
+  const iFail = b.indexOf('t("statusbar-final-fail"');
+  const iSkip = b.indexOf('t("statusbar-final-skip"');
+  assert.ok(iFail > 0 && iSkip > 0, "缺 statusbar-final-fail / -skip");
+  assert.ok(iFail < iSkip, "失败必须排在跳过之前 —— 窄窗截断时先保失败");
+});
+
+test("状态栏新键两种语言都在（旧 statusbar-done 已退役）", () => {
+  const zh = read2(join(here, "..", "src", "i18n.js"), "utf8");
+  for (const k of ["statusbar-final", "statusbar-final-ok", "statusbar-final-fail",
+                   "statusbar-final-skip", "statusbar-final-saved"]) {
+    const hits = zh.split(`"${k}"`).length - 1;
+    assert.equal(hits, 2, `${k} 在两种语言里不是各一处（实际 ${hits}）`);
+  }
+  assert.ok(!zh.includes('"statusbar-done"'), "旧键 statusbar-done 还在，已无人引用");
+});
