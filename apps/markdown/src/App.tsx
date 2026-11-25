@@ -21,8 +21,9 @@ import {
   type Frontmatter,
 } from "./services/markdown";
 import {
-  openFile, saveFile, saveFileAs, saveHtmlAs, normalizeEol, applyEol, type Eol,
+  openFile, saveFile, saveFileAs, saveHtmlAs, normalizeEol, applyEol, readRaw, type Eol,
 } from "./services/file";
+import { forgetBookmark, resolveBookmarkPath } from "./bookmarks";
 import { buildStandaloneHtml, inlineLocalImages } from "./services/exportHtml";
 import {
   MAX_TABS, activeTabOf, closeTab, createTab, openTab, tabLabel, updateTabDoc,
@@ -487,7 +488,7 @@ export default function App() {
       for (const raw of candidates) {
         if (!raw) continue;
         try {
-          const rawContent = await invoke<string>("read_document", { path: raw }).catch(() => null);
+          const rawContent = await readRaw(raw).catch(() => null);
           if (rawContent !== null) {
             const { eol } = normalizeEol(rawContent);
             if (!cancelled) {
@@ -883,6 +884,9 @@ export default function App() {
       report(t("toast.unsupportedType"));
       return "unsupported";
     }
+    // 书签优先：文件被移动或改名过时，书签能解回它的新位置（准则 §二十二 第 5 条）。
+    // 解不出来就原样用入参，行为与改动前一致。
+    const target = await resolveBookmarkPath(path);
     let loaded: { content: string; eol: Eol };
     try {
       // 沙箱（MAS）下对未授权路径的探测，究竟返回 false 还是直接抛错，
@@ -890,7 +894,7 @@ export default function App() {
       // 无论哪种都归为「访问不到」，不再细分「不存在」与「没权限」。
       // 沙盒（MAS）下未授权路径读不到：NOT_FOUND 与其他错误都归为「访问不到」，
       // 不再细分「不存在」与「没权限」。
-      const raw = await invoke<string>("read_document", { path }).catch((e: unknown) =>
+      const raw = await readRaw(target).catch((e: unknown) =>
         String(e) === "NOT_FOUND" ? "__NOT_FOUND__" : null,
       );
       if (raw === "__NOT_FOUND__") {
@@ -907,11 +911,11 @@ export default function App() {
       return "unavailable";
     }
     if (!openInTab(
-      { path, content: loaded.content, modified: false },
-      { eol: loaded.eol, savedContent: loaded.content, savedPath: path },
+      { path: target, content: loaded.content, modified: false },
+      { eol: loaded.eol, savedContent: loaded.content, savedPath: target },
     ))
       return "tab-limit";
-    rememberPath(path);
+    rememberPath(target);
     showToast(t("toast.fileOpened"), "success");
     return "ok";
   }, [openInTab, rememberPath, showToast]);
@@ -924,6 +928,8 @@ export default function App() {
     const res = await openMarkdownPath(path, { quiet: true });
     if (res === "unavailable" || res === "unsupported") {
       forgetRecent(path);
+      // 书签也一起丢：留着一条解不出文件的凭据，下次只会再失败一次
+      forgetBookmark(path);
       showToast(t("toast.recentUnavailable"), "error");
     }
   }, [forgetRecent, openMarkdownPath, showToast]);
@@ -1039,7 +1045,8 @@ export default function App() {
     if (!path || !isTauri) return;
     checkingRef.current = true;
     try {
-      const diskRaw = await invoke<string>("read_document", { path }).catch(() => null);
+      // 轮询不生成书签：这条路径每 3 秒跑一次，没必要每轮都去签一份
+      const diskRaw = await readRaw(path, false).catch(() => null);
       if (diskRaw === null) return;
       // 先归一化再比较：基线是 LF，CRLF 文件不归一会被每轮轮询误判成"外部修改"
       const { content: diskContent, eol } = normalizeEol(diskRaw);
@@ -1135,7 +1142,9 @@ export default function App() {
     const ts = Date.now();
     let name = `paste-${ts}.${ext}`;
     try {
-      for (let i = 1; await invoke<boolean>("path_exists", { path: `${dir}assets/${name}` }); i++) {
+      // 显式传 bookmark:null：这些是文档同目录的兄弟路径，书签只授权单个文件，
+      // 传了也用不上；写出来是为了不依赖「Option 参数可省略」这一层隐式行为。
+      for (let i = 1; await invoke<boolean>("path_exists", { path: `${dir}assets/${name}`, bookmark: null }); i++) {
         name = `paste-${ts}-${i}.${ext}`;
       }
       await invoke("save_paste_image", { path: `${dir}assets/${name}`, data: m[2] });

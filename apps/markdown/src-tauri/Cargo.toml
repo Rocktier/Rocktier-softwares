@@ -25,9 +25,11 @@ base64 = "0.22"
 # 授权回执的 Ed25519 离线验签（license.rs，FAMILY-LICENSE.md §2）
 ed25519-dalek = "2"
 
-# macOS App Store（沙盒）构建：面板选中路径的读写需安全作用域访问（lib.rs with_scoped）
+# macOS App Store（沙盒）构建：面板选中路径的读写需安全作用域访问（lib.rs with_scoped）。
+# NSArray / NSData / NSError 只为书签 API 而开：bookmarkDataWithOptions 的签名
+# 需要 NSArray<NSURLResourceKey> 与 NSError，缺一个那方法就不会被生成。
 [target.'cfg(target_os = "macos")'.dependencies]
-objc2-foundation = { version = "0.3", features = ["NSURL", "NSString"] }
+objc2-foundation = { version = "0.3", features = ["NSURL", "NSString", "NSArray", "NSData", "NSError"] }
 
 [features]
 default = ["custom-protocol"]

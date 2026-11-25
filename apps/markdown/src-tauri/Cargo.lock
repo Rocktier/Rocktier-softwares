@@ -2954,6 +2954,7 @@ version = "1.0.26"
 dependencies = [
  "base64 0.22.1",
  "ed25519-dalek",
+ "objc2-foundation",
  "serde",
  "serde_json",
  "tauri",

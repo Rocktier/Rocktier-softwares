@@ -462,26 +462,195 @@ fn with_scoped<T>(path: &std::path::Path, f: impl FnOnce() -> T) -> T {
     f()
 }
 
+/* ── 安全作用域书签（准则 §二十二 第 5 条）────────────────────────────
+ *
+ * 为什么需要：沙盒版只记绝对路径，重启后系统不再给这个进程任何授权，
+ * 于是「最近打开」的每一条都点不开（D-152 之前的诚实降级只是把失败说清楚）。
+ * 书签是系统给的凭据，路径变了也能解回原文件 —— 它同时修好了「文件被移动」。
+ *
+ * 为什么不缓存解出来的 NSURL：那需要把它塞进跨线程状态，而 objc2 的 Retained
+ * 默认不是 Send。每次读写重解一次书签的代价是微秒级，换掉一个 unsafe Send 包装
+ * 很划算。
+ */
+
+/// 把书签解成路径并取得作用域，再把 f 跑在**解出来的**路径上。
+///
+/// 书签缺失或解析失败时退回按原路径的旧行为 —— 直发版与 Windows 走的就是这条路，
+/// 行为与改动前逐字一致。
+#[cfg(target_os = "macos")]
+fn with_scope<T>(
+    path: &std::path::Path,
+    bookmark: Option<&str>,
+    f: impl FnOnce(&std::path::Path) -> T,
+) -> T {
+    if let Some(token) = bookmark {
+        // FnOnce 只能被调用一次，而两条路径（书签 / 退回路径）互斥。
+        // 用 Option 保管它，谁来执行谁 take —— 这样不需要给调用方加 Clone 约束。
+        let mut f = Some(f);
+        let done = with_bookmark_url(token, |url| {
+            let run = f.take().expect("书签分支只会执行一次");
+            // SAFETY: 仅改变本进程对该 URL 的作用域持有状态，无内存安全问题。
+            let scoped = unsafe { url.startAccessingSecurityScopedResource() };
+            let resolved = url
+                .path()
+                .map(|p| std::path::PathBuf::from(p.to_string()))
+                .unwrap_or_else(|| path.to_path_buf());
+            let out = run(&resolved);
+            if scoped {
+                unsafe { url.stopAccessingSecurityScopedResource() };
+            }
+            out
+        });
+        match (done, f) {
+            (Some(out), _) => return out,
+            (None, Some(run)) => return with_scoped(path, || run(path)),
+            (None, None) => unreachable!("书签未解析成功却已消费闭包"),
+        }
+    }
+    with_scoped(path, || f(path))
+}
+
+#[cfg(not(target_os = "macos"))]
+fn with_scope<T>(
+    path: &std::path::Path,
+    bookmark: Option<&str>,
+    f: impl FnOnce(&std::path::Path) -> T,
+) -> T {
+    let _ = bookmark;
+    with_scoped(path, || f(path))
+}
+
+/// base64 书签 → 解出来的 NSURL，交给调用方在作用域内做事。
+///
+/// 之所以不把 NSURL 返回出去：`Retained<NSURL>` 要跨函数存活就得进状态，
+/// 而 objc2 的 Retained 默认不是 Send。回调形态让 URL 的生命周期收在一个栈帧里。
+#[cfg(target_os = "macos")]
+fn with_bookmark_url<T>(
+    token: &str,
+    f: impl FnOnce(&objc2_foundation::NSURL) -> T,
+) -> Option<T> {
+    use base64::Engine as _;
+    use objc2_foundation::{NSData, NSURL, NSURLBookmarkResolutionOptions};
+
+    let bytes = base64::engine::general_purpose::STANDARD.decode(token).ok()?;
+    if bytes.is_empty() {
+        return None;
+    }
+    // SAFETY: 指针与长度来自同一个 Vec<u8>；NSData 会复制一份再持有。
+    let data = unsafe {
+        NSData::dataWithBytes_length(bytes.as_ptr() as *const std::ffi::c_void, bytes.len())
+    };
+    // SAFETY: 第 4 参传 null 表示不关心 stale 标志，这正是文档允许的用法。
+    let resolve = |options| unsafe {
+        NSURL::URLByResolvingBookmarkData_options_relativeToURL_bookmarkDataIsStale_error(
+            &data,
+            options,
+            None,
+            std::ptr::null_mut(),
+        )
+    };
+    // 带作用域的解法优先；普通书签（非沙盒进程生成的那种）在带作用域的方式下
+    // 可能解不出来，那就退回不带作用域的解 —— 路径照样能拿到。
+    let resolved = resolve(NSURLBookmarkResolutionOptions::WithSecurityScope)
+        .or_else(|_| resolve(NSURLBookmarkResolutionOptions(0)));
+    resolved.ok().map(|url| f(&url))
+}
+
+/// 为一个已在磁盘上存在的路径生成书签（base64）。沙盒外也能生成，只是用不上作用域。
 #[tauri::command]
 #[cfg(desktop)]
-fn save_document(path: String, content: String) -> Result<(), String> {
+fn bookmark_create(path: String) -> Result<String, String> {
+    #[cfg(target_os = "macos")]
+    {
+        use objc2_foundation::{
+            NSDataBase64EncodingOptions, NSString, NSURL, NSURLBookmarkCreationOptions,
+        };
+
+        let url = NSURL::fileURLWithPath_isDirectory_relativeToURL(
+            &NSString::from_str(&path),
+            false,
+            None,
+        );
+        // 先要带作用域的那种：只有它能让沙盒版重启后仍有权限。
+        // 但非沙盒进程（直发版、本机单测）生成带作用域的失败 —— 系统回
+        // 「The file couldn't be opened.」—— 那就退回普通书签：它不解权限，
+        // 仍能跟踪文件被移动/改名。两者都失败才算真失败。
+        let scoped = url.bookmarkDataWithOptions_includingResourceValuesForKeys_relativeToURL_error(
+            NSURLBookmarkCreationOptions::WithSecurityScope,
+            None,
+            None,
+        );
+        let data = match scoped {
+            Ok(data) => data,
+            Err(_) => url
+                .bookmarkDataWithOptions_includingResourceValuesForKeys_relativeToURL_error(
+                    NSURLBookmarkCreationOptions(0),
+                    None,
+                    None,
+                )
+                .map_err(|e| e.localizedDescription().to_string())?,
+        };
+        Ok(data
+            .base64EncodedStringWithOptions(NSDataBase64EncodingOptions(0))
+            .to_string())
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = path;
+        Err("security-scoped bookmarks are macOS only".to_string())
+    }
+}
+
+/// 书签 → 当前路径。文件被移动过时返回新位置；失效能解时返回 Err，由前端降级。
+#[tauri::command]
+#[cfg(desktop)]
+fn bookmark_resolve(bookmark: String) -> Result<String, String> {
+    #[cfg(target_os = "macos")]
+    {
+        let path = with_bookmark_url(&bookmark, |url| {
+            // SAFETY: 只改变本进程对该 URL 的作用域持有状态。
+            let scoped = unsafe { url.startAccessingSecurityScopedResource() };
+            let p = url.path().map(|s| s.to_string());
+            if scoped {
+                unsafe { url.stopAccessingSecurityScopedResource() };
+            }
+            p
+        })
+        .ok_or_else(|| "bookmark could not be resolved".to_string())?;
+        path.ok_or_else(|| "bookmark resolved to a non-file URL".to_string())
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = bookmark;
+        Err("security-scoped bookmarks are macOS only".to_string())
+    }
+}
+
+#[tauri::command]
+#[cfg(desktop)]
+fn save_document(path: String, content: String, bookmark: Option<String>) -> Result<(), String> {
     // 保存是本应用最核心的写操作：受授权闸门保护（FAMILY-LICENSE.md §2）。
     ensure_write_allowed()?;
     let target = std::path::PathBuf::from(&path);
     // 错误带上目标路径与 errno：前端原来把任何失败都显示成一句「无法写入文件」，
     // 审核员与用户都拿不到线索，我们也没法从截图里判断是权限、是只读盘还是别
     // 的什么。
-    with_scoped(&target, || write_with_fallback(&target, &content, write_atomic))
-        .map_err(|e| format!("{}: {}", target.display(), e))
+    with_scope(&target, bookmark.as_deref(), |resolved| {
+        write_with_fallback(resolved, &content, write_atomic)
+    })
+    .map_err(|e| format!("{}: {}", target.display(), e))
 }
 
 /// 打开面板选中文件的读取（沙盒下需安全作用域，见 with_scoped）。
 /// NOT_FOUND 单独返回，前端据以区分「文件不存在」与「读不了」。
 #[tauri::command]
 #[cfg(desktop)]
-fn read_document(path: String) -> Result<String, String> {
+fn read_document(path: String, bookmark: Option<String>) -> Result<String, String> {
     let target = std::path::PathBuf::from(&path);
-    with_scoped(&target, || std::fs::read_to_string(&target)).map_err(|e| {
+    with_scope(&target, bookmark.as_deref(), |resolved| {
+        std::fs::read_to_string(resolved)
+    })
+    .map_err(|e| {
         if e.kind() == std::io::ErrorKind::NotFound {
             "NOT_FOUND".to_string()
         } else {
@@ -493,9 +662,9 @@ fn read_document(path: String) -> Result<String, String> {
 /// 面板路径的存在性探测（沙盒下 JS 侧 exists() 会因无权限误报 false）。
 #[tauri::command]
 #[cfg(desktop)]
-fn path_exists(path: String) -> bool {
+fn path_exists(path: String, bookmark: Option<String>) -> bool {
     let target = std::path::PathBuf::from(&path);
-    with_scoped(&target, || target.exists())
+    with_scope(&target, bookmark.as_deref(), |resolved| resolved.exists())
 }
 
 /// Makes each concurrent save write to its own temp file. See `save_document`.
@@ -962,6 +1131,8 @@ pub fn run() {
             save_document,
             read_document,
             path_exists,
+            bookmark_create,
+            bookmark_resolve,
             list_recovery,
             clear_recovery,
             initial_file,
@@ -1216,5 +1387,37 @@ mod tests {
         );
 
         let _ = std::fs::remove_dir_all(&dir);
+    }
+}
+
+/// 书签的真实往返：建一份、解回来，路径必须一致。
+///
+/// 为什么要跑真 API 而不是只测 base64：这段代码的风险全在 objc2 的调用约定上
+/// （feature 没开方法就不生成、指针约定错会崩），纯字符串往返一条都测不出来。
+#[cfg(all(test, target_os = "macos"))]
+mod bookmark_tests {
+    use super::*;
+
+    #[test]
+    fn bookmark_round_trip_returns_the_same_file() {
+        let dir = std::env::temp_dir().join("rocktier-md-bookmark-roundtrip.md");
+        std::fs::write(&dir, "# round trip\n").unwrap();
+        let path = dir.to_string_lossy().to_string();
+
+        let token = bookmark_create(path.clone()).expect("应能为已存在的文件生成书签");
+        assert!(!token.is_empty(), "书签不能是空串");
+
+        let back = bookmark_resolve(token).expect("刚生成的书签必须解得回来");
+        let a = std::fs::canonicalize(&back).expect("解出的路径应存在");
+        let b = std::fs::canonicalize(&path).expect("原路径应存在");
+        assert_eq!(a, b, "书签解出的路径与原路径不一致：{back} vs {path}");
+
+        let _ = std::fs::remove_file(&dir);
+    }
+
+    #[test]
+    fn garbage_bookmark_is_rejected_instead_of_panicking() {
+        assert!(bookmark_resolve("not-base64!!".to_string()).is_err());
+        assert!(bookmark_resolve(String::new()).is_err());
     }
 }
