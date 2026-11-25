@@ -809,10 +809,12 @@ pub fn run() {
                             "[material-diag] main window found; set_background_color={:?}",
                             w.set_background_color(Some(tauri::webview::Color(0, 0, 0, 0)))
                         );
-                        let _ = w.eval(
+                        std::thread::sleep(std::time::Duration::from_millis(3000));
+                        let r = w.eval(
                             "document.title='MAT='+(document.documentElement.dataset.material||'NONE')",
                         );
-                        std::thread::sleep(std::time::Duration::from_millis(900));
+                        eprintln!("[material-diag] eval={:?}", r);
+                        std::thread::sleep(std::time::Duration::from_millis(700));
                         eprintln!("[material-diag] dom title={:?}", w.title());
                         let _ = w.set_title("Rocktier Compressor");
                     }
