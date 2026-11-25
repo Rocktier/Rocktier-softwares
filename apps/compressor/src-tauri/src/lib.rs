@@ -796,29 +796,8 @@ pub fn run() {
             // 只在 macOS：Windows/Linux 的窗口本来就不透明，清了反而会露出窗口外的底色。
             #[cfg(target_os = "macos")]
             {
-                let cfg = app.config();
-                if let Some(wc) = cfg.app.windows.first() {
-                    eprintln!(
-                        "[material-diag] runtime config: transparent={} effects={:?} bgcolor={:?}",
-                        wc.transparent, wc.window_effects, wc.background_color
-                    );
-                }
-                match app.get_webview_window("main") {
-                    Some(w) => {
-                        eprintln!(
-                            "[material-diag] main window found; set_background_color={:?}",
-                            w.set_background_color(Some(tauri::webview::Color(0, 0, 0, 0)))
-                        );
-                        std::thread::spawn(move || {
-                            std::thread::sleep(std::time::Duration::from_millis(5000));
-                            let r = w.eval_with_callback(
-                                "JSON.stringify({mat:document.documentElement.dataset.material||'NONE',body:getComputedStyle(document.body).backgroundColor,app:getComputedStyle(document.querySelector('.app')).backgroundColor})",
-                                |value| eprintln!("[material-diag] dom={}", value),
-                            );
-                            eprintln!("[material-diag] eval={:?}", r);
-                        });
-                    }
-                    None => eprintln!("[material-diag] main window NOT FOUND in setup"),
+                if let Some(w) = app.get_webview_window("main") {
+                    let _ = w.set_background_color(Some(tauri::webview::Color(0, 0, 0, 0)));
                 }
             }
 
