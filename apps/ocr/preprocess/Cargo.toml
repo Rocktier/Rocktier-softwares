@@ -1,0 +1,8 @@
+[package]
+name = "ocr-preprocess"
+version = "0.1.0"
+edition = "2021"
+description = "识别前置处理：拉直 / 去透视 / 去摩尔纹 / 增强。纯 Rust，无 OpenCV，无云端"
+
+[dependencies]
+image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }

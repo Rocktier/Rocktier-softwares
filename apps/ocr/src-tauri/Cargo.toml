@@ -19,6 +19,8 @@ serde_json = "1"
 image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }
 anyhow = "1"
 ocr-engine = { path = "../engine" }
+# 识别前置处理三件套（拉直 / 去摩尔纹 / 增强）：纯位图运算，不依赖推理运行时。
+ocr-preprocess = { path = "../preprocess" }
 write-searchable = { path = "../writer" }
 pdfium-render = "0.9.4"
 tauri-plugin-clipboard-manager = "2"

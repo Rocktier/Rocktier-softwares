@@ -253,6 +253,7 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             initial_file,
             commands::ocr_process,
+            commands::ocr_preprocess_preview,
             commands::ocr_export_pdf,
             commands::ocr_export_docx,
             commands::ocr_export_txt,

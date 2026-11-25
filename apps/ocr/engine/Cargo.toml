@@ -12,3 +12,6 @@ ort = { version = "=2.0.0-rc.13", features = [] }
 image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }
 anyhow = "1"
 clipper2 = "0.6.0"
+# 单应矩阵与透视取样住在这里：识别裁切与前置处理的去透视共用同一套取样器，
+# 两份实现各调一次插值核会让坐标基准悄悄分叉。
+ocr-preprocess = { path = "../preprocess" }

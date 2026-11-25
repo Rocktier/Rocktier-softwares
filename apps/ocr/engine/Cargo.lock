@@ -381,8 +381,16 @@ dependencies = [
  "anyhow",
  "clipper2",
  "image",
+ "ocr-preprocess",
  "ort",
  "serde_json",
+]
+
+[[package]]
+name = "ocr-preprocess"
+version = "0.1.0"
+dependencies = [
+ "image",
 ]
 
 [[package]]

@@ -14,11 +14,41 @@
 
 use crate::pdf;
 use ocr_engine::Pipeline;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use tauri::{AppHandle, Emitter, State};
+
+/// 前置处理三件套的开关，前端直接传这个。
+///
+/// `rectify`（拉直 + 去透视）在 PDF 输入上会被后端强制关掉：给 PDF 加文字层
+/// 是把识别框按 DPI 换算回原页坐标的，画幅一旦被校正过，整页文字层就会错位。
+/// 图片输入没有这个问题 —— 处理后的位图就是那一页本身。
+#[derive(Clone, Copy, Debug, Default, Deserialize, Serialize)]
+pub struct PreprocessOpts {
+    #[serde(default)]
+    pub rectify: bool,
+    #[serde(default)]
+    pub demoire: bool,
+    #[serde(default)]
+    pub enhance: bool,
+}
+
+impl PreprocessOpts {
+    fn any(&self) -> bool {
+        self.rectify || self.demoire || self.enhance
+    }
+
+    /// `allow_rectify` 为 false 时只保留不改变几何的两项。
+    fn engine(&self, allow_rectify: bool) -> ocr_preprocess::Opts {
+        ocr_preprocess::Opts {
+            rectify: self.rectify && allow_rectify,
+            demoire: self.demoire,
+            enhance: self.enhance,
+        }
+    }
+}
 
 /// A document that has been read: what each page says, and where it came from.
 #[derive(Clone)]
@@ -39,6 +69,9 @@ pub struct Job {
     /// Page size in twips (1/1440 inch) taken from the source PDF, so the
     /// exported document keeps the original page shape. None for images.
     pub page_twips: Option<(u32, u32)>,
+    /// 识别时用的前置处理选项。导出可搜索 PDF 要按**同一套选项**重跑一遍，
+    /// 否则嵌进 PDF 的是原图、文字层却是处理后的坐标。
+    pub preprocess: Option<PreprocessOpts>,
 }
 
 pub struct AppState {
@@ -75,6 +108,10 @@ pub struct Summary {
     kind: String,
     /// Every page already carried a text layer: there was nothing to do.
     already_searchable: bool,
+    /// 实际生效的拉直角度（度），0 表示没转。
+    angle_deg: f32,
+    /// 是否做了四角透视校正。
+    perspective: bool,
 }
 
 #[derive(Serialize)]
@@ -166,6 +203,7 @@ pub async fn ocr_process(
     state: State<'_, AppState>,
     input: String,
     dpi: Option<f64>,
+    preprocess: Option<PreprocessOpts>,
 ) -> Result<Summary, String> {
     let dpi = dpi.unwrap_or(200.0);
     state.cancel.store(false, Ordering::SeqCst);
@@ -181,6 +219,8 @@ pub async fn ocr_process(
         let mut line_boxes: Vec<Vec<crate::docx::LineBox>> = Vec::new();
         let mut page_twips: Option<(u32, u32)> = None;
         let (mut ocr_pages, mut skipped, mut line_count) = (0usize, 0usize, 0usize);
+        let mut report = ocr_preprocess::Report::default();
+        let opts = preprocess.filter(|p| p.any());
         let total: usize;
 
         if is_pdf {
@@ -217,6 +257,11 @@ pub async fn ocr_process(
                 } else {
                     let _ = app.emit("ocr-progress", Progress { page: i, total, phase: "render".into() });
                     let img = pdf::render_page(&page, dpi).map_err(|e| e.to_string())?;
+                    // PDF 页只吃非几何的两项：拉直会改画幅，文字层坐标就回不去了。
+                    let img = match &opts {
+                        Some(p) => ocr_preprocess::apply(&img, &p.engine(false)).0,
+                        None => img,
+                    };
                     let _ = app.emit("ocr-progress", Progress { page: i, total, phase: "recognise".into() });
                     let lines = with_pipeline(&pipeline, &app_for_pdf, |pipe| {
                         pipe.run(&img).map_err(|e| e.to_string())
@@ -243,7 +288,13 @@ pub async fn ocr_process(
             total = 1;
             let _ = app.emit("ocr-progress", Progress { page: 0, total, phase: "preparing".into() });
             check_image_size(&input)?;
-            let img = image::open(&input).map_err(|e| format!("无法打开图片：{e}"))?;
+            let mut img = image::open(&input).map_err(|e| format!("无法打开图片：{e}"))?;
+            if let Some(p) = &opts {
+                let _ = app.emit("ocr-progress", Progress { page: 0, total, phase: "preprocess".into() });
+                let (out, rep) = ocr_preprocess::apply(&img, &p.engine(true));
+                img = out;
+                report = rep;
+            }
             let lines = with_pipeline(&pipeline, &app_for_pdf, |pipe| {
                 pipe.run(&img).map_err(|e| e.to_string())
             })?;
@@ -269,6 +320,7 @@ pub async fn ocr_process(
             page_text,
             line_boxes,
             page_twips,
+            preprocess: opts,
         });
 
         Ok(Summary {
@@ -278,6 +330,9 @@ pub async fn ocr_process(
             lines: line_count,
             kind: if is_pdf { "pdf".to_string() } else { "image".to_string() },
             already_searchable: ocr_pages == 0 && skipped > 0,
+            // PDF 页不参与几何校正，报告里就恒为零 —— 界面按 kind 决定要不要显示。
+            angle_deg: if is_pdf { 0.0 } else { report.angle_deg },
+            perspective: !is_pdf && report.perspective,
         })
     })
     .await
@@ -322,12 +377,25 @@ pub async fn ocr_export_pdf(
             // The export path re-opens the image itself, so it carries the same
             // guard independently of the recognise-time check.
             check_image_size(&job.input)?;
-            let img = image::open(&job.input).map_err(|e| e.to_string())?;
+            let mut img = image::open(&job.input).map_err(|e| e.to_string())?;
+            // 识别时开过前置处理，这里必须按**同一套选项**重跑一遍：嵌进 PDF
+            // 的页面位图与文字层才会是同一个坐标系。重跑是确定性的 —— 没有
+            // 随机、没有时间依赖 —— 所以不需要把处理后的图缓存到磁盘上。
+            let processed = match &job.preprocess {
+                Some(p) if p.any() => {
+                    let (out, _) = ocr_preprocess::apply(&img, &p.engine(true));
+                    img = out;
+                    true
+                }
+                _ => false,
+            };
             let (w, h) = (img.width() as i64, img.height() as i64);
             // The page is embedded as JPEG, so any other format is transcoded
             // first - a PNG's bytes declared as DCTDecode is a broken picture.
-            let page = if job.input.to_lowercase().ends_with(".jpg")
-                || job.input.to_lowercase().ends_with(".jpeg")
+            // 处理过的图不在磁盘上，也必须转码。
+            let page = if !processed
+                && (job.input.to_lowercase().ends_with(".jpg")
+                    || job.input.to_lowercase().ends_with(".jpeg"))
             {
                 job.input.clone()
             } else {
@@ -449,4 +517,71 @@ pub fn report_machine_fingerprint() -> String {
 #[tauri::command]
 pub fn ocr_cancel(state: State<'_, AppState>) {
     state.cancel.store(true, Ordering::SeqCst);
+}
+
+/// 前置处理预览：看一眼再决定要不要开。
+///
+/// 为什么不让前端自己处理：PDF 的页得先由 pdfium 渲染成位图才谈得上处理，
+/// 前端拿不到那一步。预览统一走后端，识别与预览就是同一份算法。
+#[derive(Serialize)]
+pub struct PreviewResult {
+    /// `data:image/png;base64,…`，前端直接塞进 <img src>。
+    data_url: String,
+    width: u32,
+    height: u32,
+    angle_deg: f32,
+    perspective: bool,
+}
+
+#[tauri::command(async)]
+pub async fn ocr_preprocess_preview(
+    app: AppHandle,
+    input: String,
+    preprocess: Option<PreprocessOpts>,
+) -> Result<PreviewResult, String> {
+    tauri::async_runtime::spawn_blocking(move || -> Result<PreviewResult, String> {
+        let is_pdf = input.to_lowercase().ends_with(".pdf");
+        let mut img = if is_pdf {
+            let pdfium = pdf::init_pdfium(&app).map_err(|e| e.to_string())?;
+            let doc = pdfium
+                .load_pdf_from_file(Path::new(&input), None)
+                .map_err(|e| e.to_string())?;
+            let page = doc.pages().get(0).map_err(|e| e.to_string())?;
+            pdf::render_page(&page, 110.0).map_err(|e| e.to_string())?
+        } else {
+            check_image_size(&input)?;
+            image::open(&input).map_err(|e| format!("无法打开图片：{e}"))?
+        };
+        // 预览只需要看效果：长边压到 900，省掉几百万像素的无谓运算。
+        let longest = img.width().max(img.height());
+        if longest > 900 {
+            let r = 900.0 / longest as f64;
+            let (w, h) = (
+                ((img.width() as f64 * r).round() as u32).max(1),
+                ((img.height() as f64 * r).round() as u32).max(1),
+            );
+            img = img.resize_exact(w, h, image::imageops::FilterType::Triangle);
+        }
+        let mut report = ocr_preprocess::Report::default();
+        if let Some(p) = preprocess.filter(|p| p.any()) {
+            let (out, rep) = ocr_preprocess::apply(&img, &p.engine(true));
+            img = out;
+            report = rep;
+        }
+        let (width, height) = (img.width(), img.height());
+        let mut buf = std::io::Cursor::new(Vec::new());
+        img.write_to(&mut buf, image::ImageFormat::Png)
+            .map_err(|e| e.to_string())?;
+        use base64::Engine as _;
+        let b64 = base64::engine::general_purpose::STANDARD.encode(buf.get_ref());
+        Ok(PreviewResult {
+            data_url: format!("data:image/png;base64,{b64}"),
+            width,
+            height,
+            angle_deg: report.angle_deg,
+            perspective: report.perspective,
+        })
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }

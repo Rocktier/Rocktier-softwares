@@ -135,7 +135,107 @@ function render() {
       out.setAttribute("data-state", "empty");
     }
   }
+
+  syncPrepUi();
 }
+
+// ── 识别前处理（拉直 / 去摩尔纹 / 增强）────────────────────────────────
+// 默认全关：好的扫描件不需要任何处理，而误开的代价（重采样让字变糊）比不开更大。
+// 勾选记在本机，下次打开沿用上次的选择。
+const PREP_KEY = "rocktier.ocr.prep";
+const PREP_BOXES = { rectify: "prep-rectify", demoire: "prep-demoire", enhance: "prep-enhance" };
+// 最近一次的处理结果（预览或识别），语言切换后要按新语言重绘这句话
+let lastPrep = null;
+
+function isPdfPath(p) {
+  return /\.pdf$/i.test(p || "");
+}
+
+function prepOpts() {
+  const o = { rectify: false, demoire: false, enhance: false };
+  for (const k of Object.keys(PREP_BOXES)) o[k] = !!el(PREP_BOXES[k]).checked;
+  // PDF 页保持原页面几何：拉直会把文字层坐标弄歪。后端也会强制关掉，
+  // 界面必须同步关掉 —— 两套说法只会让用户以为开了却没生效。
+  if (isPdfPath(inputPath)) o.rectify = false;
+  return o;
+}
+
+function prepRectifyOn() {
+  return !!el("prep-rectify").checked && !isPdfPath(inputPath);
+}
+
+function savePrep() {
+  try {
+    localStorage.setItem(PREP_KEY, JSON.stringify({
+      rectify: !!el("prep-rectify").checked,
+      demoire: !!el("prep-demoire").checked,
+      enhance: !!el("prep-enhance").checked,
+    }));
+  } catch (e) { /* 隐私模式写不进去，不影响本次使用 */ }
+}
+
+function loadPrep() {
+  let saved = {};
+  try { saved = JSON.parse(localStorage.getItem(PREP_KEY) || "{}") || {}; } catch (e) { saved = {}; }
+  for (const k of Object.keys(PREP_BOXES)) el(PREP_BOXES[k]).checked = !!saved[k];
+}
+
+function prepReportText(r) {
+  if (!r) return "";
+  if (r.perspective) return t("prepPerspective");
+  const deg = Number(r.angle_deg) || 0;
+  if (Math.abs(deg) >= 0.3) return t("prepStraightened", { deg: deg.toFixed(1) });
+  return t("prepNoChange");
+}
+
+function showPrepReport(r) {
+  lastPrep = r || null;
+  el("prep-report").textContent = lastPrep ? prepReportText(lastPrep) : "";
+}
+
+function clearPrepPreview() {
+  const shot = el("prep-shot");
+  shot.hidden = true;
+  shot.removeAttribute("src");
+  showPrepReport(null);
+}
+
+// 禁用态每帧都从 inputPath / running 推出来，不另记一份状态。
+function syncPrepUi() {
+  const pdf = isPdfPath(inputPath);
+  el("prep-rectify").disabled = running || pdf;
+  el("prep-rectify-row").dataset.disabled = pdf ? "true" : "false";
+  el("prep-rectify-row").title = pdf ? t("prepPdfNote") : "";
+  el("prep-pdf-note").hidden = !pdf;
+  el("prep-preview").disabled = !inputPath || running;
+}
+
+loadPrep();
+for (const id of Object.values(PREP_BOXES)) {
+  el(id).addEventListener("change", () => {
+    savePrep();
+    // 勾选一变，上一张预览就过期了 —— 留着会让用户对着旧效果做决定。
+    clearPrepPreview();
+  });
+}
+
+el("prep-preview").addEventListener("click", async () => {
+  if (!inputPath || running) return;
+  const btn = el("prep-preview");
+  btn.disabled = true;
+  el("prep-report").textContent = t("prepPreviewing");
+  try {
+    const r = await invoke("ocr_preprocess_preview", { input: inputPath, preprocess: prepOpts() });
+    const shot = el("prep-shot");
+    shot.src = r.data_url;
+    shot.hidden = false;
+    showPrepReport(r);
+  } catch (err) {
+    lastPrep = null;
+    el("prep-report").textContent = t("prepPreviewFailed") + errMsg(err);
+  }
+  btn.disabled = !inputPath || running;
+});
 
 // ── 选文件 ────────────────────────────────────────────────────────────
 function setPath(p) {
@@ -152,6 +252,7 @@ function setPath(p) {
   el("file").hidden = false;
   el("log").textContent = "";
   el("log-wrap").hidden = true;
+  clearPrepPreview();
   render();
 }
 
@@ -270,6 +371,7 @@ window.applyLang = function () {
 // 语言切换后：状态栏 / 结果摘要 / 顶栏按钮文案都按新语言重绘
 function afterLangChange() {
   render();
+  if (lastPrep) el("prep-report").textContent = prepReportText(lastPrep);
 }
 
 // 菜单自定义项 → 现有动作链。Rust 侧三个导出菜单项恒 enabled，而按钮在
@@ -325,10 +427,13 @@ el("go").addEventListener("click", async () => {
   render();
   log(t('startLog') + inputPath);
   try {
-    const s = await invoke("ocr_process", { input: inputPath, dpi: 200 });
+    const s = await invoke("ocr_process", { input: inputPath, dpi: 200, preprocess: prepOpts() });
     job = s;
     ui.phase = "done";
     log(t('recognisedLog', s));
+    // 只有真的请求了「拉直」才汇报几何结果：只开去摩尔纹时说「页面本来就端正」
+    // 会让人以为拉直也生效了。
+    showPrepReport(prepRectifyOn() && s.kind === "image" ? s : null);
   } catch (err) {
         const msg = errMsg(err);
     const wasCancelled = msg.includes("cancelled");

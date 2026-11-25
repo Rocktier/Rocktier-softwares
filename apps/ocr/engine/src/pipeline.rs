@@ -9,6 +9,11 @@ use image::{DynamicImage, RgbImage};
 
 use crate::det::{self, DetParams};
 use crate::words;
+/// 单应矩阵与透视取样住在 `ocr-preprocess`：识别裁切与前置处理的去透视共用
+/// 同一套取样器，两份实现各调一次插值核，同一张图会得到两个坐标基准。
+/// 这里 re-export，`words.rs` 里的 `crate::pipeline::homography` 不用改。
+pub use ocr_preprocess::homography;
+use ocr_preprocess::{dist, perspective_warp};
 
 pub struct OcrLine {
     pub box4: [(i32, i32); 4],
@@ -202,16 +207,13 @@ fn sort_boxes(boxes: &mut [det::TextBox]) {
     }
 }
 
-fn dist(a: (i32, i32), b: (i32, i32)) -> f64 {
-    (((a.0 - b.0) as f64).powi(2) + ((a.1 - b.1) as f64).powi(2)).sqrt()
-}
-
 /// `get_rotate_crop_image`: perspective-warp the quad into an upright rect,
 /// replicating edges, then turn tall crops the right way round.
 fn rotate_crop(img: &RgbImage, quad: &[(i32, i32); 4]) -> RgbImage {
     let p = [quad[0], quad[1], quad[2], quad[3]];
-    let crop_w = dist(p[0], p[1]).max(dist(p[2], p[3])) as u32;
-    let crop_h = dist(p[0], p[3]).max(dist(p[1], p[2])) as u32;
+    let pf = p.map(|(x, y)| (x as f64, y as f64));
+    let crop_w = dist(pf[0], pf[1]).max(dist(pf[2], pf[3])) as u32;
+    let crop_h = dist(pf[0], pf[3]).max(dist(pf[1], pf[2])) as u32;
     if crop_w == 0 || crop_h == 0 {
         return RgbImage::new(1, 1);
     }
@@ -225,117 +227,3 @@ fn rotate_crop(img: &RgbImage, quad: &[(i32, i32); 4]) -> RgbImage {
     }
 }
 
-/// Solve the 8-parameter homography for four point pairs, then inverse-map
-/// every destination pixel with a cubic filter and clamped edges.
-fn perspective_warp(img: &RgbImage, src: &[(i32, i32); 4], out_w: u32, out_h: u32) -> RgbImage {
-    let (iw, ih) = (img.width() as i64, img.height() as i64);
-    let src_f: [(f64, f64); 4] = src.map(|p| (p.0 as f64, p.1 as f64));
-    // The warp is inverse-mapped: every destination pixel asks "where does
-    // this come from in the source", so the homography solved here is
-    // dst -> src, not the forward one.
-    let dst = [
-        (0f64, 0f64),
-        (out_w as f64, 0.0),
-        (out_w as f64, out_h as f64),
-        (0.0, out_h as f64),
-    ];
-    let h_ = homography(&dst, &src_f);
-    let map = |dx: f64, dy: f64| -> (f64, f64) {
-        let den = h_[6] * dx + h_[7] * dy + 1.0;
-        ((h_[0] * dx + h_[1] * dy + h_[2]) / den, (h_[3] * dx + h_[4] * dy + h_[5]) / den)
-    };
-
-    let cubic = |t: f64| -> f64 {
-        // cv2's cubic convolution kernel, A = -0.75.
-        let a = -0.75;
-        let t = t.abs();
-        if t < 1.0 {
-            (a + 2.0) * t * t * t - (a + 3.0) * t * t + 1.0
-        } else if t < 2.0 {
-            a * t * t * t - 5.0 * a * t * t + 8.0 * a * t - 4.0 * a
-        } else {
-            0.0
-        }
-    };
-    let sample = |sx: f64, sy: f64| -> [f64; 3] {
-        let sx = sx.clamp(0.0, (iw - 1) as f64);
-        let sy = sy.clamp(0.0, (ih - 1) as f64);
-        let x0 = sx.floor() as i64;
-        let y0 = sy.floor() as i64;
-        let fx = sx - x0 as f64;
-        let fy = sy - y0 as f64;
-        let mut acc = [0f64; 3];
-        for m in -1..=2 {
-            for n in -1..=2 {
-                let xx = (x0 + n).clamp(0, iw - 1) as u32;
-                let yy = (y0 + m).clamp(0, ih - 1) as u32;
-                let px = img.get_pixel(xx, yy);
-                let wgt = cubic(n as f64 - fx) * cubic(m as f64 - fy);
-                for ch in 0..3 {
-                    acc[ch] += px[ch] as f64 * wgt;
-                }
-            }
-        }
-        acc
-    };
-
-    let mut out = RgbImage::new(out_w, out_h);
-    for dy in 0..out_h {
-        for dx in 0..out_w {
-            let (sx, sy) = map(dx as f64, dy as f64);
-            let v = sample(sx, sy);
-            out.put_pixel(
-                dx,
-                dy,
-                image::Rgb([v[0].clamp(0.0, 255.0) as u8, v[1].clamp(0.0, 255.0) as u8, v[2].clamp(0.0, 255.0) as u8]),
-            );
-        }
-    }
-    out
-}
-
-/// Solve the homography that maps `dst` points onto `src` points: a
-/// destination pixel (u, v) lands at ((h0 u + h1 v + h2)/den, (h3 u + h4 v +
-/// h5)/den) with den = h6 u + h7 v + 1. Used for the perspective crops and
-/// for mapping word boxes back through them.
-pub fn homography(dst: &[(f64, f64); 4], src: &[(f64, f64); 4]) -> [f64; 8] {
-    let mut a = [[0f64; 8]; 8];
-    let mut bvec = [0f64; 8];
-    for i in 0..4 {
-        let (x, y) = (src[i].0, src[i].1);
-        let (u, v) = dst[i];
-        a[i * 2] = [u, v, 1.0, 0.0, 0.0, 0.0, -x * u, -x * v];
-        bvec[i * 2] = x;
-        a[i * 2 + 1] = [0.0, 0.0, 0.0, u, v, 1.0, -y * u, -y * v];
-        bvec[i * 2 + 1] = y;
-    }
-    for col in 0..8 {
-        let mut piv = col;
-        for r in col + 1..8 {
-            if a[r][col].abs() > a[piv][col].abs() {
-                piv = r;
-            }
-        }
-        a.swap(col, piv);
-        bvec.swap(col, piv);
-        let d = a[col][col];
-        if d.abs() < 1e-12 {
-            continue;
-        }
-        for r in 0..8 {
-            if r == col {
-                continue;
-            }
-            let f = a[r][col] / d;
-            for c in col..8 {
-                a[r][c] -= f * a[col][c];
-            }
-            bvec[r] -= f * bvec[col];
-        }
-    }
-    let mut h = [0f64; 8];
-    for i in 0..8 {
-        h[i] = bvec[i] / a[i][i];
-    }
-    h
-}
