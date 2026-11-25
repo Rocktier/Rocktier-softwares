@@ -253,6 +253,10 @@ jobs:
     name: Tests & Lints (CAD Viewer)
     needs: changes
     if: needs.changes.outputs.cad-viewer == 'true'
+    # 本仓 apps/cad-viewer/rust-toolchain.toml 钉在 1.98.0。@stable 现在解析到
+    # 1.100.0，但 cd 进 src-tauri 后 rustup 仍按 toolchain 文件切回 1.98.0 ——
+    # clippy 只装给了 stable，于是 cargo clippy 必红（2026-11-25 实证）。
+    # 与 PDF job 对齐：直接装 1.98.0 的 clippy。
     # 账号的 macOS 并发上限是 5，而本文件有 7 个 macOS job。一次改多个 app 时
     # 它们会一起抢占，排到后面的 job 被清掉（2026-11-23 实测 15 分钟无 step 后
     # cancelled）。串行排队，峰值恒为 1；单 app 改动只有 1 个 job，不受影响。
@@ -263,11 +267,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@1.98.0
         with:
           components: clippy
       - name: Ensure clippy component
-        run: rustup component add clippy
+        run: rustup component add clippy --toolchain 1.98.0
       - name: Install dependencies
         working-directory: apps/cad-viewer
         run: npm ci
