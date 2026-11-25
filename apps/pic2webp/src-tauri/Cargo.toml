@@ -31,10 +31,22 @@ webp = "0.3"
 # AVIF 输出：ravif 是纯 Rust 的 AV1 编码器（底层 rav1e），不引 C 工具链 ——
 # 这是它能进商店沙盒构建（MAS / MSIX）的前提。imgref / rgb 是它编码入口的
 # 参数类型，版本必须与 ravif 依赖的那两条一致，否则 trait 对不上。
-ravif = "0.11"
+#
+# 2026-11-25：Windows **arm64** 上 rav1e 的 asm 构建链跑不通 —— cc-rs 拿
+# lib.exe 去链 cdef.o 时该文件根本没生成（Store MSIX 双架构腿实测，
+# run 45637904550：LNK1181 / exit 1181）。asm 是 ravif 的默认 feature，
+# 只能按目标关：arm64-Windows 走纯 Rust（编码慢一些，但装得上、包能进商店），
+# 其余目标保持自带 asm。
 imgref = "1"
 rgb = "0.8"
 base64 = "0.22"
 fs2 = "0.4"
 # 授权回执的 Ed25519 离线验签（license.rs，FAMILY-LICENSE.md §2）
 ed25519-dalek = "2"
+
+# 见上方 ravif 注释：Windows arm64 关掉 rav1e asm（纯 Rust），其余目标保持 asm。
+[target.'cfg(all(target_arch = "aarch64", target_os = "windows"))'.dependencies]
+ravif = { version = "0.11", default-features = false }
+
+[target.'cfg(not(all(target_arch = "aarch64", target_os = "windows")))'.dependencies]
+ravif = "0.11"
