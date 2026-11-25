@@ -21,7 +21,7 @@
         "ext": [
           "pdf"
         ],
-        "name": "Document To Compress",
+        "name": "Rocktier Compress PDF",
         "description": "PDF Document",
         "role": "Editor",
         "mimeType": "application/pdf",
@@ -36,7 +36,7 @@
         "ext": [
           "docx"
         ],
-        "name": "Document To Compress",
+        "name": "Rocktier Compress Word",
         "description": "Word Document",
         "role": "Editor",
         "mimeType": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
@@ -51,7 +51,7 @@
         "ext": [
           "xlsx"
         ],
-        "name": "Document To Compress",
+        "name": "Rocktier Compress Excel",
         "description": "Excel Spreadsheet",
         "role": "Editor",
         "mimeType": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -66,7 +66,7 @@
         "ext": [
           "pptx"
         ],
-        "name": "Document To Compress",
+        "name": "Rocktier Compress PowerPoint",
         "description": "PowerPoint Presentation",
         "role": "Editor",
         "mimeType": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
@@ -82,7 +82,7 @@
           "jpg",
           "jpeg"
         ],
-        "name": "Image To Compress",
+        "name": "Rocktier Compress JPEG",
         "description": "JPEG Image",
         "role": "Editor",
         "mimeType": "image/jpeg",
@@ -98,7 +98,7 @@
         "ext": [
           "png"
         ],
-        "name": "Image To Compress",
+        "name": "Rocktier Compress PNG",
         "description": "PNG Image",
         "role": "Editor",
         "mimeType": "image/png",
@@ -115,7 +115,7 @@
           "tiff",
           "tif"
         ],
-        "name": "Image To Compress",
+        "name": "Rocktier Compress TIFF",
         "description": "TIFF Image",
         "role": "Editor",
         "mimeType": "image/tiff",

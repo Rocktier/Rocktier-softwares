@@ -124,6 +124,12 @@ const GATES = [
   { id: "dangling-import", file: "scan-dangling-import.mjs", args: [FARM], crossProduct: true },
   { id: "release-i18n", file: "release-i18n-check.mjs", args: [], crossProduct: true },
   { id: "menu-click", file: "menu-clickability.mjs", args: [], crossProduct: true },
+  /* file-associations（2026-11-25）：Windows 侧 `fileAssociations[].name` 就是 ProgID，
+     同款里重名会让 AppxManifest / 注册表只留最后一条 —— pic2webp 1.9.21 的 MSIX
+     因此六个扩展名活下来一个（只剩 .tiff），打包全程不报错。横向一查 compressor、
+     ocr 同型。判据自带 --selftest（重名 / 抢占 / 大小写 / tiff 缺 tif 四类各报红
+     一次，正确配置与空关联均绿），不做正反对照的判据不敢接进 CI。 */
+  { id: "file-associations", file: "check-file-associations.mjs", args: [], crossProduct: true },
 ];
 
 const selected = onlyGates.length ? GATES.filter((g) => onlyGates.includes(g.id)) : GATES;

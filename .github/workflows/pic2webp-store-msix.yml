@@ -110,6 +110,22 @@ jobs:
           if grep -Fq 'internetClient' artifacts/AppxManifest.xml; then
             echo "::error::unexpected internetClient capability"; exit 1; fi
 
+          # 配置里声明的每个扩展名都必须在清单里真的出现（2026-11-25）：
+          # 1.9.21 六组 fileAssociations 共用同一个 name，AppxManifest 只留下最后
+          # 一条 —— 装完 .jpg / .png 双击都没反应，而打包全程是绿的。本条直接读
+          # tauri.conf.json 的声明，断言与配置不会脱钩。
+          node -e '
+            const c = require("./apps/pic2webp/src-tauri/tauri.conf.json");
+            const exts = [...new Set((c.bundle.fileAssociations ?? []).flatMap((a) => a.ext ?? []))];
+            if (!exts.length) { console.error("no fileAssociations declared"); process.exit(1); }
+            console.log(exts.join("\n"));
+          ' > artifacts/expected-exts.txt
+          while IFS= read -r ext; do
+            grep -Fq "FileType=\".${ext}\"" artifacts/AppxManifest.xml || {
+              echo "::error::AppxManifest 缺 .${ext} 关联 —— 配置声明了，包里没有"; exit 1; }
+          done < artifacts/expected-exts.txt
+          echo "file associations in manifest: $(wc -l < artifacts/expected-exts.txt)"
+
           VERSION=$(node -p "require('./apps/pic2webp/src-tauri/tauri.conf.json').version")
           grep -Fq "Version=\"${VERSION}.0\"" artifacts/AppxManifest.xml || {
             echo "::error::Version mismatch (expected ${VERSION}.0)"; exit 1; }

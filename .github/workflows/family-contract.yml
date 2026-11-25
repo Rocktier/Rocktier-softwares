@@ -51,8 +51,9 @@ jobs:
       #   dangling-import 悬空 import（扫 0 个文件直接判失败，不许空转绿）
       #   release-i18n   发版命名 + 语言数 + 默认 en
       #   menu-click     菜单项逐项有响应路径
+      #   file-associations 文件关联 name 唯一 / 扩展名不抢 / tiff 必带 tif
       # 脚本自己建 .family-root 软链农场，跑完即删（见 .gitignore）。
-      - name: Run family gate (8 checks)
+      - name: Run family gate (9 checks)
         run: node scripts/family-gate.mjs
 
   # 渲染态布局判据（2026-11-25 接，D-185）：八道 family gate 都是纯文本静态分析，

@@ -45,42 +45,42 @@
     "fileAssociations": [
       {
         "ext": ["jpg", "jpeg"],
-        "name": "Rocktier Image",
+        "name": "Rocktier JPEG",
         "description": "Image to convert",
         "role": "Editor",
         "mimeType": "image/jpeg"
       },
       {
         "ext": ["png"],
-        "name": "Rocktier Image",
+        "name": "Rocktier PNG",
         "description": "Image to convert",
         "role": "Editor",
         "mimeType": "image/png"
       },
       {
         "ext": ["webp"],
-        "name": "Rocktier Image",
+        "name": "Rocktier WebP",
         "description": "Image to convert",
         "role": "Editor",
         "mimeType": "image/webp"
       },
       {
         "ext": ["gif"],
-        "name": "Rocktier Image",
+        "name": "Rocktier GIF",
         "description": "Image to convert",
         "role": "Editor",
         "mimeType": "image/gif"
       },
       {
         "ext": ["bmp"],
-        "name": "Rocktier Image",
+        "name": "Rocktier BMP",
         "description": "Image to convert",
         "role": "Editor",
         "mimeType": "image/bmp"
       },
       {
-        "ext": ["tiff"],
-        "name": "Rocktier Image",
+        "ext": ["tiff", "tif"],
+        "name": "Rocktier TIFF",
         "description": "Image to convert",
         "role": "Editor",
         "mimeType": "image/tiff"

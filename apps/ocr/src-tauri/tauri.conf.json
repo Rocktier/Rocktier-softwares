@@ -21,7 +21,7 @@
         "ext": [
           "png"
         ],
-        "name": "Rocktier Image",
+        "name": "Rocktier OCR PNG",
         "description": "Image to recognize",
         "role": "Editor",
         "mimeType": "image/png"
@@ -31,7 +31,7 @@
           "jpg",
           "jpeg"
         ],
-        "name": "Rocktier Image",
+        "name": "Rocktier OCR JPEG",
         "description": "Image to recognize",
         "role": "Editor",
         "mimeType": "image/jpeg"
