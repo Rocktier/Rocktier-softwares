@@ -454,6 +454,8 @@ fn initial_file(state: tauri::State<InitialFile>) -> Option<String> {
 fn main() {
     let app = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        // 2026-11-25：窗口尺寸/位置记忆（8 款此前全缺，HIG 清单一条）。
+        .plugin(tauri_plugin_window_state::Builder::default().build())
         .manage(AppState::new())
         .setup(|app| {
             // 授权状态的落盘目录。取不到就留空，`current_status()` 会按"不拦截"处理

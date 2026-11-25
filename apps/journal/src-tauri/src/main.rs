@@ -9,6 +9,8 @@ fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_dialog::init())
+        // 2026-11-25：窗口尺寸/位置记忆（8 款此前全缺，HIG 清单一条）。
+        .plugin(tauri_plugin_window_state::Builder::default().build())
         .plugin(tauri_plugin_opener::init())
         // 菜单事件处理只在这里注册一次（其余七款产品同款写法）。
         // 不能挂进 menu::build_app_menu —— 它每次重建菜单都会被调一次，

@@ -1043,6 +1043,8 @@ fn export_docx(markdown: String, output_path: String) -> Result<(), String> {
 pub fn run() {
     let app = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        // 2026-11-25：窗口尺寸/位置记忆（8 款此前全缺，HIG 清单一条）。
+        .plugin(tauri_plugin_window_state::Builder::default().build())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_fs::init());
     // 刻意不注册 updater 插件：更新只做「告诉用户有新版本 + 给下载页链接」

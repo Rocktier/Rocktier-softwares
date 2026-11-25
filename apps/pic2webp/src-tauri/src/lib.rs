@@ -1387,6 +1387,8 @@ pub fn run() {
             let _ = app.emit("menu-action", event.id().0.clone());
         })
         .plugin(tauri_plugin_dialog::init())
+        // 2026-11-25：窗口尺寸/位置记忆（8 款此前全缺，HIG 清单一条）。
+        .plugin(tauri_plugin_window_state::Builder::default().build())
         .plugin(tauri_plugin_opener::init())
         .setup(|app| {
             let tool_paths = resolve_tools(app.handle());

@@ -763,6 +763,8 @@ pub fn run() {
             let _ = app.emit("menu-action", event.id().as_ref());
         })
         .plugin(tauri_plugin_dialog::init())
+        // 2026-11-25：窗口尺寸/位置记忆（8 款此前全缺，HIG 清单一条）。
+        .plugin(tauri_plugin_window_state::Builder::default().build())
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_opener::init())
         // 刻意不注册 updater 插件：更新只做「告诉你有新版本 + 给下载页链接」
