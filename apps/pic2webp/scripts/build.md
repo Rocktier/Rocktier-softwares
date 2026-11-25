@@ -18,6 +18,20 @@ npm run tauri build
 
 构建产物: `src-tauri/target/release/bundle/dmg/Pic2WebP_<version>_aarch64.dmg`
 
+### x86_64 构建需要 nasm（AVIF 输出引入，2026-11-25）
+
+AVIF 走 `ravif` → `rav1e`，而 rav1e 在 **x86_64** 上用汇编优化，构建脚本找不到
+`nasm` 会直接 panic（`NASM build failed. Make sure you have nasm installed or
+disable the "asm" feature.`，退出码 101，报错只在 build script 的 stderr 里，
+很容易被当成随机失败）。arm64 不需要。
+
+```bash
+brew install nasm          # Intel Mac，或 universal 交叉编译（x86_64-apple-darwin）
+```
+
+CI 已在这三条腿上装好：`pic2webp-build.yml` 的 x64 腿、`pic2webp-mas-package.yml`
+（universal 交叉编译）、`pic2webp-bench.yml`（Intel runner）。
+
 ### 签名说明
 
 **CI 发版（唯一可信路径）**：`.github/workflows/pic2webp-build.yml` 从 secret 导入

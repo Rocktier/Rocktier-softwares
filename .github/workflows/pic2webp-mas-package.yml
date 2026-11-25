@@ -40,6 +40,13 @@ jobs:
         with:
           targets: aarch64-apple-darwin,x86_64-apple-darwin
 
+      # rav1e（AVIF 编码，ravif 的底层）在 x86_64 上走汇编优化，构建脚本没有
+      # nasm 会 **panic**（exit 101，报错信息只在 build script 的 stderr 里）。
+      # arm64 不需要；Windows runner 自带。所以只有 Intel mac 与 universal 交叉
+      # 编译这两条腿要装。2026-11-25 首次跑 AVIF 时踩到，bench 直接红在编译。
+      - name: Ensure nasm (rav1e x86 asm)
+        run: command -v nasm >/dev/null 2>&1 || brew install nasm
+
       - name: Cache Rust build
         uses: swatinem/rust-cache@v2
         with:
