@@ -6,7 +6,14 @@ import { useCallback, useEffect, useState } from "react";
  *  [data-theme="sepia"] 暖纸 / [data-theme="contrast"] 高对比）。
  *  仍然只有一个 data-theme 属性 + 一组变量覆盖 —— 没有主题引擎、没有运行时算色。 */
 export type ThemeMode = "dark" | "light" | "sepia" | "contrast";
-const THEME_CYCLE: ThemeMode[] = ["dark", "light", "sepia", "contrast"];
+export const THEME_CYCLE: ThemeMode[] = ["dark", "light", "sepia", "contrast"];
+
+/** 下一档。抽成纯函数是为了能测：按钮点一下必须换一档、四档一轮回，
+ *  而不是靠人肉点四遍看颜色。 */
+export function nextTheme(prev: ThemeMode): ThemeMode {
+  const i = THEME_CYCLE.indexOf(prev);
+  return THEME_CYCLE[(i < 0 ? 0 : i + 1) % THEME_CYCLE.length];
+}
 type Resolved = ThemeMode;
 
 /* 2026-10-04 键改名（"rocktier-md-theme" → "rocktier.theme"），理由同 i18n.ts。 */
@@ -62,8 +69,7 @@ export function useTheme() {
 
   const cycleTheme = useCallback(() => {
     setMode((prev) => {
-      const i = THEME_CYCLE.indexOf(prev);
-      const next = THEME_CYCLE[(i < 0 ? 0 : i + 1) % THEME_CYCLE.length];
+      const next = nextTheme(prev);
       persist(next);
       return next;
     });
