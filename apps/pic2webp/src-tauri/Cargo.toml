@@ -27,6 +27,12 @@ tauri-plugin-dialog = "2"
 tauri-plugin-opener = "2"
 image = { version = "=0.25.5", default-features = false, features = ["jpeg", "png", "webp", "gif", "bmp", "tiff"] }
 webp = "0.3"
+# AVIF 输出：ravif 是纯 Rust 的 AV1 编码器（底层 rav1e），不引 C 工具链 ——
+# 这是它能进商店沙盒构建（MAS / MSIX）的前提。imgref / rgb 是它编码入口的
+# 参数类型，版本必须与 ravif 依赖的那两条一致，否则 trait 对不上。
+ravif = "0.11"
+imgref = "1"
+rgb = "0.8"
 base64 = "0.22"
 fs2 = "0.4"
 # 授权回执的 Ed25519 离线验签（license.rs，FAMILY-LICENSE.md §2）

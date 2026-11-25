@@ -77,3 +77,24 @@ test("导入校验与对话框共用同一份白名单（不要第二份 SUPPORT
     "addFiles 的导入校验没有用共享白名单",
   );
 });
+
+// ─── AVIF 输出（2026-11-25）────────────────────────────────────────
+//
+// 后端认 `output_format`，前端不发这个字段就等于「功能做了但用户点不到」。
+// 两层各钉一条：请求体里必须有它、菜单里必须有切换项，且两个词条两种语言都在。
+
+test("转换请求必须带上 output_format", () => {
+  assert.match(SRC, /output_format:\s*outputFormat/, "buildRequest 没把格式传给后端");
+  assert.ok(
+    /localStorage\.getItem\(OUTPUT_FORMAT_KEY\)/.test(SRC),
+    "格式没从 localStorage 读回来 —— 选了 AVIF 的用户每批都要重选",
+  );
+});
+
+test("⋯ 菜单必须有 WebP / AVIF 两项，且互斥打勾", () => {
+  assert.match(SRC, /item\(t\("mi-format-webp"\)/, "菜单缺 WebP 项");
+  assert.match(SRC, /item\(t\("mi-format-avif"\)/, "菜单缺 AVIF 项");
+  const b = block("function openMoreMenu");
+  assert.match(b, /checked:\s*outputFormat === "webp"/, "WebP 项没按当前格式打勾");
+  assert.match(b, /checked:\s*outputFormat === "avif"/, "AVIF 项没按当前格式打勾");
+});

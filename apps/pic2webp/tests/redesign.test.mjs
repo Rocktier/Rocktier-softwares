@@ -61,7 +61,8 @@ test("已移除的旧控件不得在界面里复活", () => {
     "dropzone",        // → 拖放走窗口级事件，整窗都是投放区
     "stats-panel",     // → 检查器 · Batch
     "file-list-header",
-    "lang-toggle",     // → 语言改由系统决定（Apple HIG：语言归系统管）
+    // lang-toggle 于 2026-11-24 撤回：八款统一要有工具栏语言入口，
+    // pic2webp 当时是唯一只能从原生菜单换语言的一款。判据见下方「必须有」那条。
   ];
   const survivors = removed.filter((id) => html.includes(`id="${id}"`));
   assert.deepEqual(survivors, [], `这些旧控件还在 index.html 里: ${survivors.join(", ")}`);
@@ -159,13 +160,14 @@ test("app.js 里 t(\"…\") 用到的每个键都在字典里", () => {
 // 会造出一个用户再也改不回来的孤儿偏好 —— 界面看着像「跟随系统」，
 // 实际被 localStorage 钉死。这类错没有报错，只能靠契约盯。
 
-test("标题栏不得再有语言选择器", () => {
-  assert.ok(!html.includes('id="lang-toggle"'), "index.html 里还有语言下拉");
-  const cssCode = css.replace(/\/\*[\s\S]*?\*\//g, "");
-  assert.ok(!/\.lang-toggle\s*\{/.test(cssCode), "macos.css 里还给语言下拉留着样式");
-  const leftovers = ["langToggle", "updateLangToggle", "getLanguages"]
-    .filter((name) => new RegExp(`\\b${name}\\b`).test(app));
-  assert.deepEqual(leftovers, [], `app.js 里还有语言选择器的接线: ${leftovers.join(", ")}`);
+// 判据于 2026-11-24 反转：八款统一要有工具栏语言入口（此前 pic2webp 是唯一
+// 只能从原生菜单换语言的一款）。现在必须断言「有」——只删断言不改判据的话，
+// 下一次重构会把这枚按钮悄悄删掉，八款又缺一个，而且没有任何测试会红。
+test("标题栏必须有语言切换入口（家族统一 2026-11-24）", () => {
+  assert.ok(html.includes('id="lang-toggle"'), "标题栏缺语言切换按钮");
+  assert.ok(/langToggle\?\.addEventListener\("click"/.test(app), "语言按钮没有接线");
+  // 切换必须连原生菜单一起重建，否则工具栏换了语言、菜单还是旧的
+  assert.ok(/build_menu/.test(app), "切换语言必须重建原生菜单");
 });
 
 test("界面语言由系统决定，不再读应用内保存的手动偏好", async () => {

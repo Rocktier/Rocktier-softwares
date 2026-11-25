@@ -241,6 +241,20 @@ pub struct ConvertRequest {
     // Base dir for preserve_structure (the root input dir)
     #[serde(default)]
     pub base_dir: Option<String>,
+    // ── v1.11.0：输出格式 ──
+    // "webp"（默认）| "avif"。缺省走 webp：老前端、老脚本、老请求体都不带这个字段，
+    // 少一个字段就变成 avif 是绝对不能发生的事。
+    #[serde(default = "default_output_format")]
+    pub output_format: String,
+}
+
+fn default_output_format() -> String { "webp".into() }
+
+/// 输出扩展名。**唯一判定点**：`"avif"` 之外的一切（含空串、未知值）都按 webp 处理，
+/// 因为 `ConvertRequest::default()` 的 `output_format` 是空串（derive 的 Default 不认
+/// serde 默认值），单测里 `..Default::default()` 构造的请求必须仍然产出 webp。
+fn output_ext(request: &ConvertRequest) -> &'static str {
+    if request.output_format.eq_ignore_ascii_case("avif") { "avif" } else { "webp" }
 }
 
 fn default_resize_mode() -> String { "fit".into() }
@@ -525,6 +539,37 @@ fn encode_webp(img: &image::DynamicImage, quality: i32, lossless: bool) -> Resul
     }
 }
 
+/// AVIF 编码走 ravif（纯 Rust 的 AV1 编码器，底层 rav1e），不引 C 工具链 ——
+/// 商店沙盒构建（MAS / MSIX）与直发用同一条路径。
+///
+/// 速度档定 6：ravif 的取值是 1..=10，越小压缩越狠但也越慢。转换工具是批处理，
+/// 一张 2000 万像素的图在 4 档要几十秒，用户会以为卡死；6 档是本机样本上
+/// 「体积差几个百分点、耗时砍一半以上」的折中。
+const AVIF_SPEED: u8 = 6;
+
+/// ravif 没有暴露 AV1 的无损档，所以 AVIF 下 `lossless` 被忽略（前端会把这一项置灰）。
+/// quality 超出 1..=100 会让 ravif panic —— 这里先夹一次，绝不让用户的选择把进程带走。
+fn encode_avif(img: &image::DynamicImage, quality: i32) -> Result<Vec<u8>, String> {
+    use rgb::FromSlice as _;
+    let (w, h) = (img.width() as usize, img.height() as usize);
+    let enc = ravif::Encoder::new()
+        .with_quality(quality.clamp(1, 100) as f32)
+        .with_speed(AVIF_SPEED);
+    let encoded = if img.color().has_alpha() {
+        let rgba = img.to_rgba8();
+        enc.encode_rgba(imgref::Img::new(rgba.as_raw().as_rgba(), w, h))
+    } else {
+        let rgb = img.to_rgb8();
+        enc.encode_rgb(imgref::Img::new(rgb.as_raw().as_rgb(), w, h))
+    };
+    encoded.map(|e| e.avif_file).map_err(|e| format!("encode_fail:{}", e))
+}
+
+/// 按输出格式选编码器。扩展名是唯一开关，调用方不用各自判断。
+fn encode_output(img: &image::DynamicImage, quality: i32, lossless: bool, ext: &str) -> Result<Vec<u8>, String> {
+    if ext == "avif" { encode_avif(img, quality) } else { encode_webp(img, quality, lossless) }
+}
+
 // ─── File collection helper ──────────────────────────────────────────
 
 fn collect_convert_files(request: &ConvertRequest) -> Vec<String> {
@@ -578,7 +623,9 @@ fn convert_single_file(
     let stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("output");
 
     // ── GIF: use ffmpeg for animated WebP ──
-    if ext == "gif" {
+    // 只在产出 webp 时走这条：ffmpeg 的 libwebp 能保住动画，AVIF 不支持动图，
+    // 落到下面的静态分支取首帧，比「假装转了动图、其实只有一帧」诚实。
+    if ext == "gif" && output_ext(request) == "webp" {
         if let Some(ff) = ffmpeg {
             emit_progress(app_handle, src_path, "converting", "converting", 0, 0);
             let out_name = build_output_name(stem, "webp", &request.naming_mode, quality);
@@ -624,7 +671,7 @@ fn convert_single_file(
     }
 
     // ── Build output filename & path ──
-    let out_ext = "webp";
+    let out_ext = output_ext(request);
     let filename = build_output_name(stem, out_ext, &request.naming_mode, quality);
     let output_path = dedup_output_path(build_output_path(&filename, request, parent, src_path), used_outputs);
     let output_str = output_path.to_string_lossy().to_string();
@@ -763,7 +810,7 @@ fn convert_single_file(
     img = apply_resize(img, request);
 
     // ── Encode ──
-    let webp_mem: Vec<u8> = match encode_webp(&img, quality, request.lossless) {
+    let encoded_mem: Vec<u8> = match encode_output(&img, quality, request.lossless, out_ext) {
         Ok(b) => b,
         Err(e) => {
             stats.fail_count += 1;
@@ -775,14 +822,16 @@ fn convert_single_file(
 
     // ── Write result ──
     if cancel_flag.load(Ordering::Relaxed) { return; }
-    let new_size = webp_mem.len() as i64;
+    let new_size = encoded_mem.len() as i64;
     // 产出比原图大都没有写盘的意义：跳过并计入 skipped，不再谎报成功。
-    if new_size >= original_size && original_size > 0 {
+    // 这条只对 webp 成立 —— 产品叫 Pic2WebP，用户要的就是变小；选 AVIF 时用户要的是
+    // **换格式**，webp→avif 变大是正常的，按旧规则跳过等于点了转换却什么都没发生。
+    if out_ext == "webp" && new_size >= original_size && original_size > 0 {
         stats.skip_count += 1;
         stats.total_original += original_size;
         stats.total_converted += original_size;
         emit_progress(app_handle, src_path, "skipped", "skipped", 0, 0);
-    } else if let Err(e) = write_atomically(&output_str, &webp_mem) {
+    } else if let Err(e) = write_atomically(&output_str, &encoded_mem) {
         stats.fail_count += 1;
         emit_progress(app_handle, src_path, "failed", &format!("write_fail:{}", e), 0, 0);
     } else {
@@ -933,7 +982,8 @@ fn is_same_file(a: &str, b: &Path) -> bool {
 fn build_output_name(stem: &str, ext: &str, naming_mode: &str, quality: i32) -> String {
     match naming_mode {
         "overwrite" => format!("{}.{}", stem, ext),
-        "webp-suffix" => format!("{}-webp.{}", stem, ext),
+        // 后缀取输出格式名而不是写死 webp：photo.tif → photo-webp.webp / photo-avif.avif
+        "webp-suffix" => format!("{}-{}.{}", stem, ext, ext),
         "q-suffix" => format!("{}-q{}.{}", stem, quality, ext),
         "ts-suffix" => {
             use std::time::{SystemTime, UNIX_EPOCH};
@@ -1117,12 +1167,13 @@ fn emit_progress(app: &AppHandle, file: &str, status: &str, message: &str, saved
 
 pub fn run_cli(args: &[String]) {
     eprintln!("Pic2WebP CLI mode — v1.7.0");
-    eprintln!("Usage: pic2webp --cli <files...> [--quality 80] [--lossless] [--resize 1920] [--output-dir dir]");
+    eprintln!("Usage: pic2webp --cli <files...> [--quality 80] [--lossless] [--format webp|avif] [--resize 1920] [--output-dir dir]");
     eprintln!();
     
     let mut files: Vec<String> = Vec::new();
     let mut quality = 80i32;
     let mut lossless = false;
+    let mut format = "webp".to_string();
     let mut resize_w: Option<u32> = None;
     let mut output_dir: Option<String> = None;
     let mut recursive = false;
@@ -1135,6 +1186,12 @@ pub fn run_cli(args: &[String]) {
                 if i < args.len() { quality = args[i].parse().unwrap_or(80); }
             }
             "--lossless" | "-l" => lossless = true,
+            "--format" | "-f" => {
+                i += 1;
+                if i < args.len() {
+                    format = if args[i].eq_ignore_ascii_case("avif") { "avif".into() } else { "webp".into() };
+                }
+            }
             "--resize" | "-r" => {
                 i += 1;
                 if i < args.len() { resize_w = args[i].parse().ok(); }
@@ -1147,7 +1204,8 @@ pub fn run_cli(args: &[String]) {
             "--help" | "-h" => {
                 eprintln!("Options:");
                 eprintln!("  -q, --quality N     Quality (10-100, default 80)");
-                eprintln!("  -l, --lossless      Lossless encoding");
+                eprintln!("  -l, --lossless      Lossless encoding (webp only; AVIF has no lossless mode)");
+                eprintln!("  -f, --format F      Output format: webp (default) or avif");
                 eprintln!("  -r, --resize W      Resize to width W (preserves aspect ratio)");
                 eprintln!("  -o, --output-dir D  Output directory");
                 eprintln!("      --recursive     Process subdirectories");
@@ -1198,7 +1256,8 @@ pub fn run_cli(args: &[String]) {
         let stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("output");
         let parent = path.parent().unwrap_or(Path::new(""));
         
-        let out_name = format!("{}-webp.webp", stem);
+        let ofmt = format.as_str();
+        let out_name = format!("{}-{}.{}", stem, ofmt, ofmt);
         let out_path = match &output_dir {
             Some(d) => { std::fs::create_dir_all(d).ok(); Path::new(d).join(&out_name) }
             None => parent.join(&out_name),
@@ -1221,19 +1280,9 @@ pub fn run_cli(args: &[String]) {
             img.resize(w, u32::MAX, image::imageops::FilterType::Lanczos3)
         } else { img };
         
-        // Encode
-        let (iw, ih) = (img.width(), img.height());
-        let result = if img.color().has_alpha() {
-            let rgba = img.to_rgba8();
-            let enc = webp::Encoder::from_rgba(rgba.as_raw(), iw, ih);
-            if lossless { Ok(enc.encode_lossless()) }
-            else { enc.encode_simple(false, quality as f32) }
-        } else {
-            let rgb = img.to_rgb8();
-            let enc = webp::Encoder::from_rgb(rgb.as_raw(), iw, ih);
-            if lossless { Ok(enc.encode_lossless()) }
-            else { enc.encode_simple(false, quality as f32) }
-        };
+        // Encode —— 与图形界面走同一个入口，避免两条路径各自演化。
+        // 旧代码这里返回 webp 库的 `Memory`（靠 Deref 取字节），统一入口后直接是 Vec<u8>。
+        let result: Result<Vec<u8>, String> = encode_output(&img, quality, lossless, ofmt);
 
         match result {
             Ok(mem) => {
@@ -1488,6 +1537,41 @@ mod tests {
         };
         let out = apply_resize(img, &req);
         assert_eq!((out.width(), out.height()), (100, 100));
+    }
+
+    /// 验收（AVIF 输出）：`output_format` 只在明确写 "avif" 时才换扩展名。
+    /// 这条是**向后兼容的钉子** —— 老前端不带这个字段、`Default` 给的是空串，
+    /// 任何「意外落到 avif」的实现都会让老脚本产出没人认识的扩展名。
+    #[test]
+    fn avif_is_opt_in_and_everything_else_falls_back_to_webp() {
+        let mut req = ConvertRequest::default();
+        assert_eq!(output_ext(&req), "webp", "Default（空串）必须是 webp");
+        req.output_format = "AVIF".into();
+        assert_eq!(output_ext(&req), "avif", "大小写不敏感");
+        req.output_format = "jpeg".into();
+        assert_eq!(output_ext(&req), "webp", "未知值不许悄悄变成别的格式");
+    }
+
+    /// 验收（AVIF 输出）：真编一次，产出必须是能认出来的 AVIF（`ftyp` box + `avif` 品牌），
+    /// 不是空字节、也不是「扩展名改了内容还是 WebP」。
+    #[test]
+    fn avif_encoding_produces_a_real_avif_file() {
+        // 32×32 纯色：够小够快，ravif 在 CI 上也是毫秒级。
+        let img = image::DynamicImage::new_rgb8(32, 32);
+        let out = encode_output(&img, 80, false, "avif").expect("avif encode failed");
+        assert!(out.len() > 64, "AVIF 产物过短，多半是编码没跑起来");
+        assert_eq!(&out[4..8], b"ftyp", "ISO-BMFF 必须在偏移 4 处是 ftyp box");
+        assert_eq!(&out[8..12], b"avif", "major brand 必须是 avif");
+    }
+
+    /// 验收（AVIF 输出）：质量越界不能让进程崩 —— ravif 的 `with_quality` 在
+    /// 1..=100 之外直接 panic。界面上质量是下拉固定值，但命令行 `--quality 0`
+    /// 是用户能敲的。
+    #[test]
+    fn avif_quality_is_clamped_instead_of_panicking() {
+        let img = image::DynamicImage::new_rgb8(16, 16);
+        assert!(encode_output(&img, 0, false, "avif").is_ok(), "quality 0 应被夹到 1");
+        assert!(encode_output(&img, 400, false, "avif").is_ok(), "quality 400 应被夹到 100");
     }
 
     /// 验收（FAMILY-LICENSE.md §6）：把试用起始时间改到过期后，

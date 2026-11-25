@@ -49,6 +49,15 @@ const namingMode = "basename";
 // 一个静默生效的全局开关，惩罚的是记性而不是操作 —— 这是它们被拿掉的原因。
 let recursiveWanted = false;
 let deleteSourceWanted = false;
+// 输出格式：产品叫 Pic2WebP，默认就是 WebP；AVIF 是「同一件事的另一种容器」，
+// 属低频选择，入口放在 ⋯ 菜单（该菜单的既定职责就是收低频与破坏性操作）。
+// 用 localStorage 记住 —— 选了 AVIF 的人，下一批八成还要 AVIF。
+const OUTPUT_FORMAT_KEY = "rocktier.output-format";
+let outputFormat = (() => {
+  try {
+    return localStorage.getItem(OUTPUT_FORMAT_KEY) === "avif" ? "avif" : "webp";
+  } catch (_) { return "webp"; }
+})();
 
 const convertBtn = $("#convert-btn");
 const btnText = $("#btn-text");
@@ -89,6 +98,7 @@ function buildRequest(fileList, { recursive, baseDir } = {}) {
     naming_mode: namingMode,
     output_dir: selectedDir || null,
     lossless,
+    output_format: outputFormat,
     // 递归时保持目录结构：目标目录没设时输出仍在源目录，结构自然一致；
     // 设了目录才有意义，所以两者绑定。
     preserve_structure: recursiveWanted && !!selectedDir,
@@ -569,7 +579,8 @@ function updateStatusbar() {
 function updateStatusMeta() {
   if (!statusMeta) return;
   const q = qualityMenu?.selectedOptions?.[0]?.textContent?.trim() || "";
-  const parts = [q];
+  // 只在选了 AVIF 时把格式写进摘要：WebP 是这个产品的默认前提，天天念一遍是噪音。
+  const parts = outputFormat === "avif" ? ["AVIF", q] : [q];
   // 选了 Lossless 时档位文字本身就是「无损」，不必再说一遍
   if (!lossless) parts.push(t("lossy"));
   parts.push(t("statusbar-local"));
@@ -1099,6 +1110,29 @@ function applyQualityMenu() {
 qualityMenu.addEventListener("change", applyQualityMenu);
 applyQualityMenu();
 
+/**
+ * 输出格式切换（WebP / AVIF）。
+ *
+ * AVIF 没有无损档（ravif 不暴露 AV1 的 lossless），也不支持动图。这两件事必须
+ * 在选中它的那一刻就说清楚，而不是等转换完才发现「无损勾了等于没勾」。
+ * 当前正停在「无损」档又改选 AVIF 时落到 95：用户点无损的意图是「要最好的质量」，
+ * 95 是同一意图下 AVIF 能给的最接近一档。
+ */
+function applyOutputFormat(fmt) {
+  outputFormat = fmt === "avif" ? "avif" : "webp";
+  try { localStorage.setItem(OUTPUT_FORMAT_KEY, outputFormat); } catch (_) {}
+  const losslessOpt = qualityMenu?.querySelector('option[value="lossless"]');
+  if (losslessOpt) {
+    losslessOpt.disabled = outputFormat === "avif";
+    if (outputFormat === "avif" && qualityMenu.value === "lossless") {
+      qualityMenu.value = "95";
+      applyQualityMenu();
+    }
+  }
+  updateStatusMeta();
+}
+applyOutputFormat(outputFormat);
+
 // Output dir —— 记住上次选择（localStorage），不必每次开应用重选
 /* 2026-10-04 键改名：此前是 "pic2webp-output-dir"，压根不在家族命名空间里。
  * 读取处回落旧键，否则老用户升级后要重选一次输出目录。旧键不删。 */
@@ -1382,6 +1416,14 @@ function openMoreMenu() {
       checked: deleteSourceWanted,
       danger: true,
       run: () => { deleteSourceWanted = !deleteSourceWanted; },
+    }),
+    item(t("mi-format-webp"), {
+      checked: outputFormat === "webp",
+      run: () => applyOutputFormat("webp"),
+    }),
+    item(t("mi-format-avif"), {
+      checked: outputFormat === "avif",
+      run: () => applyOutputFormat("avif"),
     }),
   );
   const sep = document.createElement("div");
