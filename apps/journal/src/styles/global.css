@@ -98,7 +98,18 @@ body {
   border-radius: var(--radius-md);
   background: var(--bg-card);
   border: 1px solid var(--border);
-  min-width: 320px;
+  /* 2026-11-25 真机（800×600 = 窗口最小尺寸）实测：320px 卡片配 40px 内边距，
+     输入框只剩 240px，占位提示被硬切成「Hint question (e.g. First pet's」
+     「Old vault's hint answer (requ」——没有省略号，看着像坏掉。
+     卡片加宽到 400px（内容 320px），再给占位符补省略号兜底更长的语种；
+     不改 8 门文案，回退成本为零。 */
+  min-width: min(400px, 100%);
+  max-width: 100%;
+}
+
+/* 占位提示超宽时给省略号，别硬切（WebKit 对 input 的 placeholder 支持） */
+.lock-input::placeholder {
+  text-overflow: ellipsis;
 }
 
 .brand-dot {
