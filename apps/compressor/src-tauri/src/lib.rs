@@ -810,13 +810,11 @@ pub fn run() {
                             w.set_background_color(Some(tauri::webview::Color(0, 0, 0, 0)))
                         );
                         std::thread::sleep(std::time::Duration::from_millis(3000));
-                        let r = w.eval(
-                            "document.title='MAT='+(document.documentElement.dataset.material||'NONE')",
+                        let r = w.eval_with_callback(
+                            "JSON.stringify({mat:document.documentElement.dataset.material||'NONE',body:getComputedStyle(document.body).backgroundColor,app:getComputedStyle(document.querySelector('.app')).backgroundColor})",
+                            |value| eprintln!("[material-diag] dom={}", value),
                         );
                         eprintln!("[material-diag] eval={:?}", r);
-                        std::thread::sleep(std::time::Duration::from_millis(700));
-                        eprintln!("[material-diag] dom title={:?}", w.title());
-                        let _ = w.set_title("Rocktier Compressor");
                     }
                     None => eprintln!("[material-diag] main window NOT FOUND in setup"),
                 }
