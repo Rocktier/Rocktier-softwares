@@ -14,7 +14,10 @@
         // 2026-10-04：运行时已改读 ""rocktier.theme""（键改名统一命名空间），
           // 这里必须同步，否则老用户会看到「先按旧键画首帧、挂载后跳成另一种」。
           var saved = localStorage.getItem("rocktier.theme") || localStorage.getItem("rocktier-md-theme");
-        var mode = saved === "light" || saved === "dark" || saved === "auto" ? saved : "auto";
+        // 2026-11-25：扩展主题（sepia / contrast）也要能在首帧之前定下去，
+        // 否则切到暖纸的用户每次启动都会先闪一帧深色再跳。
+        var known = ["light", "dark", "sepia", "contrast", "auto"];
+        var mode = known.indexOf(saved) >= 0 ? saved : "auto";
         document.documentElement.setAttribute("data-theme",
           mode === "auto"
             ? (window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark")

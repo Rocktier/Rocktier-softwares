@@ -52,6 +52,8 @@ export const zh: Strings = {
       mode: {
         light: '浅色',
         dark: '深色',
+        sepia: '暖纸',
+        contrast: '高对比',
       },
     },
     find: {

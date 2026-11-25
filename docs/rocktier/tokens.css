@@ -321,6 +321,357 @@
   --brand-hover: #cc3a30;
 }
 
+
+/* ── 扩展主题 sepia（暖纸，2026-11-25）───────────────────────────────────
+   米黄纸底 + 褐黑字，长文阅读向；红/绿/橙压暗到纸底上也达 AA。
+   令牌集与 :root 完全一致（109/109，判据 contrast-gate ④ 逐条核）；
+   只动调色板，字号 / 间距 / 时长 / 圆角等与主题无关的令牌原样继承 light 档。
+   产品侧不需要任何主题引擎：`<html data-theme="sepia">` 一组变量覆盖即生效。 */
+[data-theme="sepia"] {
+
+  --bg-primary: #f5efe0;
+  --bg-secondary: #efe7d5;
+  --bg-elevated: #fbf6ea;
+  --bg-card: rgba(93, 70, 35, 0.05);
+  --bg-card-hover: rgba(93, 70, 35, 0.09);
+  --bg-inset: rgba(93, 70, 35, 0.03);
+  --bg-input: rgba(93, 70, 35, 0.06);
+  --border: rgba(93, 70, 35, 0.18);
+  --border-hover: rgba(93, 70, 35, 0.30);
+  --border-strong: rgba(93, 70, 35, 0.70);
+  --text-primary: rgba(43, 32, 18, 0.95);
+  --text-secondary: rgba(43, 32, 18, 0.74);
+  --text-tertiary: rgba(43, 32, 18, 0.72);
+  --accent: #2b2012;
+  --on-accent: #fbf6ea;
+  --accent-hover: rgba(43, 32, 18, 0.88);
+  --accent-glow: rgba(43, 32, 18, 0.12);
+  --red: #d0392a;
+  --red-strong: #a32b20;
+  --red-soft: #dd6a55;
+  --red-ink: #a32b20;
+
+  --on-brand: #ffffff;
+
+  --accent-brand: var(--red);
+  --danger: #a32b20;
+  --warning: #7d4700;
+  --success: #14603a;
+  --dot: rgba(43, 32, 18, 0.55);
+  --dot-pattern: radial-gradient(circle, rgba(93, 70, 35, 0.07) 1px, transparent 1px);
+
+  --dot-size: 20px;
+  --shadow: rgba(60, 44, 20, 0.12);
+  --page-shadow: 0 2px 20px rgba(60, 44, 20, 0.18);
+
+  --elev-flat: none;
+  --elev-raised: 0 1px 2px rgba(60, 44, 20, 0.05), 0 4px 12px rgba(60, 44, 20, 0.06);
+  --elev-floating: 0 1px 2px rgba(60, 44, 20, 0.05), 0 4px 12px rgba(60, 44, 20, 0.07),
+    0 12px 32px rgba(60, 44, 20, 0.09);
+  --elev-overlay: 0 1px 2px rgba(60, 44, 20, 0.07), 0 8px 24px rgba(60, 44, 20, 0.11),
+    0 24px 64px rgba(60, 44, 20, 0.13);
+  --elev-border: rgba(93, 70, 35, 0.20);
+
+  --press-scale: 0.98;
+  --scrollbar: rgba(93, 70, 35, 0.22);
+  --scrollbar-hover: rgba(93, 70, 35, 0.34);
+  --selection: rgba(93, 70, 35, 0.20);
+
+  --radius-sm: 12px;
+
+  --radius-md: 20px;
+
+  --radius-lg: 28px;
+
+  --radius-pill: 999px;
+
+  --fs-2xs: 10px;
+
+  --fs-xs: 11px;
+
+  --fs-sm: 12px;
+
+  --fs-md: 13px;
+
+  --fs-lg: 14px;
+
+  --fs-xl: 22px;
+
+  --sp-1: 4px;
+
+  --sp-2: 8px;
+
+  --sp-3: 12px;
+
+  --sp-4: 16px;
+
+  --sp-5: 20px;
+
+  --sp-6: 24px;
+
+  --sp-8: 32px;
+
+  --font: "Geist", -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI",
+    Roboto, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", Helvetica, Arial,
+    sans-serif;
+
+  --font-mono: "Geist Mono", "SF Mono", "JetBrains Mono", "Fira Code", ui-monospace,
+    monospace;
+
+  --ease: cubic-bezier(0.25, 0.1, 0.25, 1);
+
+  --dur-hover: 150ms;
+
+  --dur-state: 200ms;
+
+  --dur-normal: 250ms;
+
+  --dur-enter: 300ms;
+
+  --titlebar-h: 44px;
+
+  --toolbar-h: 44px;
+
+  --statusbar-h: 28px;
+
+  --rail-w: 56px;
+
+  --rail-w-open: 208px;
+  --accent-muted: rgba(93, 70, 35, 0.10);
+
+  --font-sans: "Geist", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, "PingFang SC", "Hiragino Sans GB",
+    "Microsoft YaHei", sans-serif;
+  --text3: rgba(43, 32, 18, 0.72);
+
+  --mono: "Geist Mono", "SF Mono", "JetBrains Mono", "Fira Code", ui-monospace, Menlo, monospace;
+  --text: rgba(43, 32, 18, 0.95);
+  --text-muted: rgba(43, 32, 18, 0.72);
+
+  --brand: #ff4a3d;
+  --text2: rgba(43, 32, 18, 0.76);
+  --border-mid: rgba(93, 70, 35, 0.24);
+
+  --radius-xs: 3px;
+  --card: rgba(93, 70, 35, 0.05);
+  --bg-floating: #fbf6ea;
+  --bg-surface: #efe7d5;
+  --bg: #f5efe0;
+  --bg2: #efe7d5;
+  --code-comment: #5b5347;
+  --code-keyword: #9d211c;
+  --code-function: #6a3c9c;
+  --code-type: #7a4600;
+  --card-hover: rgba(93, 70, 35, 0.09);
+  --surface: #fbf6ea;
+  --glow-md: 0 0 20px rgba(60, 44, 20, 0.10);
+
+  --fs-base: 13px;
+  --head-bg: rgba(245, 239, 224, 0.85);
+
+  --font-serif: "New York", "New York Small", Georgia, "Times New Roman",
+    "Songti SC", "Source Han Serif SC", "Noto Serif CJK SC",
+    "Microsoft YaHei UI", "Microsoft YaHei", "PingFang SC", serif;
+  --code-string: #0f4363;
+  --code-number: #124e8f;
+  --code-variable: #7a4600;
+  --code-tag: #12572a;
+  --focus-ring: rgba(43, 32, 18, 0.60);
+
+  --radius: 12px;
+  --surface-2: #efe7d5;
+  --warn: #7d4700;
+
+  --sidebar-w: 260px;
+  --accent-warn: #7d4700;
+  --dim-text: rgba(43, 32, 18, 0.72);
+  --scrollbar-thumb: rgba(93, 70, 35, 0.68);
+  --brand-dot: #2b2012;
+  --focus-glow: rgba(43, 32, 18, 0.12);
+
+  --brand-hover: #cc3a30;
+}
+
+
+/* ── 扩展主题 contrast（高对比，2026-11-25）───────────────────────────────────
+   纯白底 + 纯黑字 + 加重描边与焦点环，无障碍向（低视力 / 强光环境）。
+   令牌集与 :root 完全一致（109/109，判据 contrast-gate ④ 逐条核）；
+   只动调色板，字号 / 间距 / 时长 / 圆角等与主题无关的令牌原样继承 light 档。
+   产品侧不需要任何主题引擎：`<html data-theme="contrast">` 一组变量覆盖即生效。 */
+[data-theme="contrast"] {
+
+  --bg-primary: #ffffff;
+  --bg-secondary: #f2f2f2;
+  --bg-elevated: #ffffff;
+  --bg-card: rgba(0, 0, 0, 0.05);
+  --bg-card-hover: rgba(0, 0, 0, 0.09);
+  --bg-inset: rgba(0, 0, 0, 0.03);
+  --bg-input: rgba(0, 0, 0, 0.06);
+  --border: rgba(0, 0, 0, 0.30);
+  --border-hover: rgba(0, 0, 0, 0.50);
+  --border-strong: rgba(0, 0, 0, 0.80);
+  --text-primary: #000000;
+  --text-secondary: rgba(0, 0, 0, 0.82);
+  --text-tertiary: rgba(0, 0, 0, 0.76);
+  --accent: #000000;
+  --on-accent: #ffffff;
+  --accent-hover: #000000;
+  --accent-glow: rgba(0, 0, 0, 0.18);
+  --red: #d0392a;
+  --red-strong: #8f1d14;
+  --red-soft: #e05a4a;
+  --red-ink: #8f1d14;
+
+  --on-brand: #ffffff;
+
+  --accent-brand: var(--red);
+  --danger: #8f1d14;
+  --warning: #7a3d00;
+  --success: #0f5c33;
+  --dot: rgba(0, 0, 0, 0.75);
+  --dot-pattern: radial-gradient(circle, rgba(0, 0, 0, 0.08) 1px, transparent 1px);
+
+  --dot-size: 20px;
+  --shadow: rgba(0, 0, 0, 0.16);
+  --page-shadow: 0 2px 20px rgba(0, 0, 0, 0.24);
+
+  --elev-flat: none;
+  --elev-raised: 0 1px 2px rgba(0, 0, 0, 0.10), 0 4px 12px rgba(0, 0, 0, 0.10);
+  --elev-floating: 0 1px 2px rgba(0, 0, 0, 0.10), 0 4px 12px rgba(0, 0, 0, 0.12),
+    0 12px 32px rgba(0, 0, 0, 0.14);
+  --elev-overlay: 0 1px 2px rgba(0, 0, 0, 0.14), 0 8px 24px rgba(0, 0, 0, 0.18),
+    0 24px 64px rgba(0, 0, 0, 0.20);
+  --elev-border: rgba(0, 0, 0, 0.35);
+
+  --press-scale: 0.98;
+  --scrollbar: rgba(0, 0, 0, 0.45);
+  --scrollbar-hover: rgba(0, 0, 0, 0.62);
+  --selection: rgba(0, 0, 0, 0.22);
+
+  --radius-sm: 12px;
+
+  --radius-md: 20px;
+
+  --radius-lg: 28px;
+
+  --radius-pill: 999px;
+
+  --fs-2xs: 10px;
+
+  --fs-xs: 11px;
+
+  --fs-sm: 12px;
+
+  --fs-md: 13px;
+
+  --fs-lg: 14px;
+
+  --fs-xl: 22px;
+
+  --sp-1: 4px;
+
+  --sp-2: 8px;
+
+  --sp-3: 12px;
+
+  --sp-4: 16px;
+
+  --sp-5: 20px;
+
+  --sp-6: 24px;
+
+  --sp-8: 32px;
+
+  --font: "Geist", -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI",
+    Roboto, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", Helvetica, Arial,
+    sans-serif;
+
+  --font-mono: "Geist Mono", "SF Mono", "JetBrains Mono", "Fira Code", ui-monospace,
+    monospace;
+
+  --ease: cubic-bezier(0.25, 0.1, 0.25, 1);
+
+  --dur-hover: 150ms;
+
+  --dur-state: 200ms;
+
+  --dur-normal: 250ms;
+
+  --dur-enter: 300ms;
+
+  --titlebar-h: 44px;
+
+  --toolbar-h: 44px;
+
+  --statusbar-h: 28px;
+
+  --rail-w: 56px;
+
+  --rail-w-open: 208px;
+  --accent-muted: rgba(0, 0, 0, 0.10);
+
+  --font-sans: "Geist", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, "PingFang SC", "Hiragino Sans GB",
+    "Microsoft YaHei", sans-serif;
+  --text3: rgba(0, 0, 0, 0.76);
+
+  --mono: "Geist Mono", "SF Mono", "JetBrains Mono", "Fira Code", ui-monospace, Menlo, monospace;
+  --text: #000000;
+  --text-muted: rgba(0, 0, 0, 0.76);
+
+  --brand: #ff4a3d;
+  --text2: rgba(0, 0, 0, 0.85);
+  --border-mid: rgba(0, 0, 0, 0.45);
+
+  --radius-xs: 3px;
+
+  --card: rgba(0, 0, 0, 0.03);
+
+  --bg-floating: #ffffff;
+
+  --bg-surface: #f5f5f5;
+
+  --bg: #ffffff;
+
+  --bg2: #f5f5f5;
+  --code-comment: #4a4a4a;
+  --code-keyword: #a1191b;
+  --code-function: #5b2f9c;
+  --code-type: #77400a;
+
+  --card-hover: rgba(0, 0, 0, 0.06);
+
+  --surface: #ffffff;
+
+  --glow-md: 0 0 20px rgba(0, 0, 0, 0.08);
+
+  --fs-base: 13px;
+  --head-bg: rgba(255, 255, 255, 0.92);
+
+  --font-serif: "New York", "New York Small", Georgia, "Times New Roman",
+    "Songti SC", "Source Han Serif SC", "Noto Serif CJK SC",
+    "Microsoft YaHei UI", "Microsoft YaHei", "PingFang SC", serif;
+  --code-string: #0a3069;
+  --code-number: #05408f;
+  --code-variable: #77400a;
+  --code-tag: #0f5c2a;
+  --focus-ring: rgba(0, 0, 0, 0.95);
+
+  --radius: 12px;
+
+  --surface-2: #f5f5f5;
+  --warn: #7a3d00;
+
+  --sidebar-w: 260px;
+  --accent-warn: #7a3d00;
+  --dim-text: rgba(0, 0, 0, 0.76);
+  --scrollbar-thumb: rgba(0, 0, 0, 0.80);
+  --brand-dot: #000000;
+  --focus-glow: rgba(0, 0, 0, 0.20);
+
+  --brand-hover: #cc3a30;
+}
+
 *::after {
   transition:
     background-color var(--dur-state) var(--ease),
@@ -520,6 +871,22 @@ button.icon-btn:active:not(:disabled) {
   );
   border: 1px solid var(--text-tertiary);
 }
+/* sepia（暖纸）：右上斜切半填 —— 与 light 全实心 / dark 左半实心都能区分 */
+.icon-btn[data-mode="sepia"]::before {
+  background: linear-gradient(
+    135deg,
+    var(--text-tertiary) 0 50%,
+    transparent 50% 100%
+  );
+  border: 1px solid var(--text-tertiary);
+}
+
+/* contrast（高对比）：空心 + 加重描边（低视力下先认「是不是实心」） */
+.icon-btn[data-mode="contrast"]::before {
+  background: transparent;
+  border: 2px solid var(--text-primary);
+}
+
 
 /* ─────────────────────────────────────────────────────────────────────────
  * .badge-license —— 家族统一的许可/试用徽标原语（2026-10-25 审计 D-78）

@@ -100,13 +100,20 @@ const stripComments = (s) => s.replace(/\/\*[\s\S]*?\*\//g, "");
  *   "light" = [data-theme="light"]
  */
 function blocks(css) {
+  /* 2026-11-25：除 root / light 两档，母版还允许扩展主题（sepia / contrast …）。
+     scope 写 "theme:<name>"，它们既不能污染 root 映射，也必须逐条核完整性。 */
   const re =
-    /(:root\s*(?:,\s*\[data-theme="dark"\])?|html\b|\[data-theme="auto"\]|\[data-theme="light"\])\s*\{/g;
+    /(:root\s*(?:,\s*\[data-theme="dark"\])?|html\b|\[data-theme="auto"\]|\[data-theme="light"\]|\[data-theme="(?!light|dark|auto")[A-Za-z0-9-_]+"\])\s*\{/g;
   const out = [];
   let m;
   while ((m = re.exec(css))) {
     const head = m[1];
-    const scope = head.includes("light") ? "light" : "root";
+    const alt = /\[data-theme="([A-Za-z0-9-_]+)"\]/.exec(head);
+    const scope = head.includes("light")
+      ? "light"
+      : alt && !["light", "dark", "auto"].includes(alt[1])
+        ? `theme:${alt[1]}`
+        : "root";
     let i = m.index + m[0].length, depth = 1;
     while (i < css.length && depth > 0) {
       if (css[i] === "{") depth++;
@@ -151,7 +158,12 @@ const masterCss = stripComments(readFileSync(MASTER, "utf8"));
 const MB = blocks(masterCss);
 const masterRoot = new Map();
 const masterLightRaw = new Map(); // 关键：原始值，不做 root 填充
+const masterAlt = new Map(); // 扩展主题名 → 令牌映射
 for (const b of MB) {
+  if (b.scope.startsWith("theme:")) {
+    masterAlt.set(b.scope.slice(6), b.tokens);
+    continue;
+  }
   const target = b.scope === "light" ? masterLightRaw : masterRoot;
   for (const [k, v] of b.tokens) target.set(k, v);
 }
@@ -409,6 +421,27 @@ lines.push("⑤ 字面色值登记制（tokens.css 快照以外的一切字面�
   } else {
     ok("全部字面色落在登记范围内（遮罩 / 纯白 / 令牌色相染色 / 显式例外）");
   }
+}
+
+/* ---------- 判据 ⑥ 扩展主题：完整性 + 对比度 ---------- */
+
+lines.push("");
+lines.push("⑥ 扩展主题完整性 + 对比度");
+if (!masterAlt.size) {
+  ok("无扩展主题（只有 root / light 两档）");
+}
+for (const [name, tokens] of masterAlt) {
+  const missing = [...masterRoot.keys()].filter((k) => !tokens.has(k));
+  if (missing.length) {
+    fail(
+      `[data-theme="${name}"] 缺 ${missing.length} 个令牌，会静默回落到深色值：` +
+        missing.slice(0, 8).join(", ") + (missing.length > 8 ? " …" : "")
+    );
+  } else {
+    ok(`[data-theme="${name}"] 含 root 全部令牌（${tokens.size}/${masterRoot.size}）`);
+  }
+  /* 同名令牌以扩展主题为准：它没定义的由 root 兜底（此时已在上一条报红）。 */
+  checkContrast(`扩展 ${name}`, new Map([...masterRoot, ...tokens]));
 }
 
 /* ---------- 输出 ---------- */

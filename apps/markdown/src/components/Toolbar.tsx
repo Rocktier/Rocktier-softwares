@@ -14,7 +14,7 @@ interface Props {
   displayName: string;
   /** 当前文档路径：标题栏第二行显示所在目录（设计稿 lenso 的 doc-title） */
   filePath?: string | null;
-  themeMode: "light" | "dark";
+  themeMode: "dark" | "light" | "sepia" | "contrast";
   onToggleTheme: () => void;
   onFindReplace: () => void;
   onExportPdf: () => void;
@@ -142,7 +142,8 @@ export const Toolbar = memo(function Toolbar({
           </button>
         )}
         {/* 家族唯一主题按钮：.icon-btn（28×28 + 40px 命中区）。
-            两态 light ⇄ dark（2026-11-15 用户令：取消「跟随系统」）。
+            四档循环 dark → light → sepia → contrast（2026-11-15 取消「跟随系统」，
+            2026-11-25 加暖纸 / 高对比两套扩展主题）。
             2026-11-15 二次简化：固定一枚太阳，颜色随主题走（currentColor），
             当前档位由角标 + title/aria 说明。 */}
         <button

@@ -51,6 +51,8 @@ export const en = {
       mode: {
         light: 'Light',
         dark: 'Dark',
+        sepia: 'Sepia',
+        contrast: 'High contrast',
       },
     },
     find: {
