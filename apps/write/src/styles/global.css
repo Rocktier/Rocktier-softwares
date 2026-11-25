@@ -95,7 +95,8 @@ button {
   background: none;
   color: inherit;
   font-size: inherit;
-  transition: all var(--dur-hover) var(--ease);
+  transition: color var(--dur-hover) var(--ease), background-color var(--dur-hover) var(--ease),
+    border-color var(--dur-hover) var(--ease), opacity var(--dur-hover) var(--ease);
 }
 
 input, textarea {

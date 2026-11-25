@@ -339,7 +339,7 @@ body {
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: background-color var(--dur-hover) var(--ease), border-color var(--dur-hover) var(--ease), color var(--dur-hover) var(--ease);
   flex: none;
 }
 .ghost:hover {
@@ -384,7 +384,7 @@ body {
   border-radius: var(--radius-sm);
   border: 1px solid var(--accent);
   cursor: pointer;
-  transition: all 0.2s cubic-bezier(0.25, 0.1, 0.25, 1);
+  transition: box-shadow var(--dur-hover) var(--ease), transform var(--dur-hover) var(--ease);
   white-space: nowrap;
 }
 .btn:hover {
@@ -605,7 +605,7 @@ body {
   padding: 4px 12px;
   border-radius: var(--radius-pill);
   cursor: pointer;
-  transition: all 0.15s;
+  transition: color var(--dur-hover) var(--ease), border-color var(--dur-hover) var(--ease);
   max-width: 260px;
   overflow: hidden;
   text-overflow: ellipsis;

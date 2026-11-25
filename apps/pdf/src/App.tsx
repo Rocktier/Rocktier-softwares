@@ -413,8 +413,9 @@ export function App() {
           void saveAs();
           break;
         case 'export-markdown':
-          // 转换需要已打开的文档；没打开时静默忽略（菜单项可能仍可点）
+          // 转换需要已打开的文档；菜单项在 Rust 侧已按 has_doc 置灰，这里兜竞态
           if (pdf.doc) setDialog('markdown');
+          else notify(t('toast.noDocExport'), true);
           break;
         case 'undo':
           void pdf.stepHistory('undo');
@@ -424,6 +425,7 @@ export function App() {
           break;
         case 'find':
           if (pdf.doc) setFindOpen(true);
+          else notify(t('toast.noDocFind'), true);
           break;
         case 'actual-size':
           setZoom(1);

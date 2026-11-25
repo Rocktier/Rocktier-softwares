@@ -1089,6 +1089,57 @@ async function runChecks(id, product, dir) {
     /prefers-reduced-motion/.test(cssAll) ? "PASS" : "FAIL",
     /prefers-reduced-motion/.test(cssAll) ? "存在降级动画块" : "缺 @media (prefers-reduced-motion)");
 
+  /* 根字号（UI 规范 §2.2）：html / :root 只允许 16px，不声明即走浏览器默认 16px。
+     这是「验违规、不求统一」——只拦会拖动整个 rem 体系的声明，不逼各款补写一行。
+     属性选择器（html[data-theme=...]）不算根声明，别误伤主题块。 */
+  {
+    const bad = [];
+    const scanRootFont = (css, label) => {
+      for (const m of stripComments(css).matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+        const selectors = m[1].split(",").map((s) => s.trim());
+        if (!selectors.some((s) => s === "html" || s === ":root")) continue;
+        const decl = /(?:^|;)\s*font-size\s*:\s*([^;]+)/.exec(m[2]);
+        if (!decl) continue;
+        const value = decl[1].trim();
+        if (value !== "16px") bad.push(`${label}: ${value}`);
+      }
+    };
+    for (const f of walkFe([".css"])) scanRootFont(read(f), basename(f));
+    scanRootFont(htmlSrc, "index.html<style>");
+    add(id, "root-font-size-16px", bad.length ? "FAIL" : "PASS",
+      bad.length
+        ? `html/:root 根字号非 16px（会拖动整款 rem 体系）: ${bad.slice(0, 5).join(" / ")}`
+        : "未声明或显式 16px，根字号合规");
+  }
+
+  /* 动效纪律（规范 §10，2026-11-25 收口）。用户拍板的口径：
+     `transition: all` 一律 FAIL（会把未预期的属性也拖进过渡）；裸时长只 WARN，
+     不逼存量 CSS 一次性改完。@keyframes 自身的时长与 reduced-motion 兜底豁免。 */
+  {
+    const allHit = [];
+    const bareHit = [];
+    const scanMotion = (css, label) => {
+      const clean = stripComments(css)
+        .replace(/@keyframes[^{]*\{(?:[^{}]|\{[^{}]*\})*\}/g, "")
+        .replace(/@media[^{]*prefers-reduced-motion[^{]*\{(?:[^{}]|\{[^{}]*\})*\}/g, "");
+      for (const line of clean.split("\n")) {
+        if (/transition\s*:[^;]*\ball\b/.test(line)) allHit.push(`${label}: ${line.trim().slice(0, 80)}`);
+        const m = /(?:transition|animation)\s*:[^;]*?(\d*\.?\d+m?s)\b/.exec(line);
+        if (m) bareHit.push(`${label}: ${m[1]}`);
+      }
+    };
+    for (const f of walkFe([".css"])) scanMotion(read(f), basename(f));
+    scanMotion(htmlSrc, "index.html<style>");
+    add(id, "motion-no-transition-all", allHit.length ? "FAIL" : "PASS",
+      allHit.length
+        ? `transition: all ${allHit.length} 处: ${allHit.slice(0, 5).join(" / ")}`
+        : "无 transition: all");
+    add(id, "motion-duration-token", bareHit.length ? "WARN" : "PASS",
+      bareHit.length
+        ? `${bareHit.length} 处裸时长（本轮只告警，不阻塞）: ${bareHit.slice(0, 5).join(" / ")}`
+        : "时长全部走 --dur-* 令牌");
+  }
+
   /* 11. identifier-naming-convention：Rocktier.Rocktier<Product>（Write 例外见 DECISIONS §8）
      必须取 tauri.conf.json 顶层 identifier——正则会误抓 fileAssociations 里的 UTI（如 com.adobe.pdf）。 */
   let topIdentifier = null;

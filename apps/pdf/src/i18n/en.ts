@@ -31,8 +31,8 @@ export const en = {
     markdown: 'To Markdown',
     stamp: 'Page numbers',
     extractPages: 'Extract pages',
-    undo: 'Undo',
-    redo: 'Redo',
+    undo: 'Undo (Cmd/Ctrl+Z)',
+    redo: 'Redo (Cmd/Ctrl+Shift+Z)',
     toolsLabel: 'Tools',
     find: 'Find',
     more: 'More',
@@ -383,6 +383,9 @@ export const en = {
     // 值里不出现 ASCII 冒号（family-check 的取键正则会把「某词 + 半角冒号」读成一个
     // 新键，报「仅 en 有」）。见本文件 dsignReady 上方同一条说明。
     stillOpening: 'Still opening after {sec}s. If it never finishes, copy the path below to check — {path}',
+    // 破折号而不是半角冒号，理由同上（family-check 取键正则）
+    noDocExport: 'Open a PDF first — export needs a document',
+    noDocFind: 'Open a PDF first — Find needs a document',
     dismiss: 'Dismiss',
   },
 

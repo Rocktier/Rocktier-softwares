@@ -187,7 +187,7 @@ for (const p of realSources) {
     const kv = perFile[Object.keys(perFile)[0]] || {};
     for (const [k, v] of Object.entries(kv)) {
       if (!G.terms[k]) continue;
-      const kk = `${k} ${loc}`;
+      const kk = `${k}\u0000${loc}`;
       if (!drift.has(kk)) drift.set(kk, new Map());
       drift.get(kk).set(p.label, v);
     }
@@ -195,7 +195,7 @@ for (const p of realSources) {
 }
 let newDrift = 0;
 for (const [kk, byProd] of drift) {
-  const [k, loc] = kk.split(" ");
+  const [k, loc] = kk.split("\u0000");
   if (G.adjudicated?.[k]) continue;
   if (G.terms[k]?.[loc]?.status === "wording-variant") continue;
   const vals = [...new Set(byProd.values())];

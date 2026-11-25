@@ -437,6 +437,17 @@
     .update-footer button.update-get-btn {
       background: var(--accent); border-color: transparent; color: var(--bg); font-weight: 600;
     }
+    /* 菜单动作的即时提示：固定浮在状态栏上方，不随 render() 重绘消失 */
+    .toast {
+      position: fixed; left: 50%; bottom: 52px; transform: translateX(-50%); z-index: 90;
+      max-width: min(90vw, 440px); padding: 10px 14px; text-align: center;
+      font-size: 12.5px; line-height: 1.5; color: var(--text-primary);
+      background: var(--glass-panel-a); border: 1px solid var(--glass-hairline);
+      border-radius: 10px; box-shadow: var(--glass-shadow);
+      backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+      -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+    }
+    .toast[hidden] { display: none; }
   </style>
 </head>
 <!-- ══════════════════════════════════════════════════════════════
@@ -541,6 +552,8 @@
       <summary data-i18n="details">Details</summary>
       <pre id="log" role="log" aria-live="polite"></pre>
     </details>
+    <!-- 菜单动作无结果时的即时反馈。日志折叠区不进主视线，这里必须单独浮出来 -->
+    <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
   </main>
 
   <footer class="statusbar">

@@ -48,23 +48,38 @@ function log(msg) {
   box.scrollTop = box.scrollHeight;
 }
 
+// 菜单动作被守卫拦下时给用户一句即时反馈。日志折叠区不进主视线，
+// 状态栏又会被 render() 重绘覆盖，所以单独用固定浮层，不复用那两处。
+let toastTimer = null;
+function showToast(msg) {
+  const box = el("toast");
+  box.textContent = msg;
+  box.hidden = false;
+  if (toastTimer) clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => {
+    box.hidden = true;
+    box.textContent = "";
+    toastTimer = null;
+  }, 2600);
+}
+
 // ── 状态栏文字：进行中说进度，结束说结果，失败说原因 ───────────────────
 function statusText() {
     switch (ui.phase) {
     case "running":
       // 后端只在有真实页号时才发页事件；preparing 阶段没有页号就不编。
-      return ui.total && ui.page ? t.statusProgress(ui.page, ui.total) : t.preparing;
+      return ui.total && ui.page ? t("statusProgress", { p: ui.page, t: ui.total }) : t("preparing");
     case "done":
-      if (!job) return t.statusDone;
-      return job.already_searchable ? t.statusAlready : t.statusSummary(job);
+      if (!job) return t("statusDone");
+      return job.already_searchable ? t("statusAlready") : t("statusSummary", job);
     case "failed":
-      return t.failed + ui.error;
+      return t("failed") + ui.error;
     case "cancelled":
-      return t.statusCancelled;
+      return t("statusCancelled");
     case "ready":
-      return t.statusReady;
+      return t("statusReady");
     default:
-      return t.statusIdle;
+      return t("statusIdle");
   }
 }
 
@@ -91,8 +106,8 @@ function render() {
   el("txt").disabled = !canExport;
   el("copy").disabled = !canExport;
 
-  el("pick-label").textContent = inputPath ? t.changeFile : t.pickFile;
-  el("pick").title = inputPath ? t.changeFile : t.pickFile;
+  el("pick-label").textContent = inputPath ? t("changeFile") : t("pickFile");
+  el("pick").title = inputPath ? t("changeFile") : t("pickFile");
 
   // 结果摘要：只在真有识别结果时出现，计数全部来自 ocr_process 返回值
   el("result").hidden = !job;
@@ -104,10 +119,10 @@ function render() {
     el("stat-skip").textContent = job.pages_skipped;
     el("stat-lines").textContent = job.lines;
     el("done").innerHTML = job.already_searchable
-      ? t.already
+      ? t("already")
       : job.kind === "image"
-        ? t.imageDone(job)
-        : t.recognised(job);
+        ? t("imageDone", job)
+        : t("recognised", job);
 
     const out = el("out-path");
     if (outPath) {
@@ -115,7 +130,7 @@ function render() {
       out.title = outPath;
       out.removeAttribute("data-state");
     } else {
-      out.textContent = t.outputPending;
+      out.textContent = t("outputPending");
       out.removeAttribute("title");
       out.setAttribute("data-state", "empty");
     }
@@ -257,21 +272,25 @@ function afterLangChange() {
   render();
 }
 
-// 菜单自定义项 → 现有动作链。导出项直接点对应按钮：禁用态与"运行中"
-// 守卫都由按钮自身的逻辑把关，菜单项无需单独维护可用性。
+// 菜单自定义项 → 现有动作链。Rust 侧三个导出菜单项恒 enabled，而按钮在
+// 无识别结果时是 disabled 的 —— 点菜单等于点了空气。这里补同一句提示。
 listen("menu-action", (e) => {
+  const exportIfReady = (id) => {
+    if (!job) { showToast(t("needFileExport")); return; }
+    el(id).click();
+  };
   switch (e.payload) {
     case "open":
       pickFile();
       break;
     case "export-docx":
-      el("docx").click();
+      exportIfReady("docx");
       break;
     case "export-txt":
-      el("txt").click();
+      exportIfReady("txt");
       break;
     case "export-pdf":
-      el("pdf").click();
+      exportIfReady("pdf");
       break;
     case "toggle-lang":
       toggleLang();
@@ -315,7 +334,7 @@ el("go").addEventListener("click", async () => {
     const wasCancelled = msg.includes("cancelled");
     ui.phase = wasCancelled ? "cancelled" : "failed";
     ui.error = wasCancelled ? "" : msg;
-    log(wasCancelled ? t.cancelled : t.failed + msg);
+    log(wasCancelled ? t("cancelled") : t("failed") + msg);
   }
   running = false;
   render();
