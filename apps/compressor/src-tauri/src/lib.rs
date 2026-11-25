@@ -804,10 +804,18 @@ pub fn run() {
                     );
                 }
                 match app.get_webview_window("main") {
-                    Some(w) => eprintln!(
-                        "[material-diag] main window found; set_background_color={:?}",
-                        w.set_background_color(Some(tauri::webview::Color(0, 0, 0, 0)))
-                    ),
+                    Some(w) => {
+                        eprintln!(
+                            "[material-diag] main window found; set_background_color={:?}",
+                            w.set_background_color(Some(tauri::webview::Color(0, 0, 0, 0)))
+                        );
+                        let _ = w.eval(
+                            "document.title='MAT='+(document.documentElement.dataset.material||'NONE')",
+                        );
+                        std::thread::sleep(std::time::Duration::from_millis(900));
+                        eprintln!("[material-diag] dom title={:?}", w.title());
+                        let _ = w.set_title("Rocktier Compressor");
+                    }
                     None => eprintln!("[material-diag] main window NOT FOUND in setup"),
                 }
             }
