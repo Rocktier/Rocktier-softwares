@@ -15,6 +15,10 @@
    用法：
      node ux-audit.mjs --root <dist 或 ui 目录> [--port 8931] [--out x.json]
                        [--steps 18] [--width 1280] [--height 860]
+                       [--browser <path>]   # 默认 macOS Edge；CI 传 chromium/chrome 绝对路径
+   浏览器：--browser > 环境变量 CHROME_BIN > macOS Edge 默认路径。
+   Chromium 与 Edge 同为 Chromium 内核、CDP 协议通用，故 ubuntu runner 可复跑；
+   ci 结果只作「同环境纵向回归判据」，字体与真机 WKWebView/WebView2 不同，不是终审。
    退出码：0 = 无 fail 级问题；1 = 有。warn 级（截断/命中区）不影响退出码。
  */
 import { createServer } from "node:http";
@@ -23,13 +27,16 @@ import { existsSync, statSync } from "node:fs";
 import { join, extname, normalize } from "node:path";
 import { spawn } from "node:child_process";
 
-const EDGE = "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge";
-
 /* ---------- 参数 ---------- */
 function arg(name, dflt) {
   const i = process.argv.indexOf("--" + name);
   return i > 0 && process.argv[i + 1] ? process.argv[i + 1] : dflt;
 }
+/* 浏览器可配置：CI（ubuntu）传 chromium/chrome，本机默认 Edge。
+   2026-11-25 D-185：脚本原先写死 macOS Edge 路径，CI 必然 exit 2。 */
+const EDGE = arg("browser", null)
+  || process.env.CHROME_BIN
+  || "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge";
 const ROOT = arg("root", null);
 const PORT = Number(arg("port", 8931));   // 静态服务端口
 const DPORT = PORT + 1;                   // CDP 调试端口（必须错开）
@@ -130,7 +137,13 @@ const MEASURE = `(() => {
     if (cls) s += "." + cls;
     return s;
   };
+  /* aria-hidden 层（如 KaTeX 的 .katex-mathml）是给屏幕阅读器的等价副本，
+     视觉上被 clip 隐藏、与人眼所见重叠；把它当可见文字会假报溢出（基线 4 条全是它）。
+     同理 clip-path: inset(全裁) 的元素也不参与视觉判据。 */
+  const hiddenLayer = (el) => el.closest("[aria-hidden=\\"true\\"]")
+    || getComputedStyle(el).clipPath === "inset(50%)";
   const vis = (el) => {
+    if (hiddenLayer(el)) return false;
     const r = el.getBoundingClientRect();
     const st = getComputedStyle(el);
     return r.width > 0 && r.height > 0 && st.visibility !== "hidden" && st.display !== "none"

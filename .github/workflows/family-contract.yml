@@ -54,3 +54,65 @@ jobs:
       # 脚本自己建 .family-root 软链农场，跑完即删（见 .gitignore）。
       - name: Run family gate (8 checks)
         run: node scripts/family-gate.mjs
+
+  # 渲染态布局判据（2026-11-25 接，D-185）：八道 family gate 都是纯文本静态分析，
+  # 量不到 DOM 盒模型。ux-audit 用 headless Chromium 量溢出/重叠/命中区，补这一维。
+  # 口径：本机字体 ≠ 真机 WKWebView/WebView2，CI 结果只作「同环境纵向回归」，
+  # 不是真机终审（真机字体差异另见 task_plan 独立待办）。
+  ux-audit:
+    name: UX audit (rendered layout)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22" # ux-audit 用全局 WebSocket，Node 20 以下不稳定
+      - name: Locate Chromium
+        id: chrome
+        run: |
+          for c in google-chrome chromium chromium-browser google-chrome-stable; do
+            if command -v "$c" >/dev/null 2>&1; then
+              echo "bin=$(command -v "$c")" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+          done
+          echo "no chromium found on runner" >&2
+          exit 1
+      - name: Build probe target (markdown)
+        working-directory: apps/markdown
+        run: |
+          npm ci
+          npm run build
+      # 先跑脚本自带的正负对照：注入真溢出要报红、aria-hidden 隐藏层要豁免；
+      # 判据本身失效时不能让它「全绿」蒙混过关。
+      - name: Self-check (positive + negative)
+        working-directory: apps/markdown
+        run: |
+          set -e
+          cp dist/index.html /tmp/ux-audit-index.bak
+          node ../../docs/rocktier/tools/ux-audit.mjs --root dist --steps 2 --browser "${{ steps.chrome.outputs.bin }}" --port 8931
+          python3 - <<'PY'
+          p = "dist/index.html"
+          s = open(p, encoding="utf-8").read()
+          inject = ('<div id="ux-neg" style="width:40px;overflow:hidden;white-space:nowrap">'
+                    '<span>NEGATIVE_OVERFLOW_TEST_STRING_LONG_ENOUGH_TO_TRIGGER_CLIP</span></div>'
+                    '<div aria-hidden="true" id="ux-hidden" style="width:40px;overflow:hidden;white-space:nowrap">'
+                    '<span>HIDDEN_OVERFLOW_SHOULD_BE_IGNORED</span></div>')
+          i = s.rfind("</body>")
+          open(p, "w", encoding="utf-8").write(s[:i] + inject + s[i:])
+          PY
+          if node ../../docs/rocktier/tools/ux-audit.mjs --root dist --steps 2 --browser "${{ steps.chrome.outputs.bin }}" --port 8932; then
+            echo "negative control did not fail — audit predicate is broken" >&2
+            cp /tmp/ux-audit-index.bak dist/index.html
+            exit 1
+          fi
+          cp /tmp/ux-audit-index.bak dist/index.html
+      # 正式判据：只量上面已构建的 markdown dist。其余 7 款不预设 dist —— 在各自
+      # Checks job 里 npm ci + build 之后再逐个纳入，避免用不存在的目录制造假红。
+      # Ubuntu 字体与 mac/win 不同，先收集基线；稳定后去掉 continue-on-error 转硬判据。
+      - name: Audit markdown (baseline)
+        continue-on-error: true
+        working-directory: apps/markdown
+        run: |
+          node ../../docs/rocktier/tools/ux-audit.mjs \
+            --root dist --steps 12 --browser "${{ steps.chrome.outputs.bin }}" --port 8933

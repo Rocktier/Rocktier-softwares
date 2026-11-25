@@ -6,7 +6,8 @@
   "scripts": {
     "tauri": "tauri",
     "tauri:windows:build": "tauri-windows-bundle build --runner npm",
-    "family:check": "node ../../scripts/family-gate.mjs --product ocr"
+    "family:check": "node ../../scripts/family-gate.mjs --product ocr",
+    "verify:glass": "node scripts/verify-glass-contrast.mjs --selftest"
   },
   "devDependencies": {
     "@choochmeque/tauri-windows-bundle": "^0.1.29",

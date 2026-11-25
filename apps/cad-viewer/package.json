@@ -15,7 +15,8 @@
     "tauri:windows:build": "tauri-windows-bundle build --runner npm",
     "sync:legal": "node scripts/sync-legal.mjs",
     "fixtures": "node fixtures/gen.mjs",
-    "family:check": "node ../../scripts/family-gate.mjs --product cad-viewer"
+    "family:check": "node ../../scripts/family-gate.mjs --product cad-viewer",
+    "verify:glass": "node scripts/verify-glass-contrast.mjs --selftest"
   },
   "dependencies": {
     "@tauri-apps/api": "^2",

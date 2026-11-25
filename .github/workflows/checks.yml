@@ -84,6 +84,9 @@ jobs:
       - name: Frontend typecheck
         working-directory: apps/pdf
         run: npx tsc --noEmit
+      - name: Glass contrast (lenso material)
+        working-directory: apps/pdf
+        run: npm run verify:glass
       - name: Rust tests
         working-directory: apps/pdf/src-tauri
         run: cargo test --all-targets
@@ -164,6 +167,9 @@ jobs:
           for f in ui/*.js; do
             node --check "$f"
           done
+      - name: Glass contrast (lenso material)
+        working-directory: apps/ocr
+        run: npm run verify:glass
       - name: Rust tests
         working-directory: apps/ocr/src-tauri
         run: cargo test --all-targets
@@ -205,6 +211,9 @@ jobs:
       - name: fs permission audit
         working-directory: apps/write
         run: npm run verify:fs
+      - name: Glass contrast (lenso material)
+        working-directory: apps/write
+        run: npm run verify:glass
       - name: Rust tests + clippy
         working-directory: apps/write/src-tauri
         run: |
@@ -243,6 +252,9 @@ jobs:
       - name: Frontend tests
         working-directory: apps/pic2webp
         run: npm test
+      - name: Glass contrast (lenso material)
+        working-directory: apps/pic2webp
+        run: npm run verify:glass
       - name: Rust tests + clippy
         working-directory: apps/pic2webp/src-tauri
         run: |
@@ -281,6 +293,9 @@ jobs:
       - name: Type check + build
         working-directory: apps/cad-viewer
         run: npm run build
+      - name: Glass contrast (lenso material)
+        working-directory: apps/cad-viewer
+        run: npm run verify:glass
       - name: Rust tests + clippy
         working-directory: apps/cad-viewer/src-tauri
         run: |
@@ -316,6 +331,9 @@ jobs:
         run: |
           go vet ./...
           go test ./...
+      - name: Glass contrast (lenso material)
+        working-directory: apps/compressor
+        run: npm run verify:glass
       - name: Build compress-engine binaries
         working-directory: apps/compressor/compress-engine
         run: |
@@ -347,6 +365,9 @@ jobs:
       - name: Frontend build
         working-directory: apps/journal
         run: npm run build
+      - name: Glass contrast (lenso material)
+        working-directory: apps/journal
+        run: npm run verify:glass
       - name: Rust tests
         working-directory: apps/journal/src-tauri
         run: cargo test --all-targets
