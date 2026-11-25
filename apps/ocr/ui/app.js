@@ -203,6 +203,9 @@ function clearPrepPreview() {
 // 禁用态每帧都从 inputPath / running 推出来，不另记一份状态。
 function syncPrepUi() {
   const pdf = isPdfPath(inputPath);
+  // 识别进行中三个开关一起锁：选项是在点「识别」那一刻读走的，中途可点会让人
+  // 以为改动生效了 —— 实际上没有。
+  for (const id of Object.values(PREP_BOXES)) el(id).disabled = running;
   el("prep-rectify").disabled = running || pdf;
   el("prep-rectify-row").dataset.disabled = pdf ? "true" : "false";
   el("prep-rectify-row").title = pdf ? t("prepPdfNote") : "";
