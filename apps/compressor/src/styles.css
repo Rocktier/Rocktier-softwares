@@ -72,41 +72,6 @@ body {
     linear-gradient(160deg, var(--canvas) 0%, var(--canvas-2) 50%, var(--canvas-3) 100%);
 }
 
-/* ═══ 真材质档（macOS vibrancy，Lenso 阶段 265）═══════════════════════════
-   开窗材质之前，柔光底的职责是「冒充别人的壁纸」（D-158 §2），所以它必须不透明。
-   窗口一旦真的透明，这层不透明底会把桌面挡死 —— 材质白开。所以在真材质档里
-   把它降级成 **品牌 tint**：色相不动，整体压到 72%，桌面光影透上来。
-
-   令牌一个没改：glass.css 必须与家族另外七份逐字节一致（md5 判据），
-   所以 alpha 只在产品层用 color-mix 现算，不新增也不覆写 L0 令牌。
-
-   对比度为什么不用重算：verify-glass-contrast 的底取纯白与纯黑两个极端，
-   而 tint 是「深色 canvas × 72% 叠在极端色上」—— 无论壁纸多白，合成结果都比
-   纯白更深；多黑，都比纯黑更浅。也就是说现有判据的极端底**仍然是上界**，
-   tint 只会把实际值拉进这个区间，不会越出去。 */
-html[data-material="vibrancy"],
-html[data-material="vibrancy"] body {
-  /* body 原本是 --bg 实色（纯黑/纯白），在透明窗口里会把材质完全遮住 */
-  background: transparent;
-}
-
-html[data-material="vibrancy"] .app {
-  /* 先给不支持 color-mix 的系统一个实底（macOS 13.2 以下回落到原样，
-     视觉等于没开材质，不是坏掉） */
-  background-color: var(--canvas);
-  background-color: color-mix(in srgb, var(--canvas) 72%, transparent);
-  background-image:
-    radial-gradient(120% 90% at 12% 0%, color-mix(in srgb, var(--wash-1) 50%, transparent) 0%, transparent 55%),
-    radial-gradient(100% 80% at 92% 8%, color-mix(in srgb, var(--wash-2) 50%, transparent) 0%, transparent 52%),
-    radial-gradient(120% 100% at 60% 110%, color-mix(in srgb, var(--wash-3) 50%, transparent) 0%, transparent 58%),
-    linear-gradient(
-      160deg,
-      color-mix(in srgb, var(--canvas) 72%, transparent) 0%,
-      color-mix(in srgb, var(--canvas-2) 72%, transparent) 50%,
-      color-mix(in srgb, var(--canvas-3) 72%, transparent) 100%
-    );
-}
-
 /* ---------- Title bar ---------- */
 .titlebar {
   display: flex;
@@ -128,11 +93,9 @@ html[data-material="vibrancy"] .app {
   align-items: center;
   gap: 8px;
   min-width: 0;
-  /* 拖拽区必须铺满标题栏的「中间那块」。
-     原来只设 display:flex，宽度等于内部文字宽度、高度等于文字高度 —— 于是
-     .titlebar（space-between）中间那一大片空白、以及 52px 高度里上下各十几像素，
-     都不在任何拖拽区里。用户抓住最自然的空白处拖，窗口一动不动，看起来像卡死。
-     D-151 当年补的是「权限」与「deep 语义」，没补覆盖范围，所以那条修完仍然拖不动。 */
+  /* 拖拽区必须铺满标题栏中间那块：原来宽度只等于文字宽、高度只等于行高，
+     用户抓住最自然的空白处拖时窗口一动不动（D-151 当年只补了权限与 deep，
+     没补覆盖范围）。2026-11-25 用户真机确认修复有效，回退材质试点时保留。 */
   flex: 1;
   align-self: stretch;
 }

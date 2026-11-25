@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc --noEmit && vite build && node scripts/verify-window-parity.mjs",
+    "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "tauri": "tauri",
     "tauri:build": "tauri build",
