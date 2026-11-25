@@ -13,7 +13,11 @@ import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
 const here = dirname(fileURLToPath(import.meta.url));
-const SRC = readFileSync(join(here, "..", "src", "app.js"), "utf8");
+/* Windows runner 上 core.autocrlf 会把检出变成 CRLF，而下面的结构断言里有
+   直接写死了 `\n` 的正则 —— 同一条判据在 Linux 绿、在 Windows 红（2026-11-25
+   Store MSIX 腿实测 42/43）。读文件时统一折成 LF，判据不再依赖检出行尾。 */
+const lf = (p) => readFileSync(p, "utf8").replace(/\r\n/g, "\n");
+const SRC = lf(join(here, "..", "src", "app.js"));
 
 /** 粗粒度取一段代码块：从起始标记到下一次 `\n  }` 或 `\n});` 收尾。 */
 function block(startMarker) {
@@ -108,9 +112,10 @@ test("⋯ 菜单必须有 WebP / AVIF 两项，且互斥打勾", () => {
 // 直接被拒，前端只会静默 catch 掉。
 
 import { readFileSync as read2 } from "node:fs";
-const HTML = read2(join(here, "..", "src", "index.html"), "utf8");
-const RUST = read2(join(here, "..", "src-tauri", "src", "lib.rs"), "utf8");
-const CAPS = read2(join(here, "..", "src-tauri", "capabilities", "default.json"), "utf8");
+const lf2 = (p) => read2(p, "utf8").replace(/\r\n/g, "\n");
+const HTML = lf2(join(here, "..", "src", "index.html"));
+const RUST = lf2(join(here, "..", "src-tauri", "src", "lib.rs"));
+const CAPS = lf2(join(here, "..", "src-tauri", "capabilities", "default.json"));
 
 test("失败清单导出：按钮、接线、命令、能力四件齐", () => {
   assert.ok(HTML.includes('id="export-failed-btn"'), "index.html 缺导出按钮");
