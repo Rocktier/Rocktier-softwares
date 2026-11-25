@@ -70,6 +70,17 @@ jobs:
             --bin src-tauri/target/release/pic2webp \
             --out bench/report | tee bench-output.txt
 
+      # 台账「1000 张图集（耗时 / 内存峰值 / 失败清单可导出）」量的是**批量行为**，
+      # 与上面的画质对比是两件事：上面那张图回答「编码器好不好」，这一步回答
+      # 「这个工具能不能扛住一千张」。分母固定 1000，产物数对不上就报红。
+      - name: Batch throughput (1000 images)
+        working-directory: apps/pic2webp
+        run: |
+          set -euo pipefail
+          node bench/batch.mjs \
+            --bin src-tauri/target/release/pic2webp \
+            --count 1000 --out bench/report | tee batch-throughput.txt
+
       - name: Summarize in job page
         if: always()
         run: |
@@ -83,6 +94,14 @@ jobs:
           else
             echo '::warning::benchmark 没有产出 report.md，看上游步骤日志'
           fi
+          if [ -f apps/pic2webp/bench/report/batch.md ]; then
+            {
+              echo
+              cat apps/pic2webp/bench/report/batch.md
+            } >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo '::warning::批量吞吐没产出 batch.md（1000 张那步可能失败了）'
+          fi
 
       - name: Upload report
         if: always()
@@ -92,4 +111,7 @@ jobs:
           path: |
             apps/pic2webp/bench/report/report.md
             apps/pic2webp/bench/report/report.json
+            apps/pic2webp/bench/report/batch.md
+            apps/pic2webp/bench/report/batch.json
+            apps/pic2webp/batch-throughput.txt
           if-no-files-found: warn

@@ -38,6 +38,20 @@ pic2webp --cli <input.png> -q <N> -o <outdir>
 **为什么坚持走 `--cli`**：benchmark 要量的是产品实际使用的那段编码代码。另写一份
 「跟产品差不多的编码函数」去跑分，数字好看也说明不了产品好用。
 
+## 批量吞吐（另一件事）
+
+```bash
+node bench/batch.mjs --bin src-tauri/target/release/pic2webp --count 1000
+```
+
+`run.mjs` 量**画质**（同一张图 vs cwebp），`batch.mjs` 量**批量行为**：1000 张一次跑完的
+总耗时、单张均值、吞吐、内存峰值、失败清单。两者都走被测二进制自己的 `--cli`。
+
+- 语料 = 固定种子图集复制 N 份，分 10 个目录（把 `--recursive` 这条真实路径也走到）
+- 内存峰值：Linux 读内核的 `VmHWM`（真峰值）；macOS 没有 `/proc`，按 100ms 采样
+  `ps -o rss=`。**量不到就写「未量到」**，不写 0 —— 0 会被读成「测出来很省」
+- 产物数 ≠ 请求数直接退出码 1：数字对不上时不给报告
+
 ## 指标
 
 - **SSIM**：BT.601 亮度、11×11 高斯窗（σ=1.5）、可分离卷积。和 `cwebp -print_ssim` 同口径。
