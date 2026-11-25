@@ -1,13 +1,13 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { open, ask } from "@tauri-apps/plugin-dialog";
+import { open, ask, save } from "@tauri-apps/plugin-dialog";
 import { initLang, getLang, toggleLang, t, translateBackendMessage } from "./i18n.js";
 import { runUpdateCheck } from "./updates.js";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import {
   initLicense, openLicenseDialog, isLicenseDialogOpen, isLicenseExpiredError,
 } from "./license.js";
-import { DIALOG_IMAGE_EXTENSIONS } from "./formats.js";
+import { DIALOG_IMAGE_EXTENSIONS, TEXT_EXPORT_FILTERS } from "./formats.js";
 import { hideProgressUi, resetResultUi } from "./result-ui.js";
 import { initQuickLook } from "./quicklook.js";
 
@@ -902,6 +902,8 @@ async function startConvert() {
   stats = null;
   const retryAllBtn = document.getElementById("retry-all-btn");
   if (retryAllBtn) retryAllBtn.hidden = true;
+  const exportFailedBtn = document.getElementById("export-failed-btn");
+  if (exportFailedBtn) exportFailedBtn.hidden = true;
 
   const baseDir = computeBaseDir(files);
   const req = buildRequest(files.map((f) => f.path), { baseDir });
@@ -990,6 +992,51 @@ async function retrySingleFile(path) {
     updateConvertBtn();
     updateStatusbar();
     if (isLicenseExpiredError(e)) { openLicenseDialog(); return; }
+    alert(t("convert-failed") + ": " + translateBackendMessage(String(e)));
+  }
+}
+
+// ─── Export failed list ────────────────────────────────────────────
+/**
+ * 把当前批次的失败项导出成纯文本。
+ *
+ * 为什么需要它：1000 张的批次里，用户在结果出来那一刻看到的是「失败 37」，
+ * 窗口一关就再也拿不到那 37 个路径。重试能救回一部分，救不回的（磁盘满、
+ * 源文件损坏）需要一份能贴给客服或自己回头处理的清单。
+ *
+ * 格式：制表符分隔的三列 —— 路径 / 本地化原因 / 后端原始码。原始码给支持用，
+ * 本地化那列给人看；两者都留着，免得「用户说的」和「日志里的」对不上。
+ */
+async function exportFailedList() {
+  const failed = files.filter((f) => f.status === "failed");
+  if (failed.length === 0) return;
+
+  const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
+  const lines = [
+    `# Rocktier Pic2WebP — ${failed.length} failed item(s)`,
+    `# ${t("export-failed-note")}`,
+    "# path\treason\tcode",
+  ];
+  for (const f of failed) {
+    // 制表符/换行会把三列挤成一列，先把它们压成空格
+    const clean = (v) => String(v ?? "").replace(/[\t\r\n]+/g, " ");
+    lines.push([
+      clean(f.path),
+      clean(translateBackendMessage(f.message)),
+      clean(f.message),
+    ].join("\t"));
+  }
+
+  try {
+    const target = await save({
+      title: t("export-failed"),
+      defaultPath: `pic2webp-failed-${stamp}.txt`,
+      filters: TEXT_EXPORT_FILTERS,
+    });
+    if (!target) return; // 用户取消
+    await invoke("export_failed_list", { path: target, content: lines.join("\n") + "\n" });
+    if (statusText) statusText.textContent = t("export-failed-done", { n: failed.length });
+  } catch (e) {
     alert(t("convert-failed") + ": " + translateBackendMessage(String(e)));
   }
 }
@@ -1181,6 +1228,8 @@ const retryAllBtn = document.getElementById("retry-all-btn");
 if (retryAllBtn) {
   retryAllBtn.addEventListener("click", retryAllFailed);
 }
+document.getElementById("export-failed-btn")
+  ?.addEventListener("click", exportFailedList);
 
 document.addEventListener("keydown", (e) => {
   if (e.key !== "Enter") return;
@@ -1244,6 +1293,10 @@ async function setupListeners() {
     const retryAllBtn = document.getElementById("retry-all-btn");
     if (retryAllBtn) {
       retryAllBtn.hidden = (event.payload.fail_count === 0);
+    }
+    const exportFailedBtn = document.getElementById("export-failed-btn");
+    if (exportFailedBtn) {
+      exportFailedBtn.hidden = (event.payload.fail_count === 0);
     }
     // Pulse the stats panel to draw attention to results
     if (inspector) {

@@ -158,6 +158,9 @@
           <div class="kv"><span class="k" data-i18n="skip">Skip</span><span class="v" id="stat-skip">0</span></div>
           <div class="kv"><span class="k" data-i18n="fail">Failed</span><span class="v" id="stat-fail">0</span></div>
           <button id="retry-all-btn" class="btn-secondary" hidden data-i18n="retry-all">Retry All Failed</button>
+          <!-- 失败清单导出：1000 张的批次里，用户要的不是「重试」而是「哪几个没成」。
+               与重试按钮同显同隐（都只在有失败时出现）。 -->
+          <button id="export-failed-btn" class="btn-secondary" hidden data-i18n="export-failed">Export failed list…</button>
         </div>
       </aside>
     </main>

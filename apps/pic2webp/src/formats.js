@@ -19,3 +19,9 @@ export const FORMAT_ALIASES = {
 
 /** 传给 Tauri dialog `filters.extensions`：小写、无前导点、无重复。 */
 export const DIALOG_IMAGE_EXTENSIONS = Object.values(FORMAT_ALIASES).flat();
+
+/** 失败清单导出的对话框过滤器。
+ *  与图片白名单同一个理由：后缀数组只许出现在本文件里 —— app.js 里一旦出现
+ *  第二份 `extensions: [...]`，就会开始与真值分叉（.tif 那次就是这么漏的，
+ *  见 tests/wiring.test.mjs 的判据）。 */
+export const TEXT_EXPORT_FILTERS = [{ name: "Text", extensions: ["txt"] }];

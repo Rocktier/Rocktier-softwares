@@ -98,3 +98,37 @@ test("⋯ 菜单必须有 WebP / AVIF 两项，且互斥打勾", () => {
   assert.match(b, /checked:\s*outputFormat === "webp"/, "WebP 项没按当前格式打勾");
   assert.match(b, /checked:\s*outputFormat === "avif"/, "AVIF 项没按当前格式打勾");
 });
+
+// ─── 失败清单导出（2026-11-25）──────────────────────────────────────
+//
+// 三处必须同时成立，缺一处就是「按钮点了没反应」：
+// ① index.html 有按钮；② app.js 接了线而且会随失败数显隐；③ 后端命令在
+// invoke_handler 里注册过、能力清单放行了 save 对话框。
+// 第 ③ 条是最容易漏的：Tauri v2 里没写 `dialog:allow-save`，对话框在运行时
+// 直接被拒，前端只会静默 catch 掉。
+
+import { readFileSync as read2 } from "node:fs";
+const HTML = read2(join(here, "..", "src", "index.html"), "utf8");
+const RUST = read2(join(here, "..", "src-tauri", "src", "lib.rs"), "utf8");
+const CAPS = read2(join(here, "..", "src-tauri", "capabilities", "default.json"), "utf8");
+
+test("失败清单导出：按钮、接线、命令、能力四件齐", () => {
+  assert.ok(HTML.includes('id="export-failed-btn"'), "index.html 缺导出按钮");
+  assert.match(SRC, /getElementById\("export-failed-btn"\)\s*\n\s*\?\.addEventListener/, "按钮没有接线");
+  assert.match(RUST, /fn export_failed_list\(/, "Rust 侧没有 export_failed_list");
+  assert.match(RUST, /export_failed_list,\n/, "export_failed_list 没有注册进 invoke_handler");
+  assert.match(CAPS, /"dialog:allow-save"/, "能力清单缺 dialog:allow-save —— 保存对话框会被拒");
+});
+
+test("失败清单必须带后端原始码（用户说的和日志里的要对得上）", () => {
+  assert.match(
+    SRC,
+    /clean\(f\.path\),\s*clean\(translateBackendMessage\(f\.message\)\),\s*clean\(f\.message\),/s,
+    "导出列应该是 路径 / 本地化原因 / 原始码",
+  );
+});
+
+test("导出按钮与重试按钮同显同隐", () => {
+  const hides = [...SRC.matchAll(/exportFailedBtn\.hidden\s*=/g)].length;
+  assert.ok(hides >= 2, `export-failed-btn 只在 ${hides} 处显隐，重置与 convert-done 没都覆盖`);
+});

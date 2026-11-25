@@ -250,6 +250,16 @@ pub struct ConvertRequest {
 
 fn default_output_format() -> String { "webp".into() }
 
+/// 导出失败清单（纯文本）。**故意不过授权闸门**。
+///
+/// 闸门管的是「产出」，这是一份排障数据：把「为什么没转成」扣在付费墙后面，
+/// 等于让试用到期的用户连报告问题的凭据都没有。真正产出（.webp）才归闸门管。
+/// 写盘仍走 write_atomically —— 半截文件与半截清单一样没法用。
+#[tauri::command]
+fn export_failed_list(path: String, content: String) -> Result<(), String> {
+    write_atomically(&path, content.as_bytes()).map_err(|e| format!("write_fail:{}", e))
+}
+
 /// 输出扩展名。**唯一判定点**：`"avif"` 之外的一切（含空串、未知值）都按 webp 处理，
 /// 因为 `ConvertRequest::default()` 的 `output_format` 是空串（derive 的 Default 不认
 /// serde 默认值），单测里 `..Default::default()` 构造的请求必须仍然产出 webp。
@@ -1424,6 +1434,7 @@ pub fn run() {
             initial_file,
             start_convert, cancel_convert, force_close, get_file_size,
             check_disk_space, is_dir, generate_thumbnail, build_menu,
+            export_failed_list,
             open_url,
             report_machine_fingerprint,
             license_status, store_receipt, clear_receipt,
