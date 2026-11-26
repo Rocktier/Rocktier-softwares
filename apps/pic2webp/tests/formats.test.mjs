@@ -66,3 +66,29 @@ test("白名单没有重复项、没有前导点", () => {
   const bad = DIALOG_IMAGE_EXTENSIONS.filter((e) => e.startsWith(".") || e !== e.toLowerCase());
   assert.deepEqual(bad, [], "后缀要小写且不带前导点（Tauri filters 的格式要求）");
 });
+
+/** 后端那张门表：`const SUPPORTED_EXTS: [&str; N] = [...]` 里的后缀。 */
+function backendSupportedExts() {
+  const lib = readFileSync(join(repo, "src-tauri/src/lib.rs"), "utf8");
+  const m = lib.match(/const SUPPORTED_EXTS:\s*\[&str;\s*\d+\]\s*=\s*\[([^\]]*)\]/);
+  assert.ok(m, "src-tauri/src/lib.rs 里找不到 SUPPORTED_EXTS");
+  return m[1]
+    .split(",")
+    .map((s) => s.trim().replace(/^"|"$/g, ""))
+    .filter(Boolean);
+}
+
+// 2026-11-26：`.tif` 曾漏在后端表里（前端白名单有、Cargo features 有、MSIX 与
+// Info.plist 也声明了这个后缀）。后果是静默丢弃 —— 面板里能选、列表里也进得去，
+// 点转换一个产物都不出；双击 .tif 更是只开个空窗口。三处各写一份是根因，所以
+// 这条判据直接跨语言比对：前端别名表的每个后缀，后端门表都得有。
+test("后端门表要覆盖前端别名表的每一个后缀（.tif 曾漏过）", () => {
+  const backend = backendSupportedExts();
+  const missing = DIALOG_IMAGE_EXTENSIONS.filter((ext) => !backend.includes(ext));
+  assert.deepEqual(
+    missing,
+    [],
+    `前端认这些后缀，后端却不认：${missing.join(", ")} —— 会静默丢弃（进得了列表、出不了产物）`,
+  );
+});
+

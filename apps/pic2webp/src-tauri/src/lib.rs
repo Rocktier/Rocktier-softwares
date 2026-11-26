@@ -583,7 +583,8 @@ fn encode_output(img: &image::DynamicImage, quality: i32, lossless: bool, ext: &
 // ─── File collection helper ──────────────────────────────────────────
 
 fn collect_convert_files(request: &ConvertRequest) -> Vec<String> {
-    let supported = ["jpg", "jpeg", "png", "webp", "gif", "bmp", "tiff"];
+    /* 用全家族唯一那张表，别再在这里抄一份 —— 抄漏 .tif 时文件会进列表却不转换。 */
+    let supported = SUPPORTED_EXTS;
     let mut files = Vec::new();
     for file in &request.files {
         let path = Path::new(file);
@@ -1236,7 +1237,8 @@ pub fn run_cli(args: &[String]) {
     }
     
     // Collect all files
-    let supported = ["jpg", "jpeg", "png", "webp", "gif", "bmp", "tiff"];
+    /* --recursive 扫目录时同样只认那张表：`--recursive` 少一个后缀就是整批漏掉。 */
+    let supported = SUPPORTED_EXTS;
     let mut all_files: Vec<String> = Vec::new();
     for f in &files {
         let path = Path::new(f);
@@ -1334,8 +1336,15 @@ pub struct InitialFile(Mutex<Option<String>>);
 /// setup 完成后再搬进 `InitialFile`。Chromium 的 `_startupComplete` 同款）。
 static PENDING_DOCS: Mutex<Vec<String>> = Mutex::new(Vec::new());
 
-/// 与前端 SUPPORTED_EXTS 及文件选择器一致。
-const SUPPORTED_EXTS: [&str; 7] = ["jpg", "jpeg", "png", "webp", "gif", "bmp", "tiff"];
+/// 与前端 `src/formats.js` 的 FORMAT_ALIASES 一致 —— **一个后缀都不许少**。
+///
+/// 这张表是后端唯一的格式门：`is_supported_path` 管双击/「打开方式」进来的文件，
+/// `collect_convert_files` 管界面上点转换的那一批，`run_cli` 的目录扫描也用它。
+/// 少一个后缀的后果不是报错，是**静默丢弃**：`.tif` 曾漏在这里，于是
+/// ① 文件面板里能选、列表里也有，点转换却一个产物都不出；
+/// ② 双击 `.tif`（MSIX 与 Info.plist 都声明了这个后缀）只开出一个空窗口。
+/// 判据见 `tests/formats.test.mjs` 的「后端白名单要覆盖前端别名表」。
+const SUPPORTED_EXTS: [&str; 8] = ["jpg", "jpeg", "png", "webp", "gif", "bmp", "tif", "tiff"];
 
 fn is_supported_path(path: &Path) -> bool {
     if !path.is_file() {
