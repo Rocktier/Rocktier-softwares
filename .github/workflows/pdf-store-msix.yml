@@ -129,6 +129,9 @@ jobs:
           VERSION=$(node -p "require('./apps/pdf/src-tauri/tauri.conf.json').version")
           grep -Fq "Version=\"${VERSION}.0\"" artifacts/AppxManifest.xml || {
             echo "::error::Version mismatch (expected ${VERSION}.0)"; exit 1; }
+          # 文件关联断言（D-188 同型，2026-11-26 补）：配置里声明的每个扩展名，
+          # 包里都必须真的出现。ProgID 撞车会让后写的覆盖先写的，而打包全程不报错。
+          node scripts/assert-msix-associations.mjs --product pdf --manifest artifacts/AppxManifest.xml
 
           printf 'ROCKTIER_CHANNEL=store\nIdentity Name=Rocktier.RocktierPDF\n' \
             > artifacts/STORE-CHANNEL.txt
