@@ -53,7 +53,16 @@ jobs:
       # 显式 toolchain（会覆盖 rust-toolchain.toml），构建时 stable 仍缺 aarch64 →
       # tauri 报 "Target aarch64-apple-darwin is not installed"（2026-11-26 实测）。
       - name: Ensure Rust targets
-        run: rustup target add --toolchain stable aarch64-apple-darwin x86_64-apple-darwin
+        # 构建在 apps/<app>/ 目录执行：PDF 仓的 rust-toolchain.toml 钉 1.98.0，
+        # tauri 检测的是该 toolchain 的 targets；而 workflow 的 @stable 是另一套。
+        # 两套都装，并把实际安装结果打进日志，别再靠 "up to date" 猜。
+        run: |
+          rustup toolchain install 1.98.0 --profile minimal
+          for tc in 1.98.0 stable; do
+            rustup target add --toolchain "$tc" aarch64-apple-darwin x86_64-apple-darwin
+            echo "── $tc targets ──"
+            rustup target list --installed --toolchain "$tc"
+          done
 
       # PDF 的 build.rs 硬性要求 bundle.resources 里的三个 sidecar 都在
       # （qpdf / sign-engine / pdfium），缺任何一个 cargo 都会死在 build script。
