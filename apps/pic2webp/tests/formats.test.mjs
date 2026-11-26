@@ -92,3 +92,38 @@ test("后端门表要覆盖前端别名表的每一个后缀（.tif 曾漏过）
   );
 });
 
+/**
+ * `tauri.conf.json` 的 `bundle.fileAssociations` —— **系统会双击送进来的那一批**。
+ *
+ * 这一组与前两条不同源：前面比的是「用户在面板里能选什么」，这里比的是
+ * 「操作系统会把什么丢给应用」。MSIX 清单与 macOS 的 Info.plist 都从这张表
+ * 生成，所以只要这张表多出一个后缀，系统就会把它送进来；后端不认 ⇒
+ * Windows 上双击 .tif 开出一个空窗口（macOS 上双击走 NSOpenPanel，被前端
+ * 的扩展名过滤挡在门外，反而看不见）。
+ */
+function declaredAssociationExts() {
+  const conf = JSON.parse(readFileSync(join(repo, "src-tauri/tauri.conf.json"), "utf8"));
+  const list = conf.bundle?.fileAssociations ?? [];
+  return [...new Set(list.flatMap((a) => a.ext ?? []))].sort();
+}
+
+test("系统会双击送进来的后缀，后端门表都得认（Windows 上否则是空窗口）", () => {
+  const backend = backendSupportedExts();
+  const missing = declaredAssociationExts().filter((ext) => !backend.includes(ext));
+  assert.deepEqual(
+    missing,
+    [],
+    `tauri.conf.json 声明了文件关联 ${missing.join(", ")}，后端却不认 —— ` +
+      `双击这类文件会打开一个空窗口（Windows 无文件面板兜底，最先暴露）`,
+  );
+});
+
+test("系统会双击送进来的后缀，前端面板也得认（否则选了也认不出）", () => {
+  const missing = declaredAssociationExts().filter((ext) => !DIALOG_IMAGE_EXTENSIONS.includes(ext));
+  assert.deepEqual(
+    missing,
+    [],
+    `tauri.conf.json 声明了文件关联 ${missing.join(", ")}，文件面板却不认这些后缀`,
+  );
+});
+
