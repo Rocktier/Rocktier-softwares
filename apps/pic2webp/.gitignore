@@ -67,3 +67,8 @@ docs/rocktier
 # benchmark 产物（图集与报告都是算出来的，不进版本库）
 bench/corpus/
 bench/report/
+
+# Windows 端验收脚本生成的样张与产物（tests/windows/）
+# 脚本本身入库，样张每次现生成 —— 样张是二进制，进版本库只会变成漂移源。
+tests/windows/in/
+tests/windows/out/
