@@ -580,6 +580,32 @@ fn encode_output(img: &image::DynamicImage, quality: i32, lossless: bool, ext: &
     if ext == "avif" { encode_avif(img, quality) } else { encode_webp(img, quality, lossless) }
 }
 
+/// 解码并按 EXIF 方向转正。**图形界面与命令行必须走这一个入口。**
+///
+/// image crate 不会自动应用 EXIF Orientation：iPhone 竖拍导出的 JPEG，像素本身
+/// 是横的，方向只写在 EXIF 里（tag 274）。不转的话出来的图全是躺的。
+///
+/// P0-21 修过一次，但**只修了图形界面那条路** —— 命令行走自己的 `decode()`，
+/// 照样躺。后果是同一张图，界面里是正的、脚本跑出来是躺的，而两边都"成功"。
+/// 2026-11-26 在 Windows 上用 ori5/6/7/8 四张样张实测：命令行 4/4 全躺。
+///
+/// 判据见 `tests/formats.test.mjs` 的「命令行与图形界面必须走同一个解码入口」。
+///
+/// 注意：image 0.25.5 的 ImageReader 没有 orientation() 方法（该方法 0.25.6+ 才有），
+/// 所以经由 into_decoder() 的 ImageDecoder trait 方法读取
+/// （无 EXIF 的格式返回默认 NoTransforms），再用 apply_orientation 校正。
+fn decode_oriented<R>(reader: ImageReader<R>) -> Result<image::DynamicImage, image::ImageError>
+where
+    R: std::io::BufRead + std::io::Seek,
+{
+    let mut decoder = reader.into_decoder()?;
+    let orientation = image::ImageDecoder::orientation(&mut decoder)
+        .unwrap_or(image::metadata::Orientation::NoTransforms);
+    let mut img = image::DynamicImage::from_decoder(decoder)?;
+    img.apply_orientation(orientation);
+    Ok(img)
+}
+
 // ─── File collection helper ──────────────────────────────────────────
 
 fn collect_convert_files(request: &ConvertRequest) -> Vec<String> {
@@ -791,30 +817,17 @@ fn convert_single_file(
         }
     };
     // EXIF 方向：image 不会自动应用，必须手动，否则 iPhone 竖拍导出后全部横躺（P0-21）。
-    // 注意：image 0.25.5 的 ImageReader 没有 orientation() 方法（该方法 0.25.6+ 才有，
-    // 53a0086 引入的写法从未编译通过）。此处经由 into_decoder() 的 ImageDecoder trait
-    // 方法读取（无 EXIF 的格式返回默认 NoTransforms），再用 apply_orientation 校正。
-    let mut decoder = match reader.into_decoder().map_err(|e| decode_error(e.to_string())) {
-        Ok(d) => d,
-        Err(e) => {
-            stats.fail_count += 1;
-            emit_progress(app_handle, src_path, "failed", &e, 0, 0);
-            let _ = app_handle.emit("convert-stats", stats.clone());
-            return;
-        }
-    };
-    let orientation = image::ImageDecoder::orientation(&mut decoder)
-        .unwrap_or(image::metadata::Orientation::NoTransforms);
-    let mut img = match image::DynamicImage::from_decoder(decoder).map_err(|e| decode_error(e.to_string())) {
+    // 图形界面与命令行共用 decode_oriented —— P0-21 当年只修了界面那条路，
+    // 命令行自己 decode()，同一张图界面是正的、脚本是躺的（2026-11-26 实测 4/4 全躺）。
+    let mut img = match decode_oriented(reader) {
         Ok(img) => img,
         Err(e) => {
             stats.fail_count += 1;
-            emit_progress(app_handle, src_path, "failed", &e, 0, 0);
+            emit_progress(app_handle, src_path, "failed", &decode_error(e.to_string()), 0, 0);
             let _ = app_handle.emit("convert-stats", stats.clone());
             return;
         }
     };
-    img.apply_orientation(orientation);
 
     // 解码是最大的单文件耗时点；取消赶在这里就不要再编码、更不要写盘。
     if cancel_flag.load(Ordering::Relaxed) { return; }
@@ -1277,11 +1290,11 @@ pub fn run_cli(args: &[String]) {
         
         let original_size = std::fs::metadata(src).map(|m| m.len() as i64).unwrap_or(0);
         
-        // Decode
+        // Decode —— 走 decode_oriented，与图形界面同一条路（EXIF 方向要转正）。
         let img = match ImageReader::open(src)
             .map_err(|e| format!("open_fail:{}", e))
             .and_then(|r| r.with_guessed_format().map_err(|e| format!("format_fail:{}", e)))
-            .and_then(|r| r.decode().map_err(|e| format!("decode_fail:{}", e)))
+            .and_then(|r| decode_oriented(r).map_err(|e| format!("decode_fail:{}", e)))
         {
             Ok(img) => img,
             Err(e) => { eprintln!("  FAIL: {} — {}", src, e); fail += 1; continue; }

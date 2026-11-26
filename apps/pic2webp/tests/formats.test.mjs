@@ -127,3 +127,31 @@ test("系统会双击送进来的后缀，前端面板也得认（否则选了�
   );
 });
 
+/**
+ * 2026-11-26：P0-21 给图形界面补过 EXIF 方向转正，**命令行那条路没补** ——
+ * 它自己 `decode()`。后果是同一张图，界面里是正的、脚本跑出来是躺的，
+ * 而且两边都"成功"，没有任何报错。
+ * Windows 上用 ori5/6/7/8 四张样张实测：命令行 4/4 全躺（期望 300x400，实得 400x300）。
+ *
+ * 根因是两条路各写各的解码。所以判据不是「转没转」，而是「**是不是同一个入口**」：
+ * 命令行里不许再出现裸 `.decode()`。
+ *
+ * 例外说明：`generate_thumbnail` 仍用裸 decode()，它在 run_cli 之前，
+ * 产出的是 48×48 正方形缩略图，EXIF 方向对正方形缩略图没有视觉意义，
+ * 且转正会额外改变缩略图的宽高比 —— 有意保持原样。
+ */
+test("命令行与图形界面必须走同一个解码入口（EXIF 方向只修过一条路的年代）", () => {
+  const lib = readFileSync(join(repo, "src-tauri/src/lib.rs"), "utf8");
+  const start = lib.indexOf("pub fn run_cli");
+  assert.ok(start > 0, "src-tauri/src/lib.rs 里找不到 run_cli");
+  const cli = lib.slice(start);
+  assert.ok(
+    !/\.decode\(\)/.test(cli),
+    "run_cli 里出现了裸 .decode() —— EXIF 方向不会被应用，命令行转出来的图是躺的",
+  );
+  assert.ok(
+    /decode_oriented\s*\(/.test(cli),
+    "run_cli 没有走 decode_oriented —— 与图形界面不是同一条解码路径",
+  );
+});
+
