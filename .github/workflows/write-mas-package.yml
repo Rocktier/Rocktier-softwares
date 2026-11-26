@@ -47,9 +47,13 @@ jobs:
           workspaces: apps/write/src-tauri
           key: mas-universal
 
-      # Intel 池上 dtolnay action 的 targets 偶尔不生效（实测只装了 x86_64），显式补装
+      # Intel 池上 dtolnay action 的 targets 偶尔不生效（实测只装了 x86_64），显式补装。
+      # 必须带 --toolchain stable：PDF 仓的 rust-toolchain.toml 钉 1.98.0，不带参数时
+      # rustup 会把 target 装到 1.98.0 上而打印 "up to date"，但 workflow 用的是 @stable
+      # 显式 toolchain（会覆盖 rust-toolchain.toml），构建时 stable 仍缺 aarch64 →
+      # tauri 报 "Target aarch64-apple-darwin is not installed"（2026-11-26 实测）。
       - name: Ensure Rust targets
-        run: rustup target add aarch64-apple-darwin x86_64-apple-darwin
+        run: rustup target add --toolchain stable aarch64-apple-darwin x86_64-apple-darwin
 
       - name: Install npm dependencies
         working-directory: apps/write
