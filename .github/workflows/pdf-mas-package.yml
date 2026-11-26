@@ -89,11 +89,12 @@ jobs:
 
       - name: Build store-channel .app
         env:
-          # 用 run_number + 100 作 build 号：本工作流首次跑时 run_number=1，
-          # 而历史被拒 build 是 1.2.2(6)/1.4.19(1)，撞号会被 ASC 拒收。
-          # 加 100 保证首包就压过所有历史 build，重跑也严格递增。
-          BUILD_NUM: ${{ github.run_number + 100 }}
-        run: bash apps/pdf/scripts/build-appstore.sh pack
+          BUILD_NUM: ${{ github.run_number }}
+        # run_number 首次为 1，会撞历史被拒 build（PDF 1.2.2(6)、Write 1.4.19(1)）；
+        # Actions 表达式不支持 + 运算，只能在 shell 里算：+100 保证首包就压过历史。
+        run: |
+          echo "BUILD_NUM=$((BUILD_NUM + 100))" >> "$GITHUB_ENV"
+          bash apps/pdf/scripts/build-appstore.sh pack
 
       - name: Upload .app artifact
         uses: actions/upload-artifact@v4
