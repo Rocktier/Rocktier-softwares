@@ -67,13 +67,27 @@ const LEGACY_DIRS = {
 };
 
 /* ---------- 建农场 ---------- */
+
+/* 建「目录链接」的跨平台封装。
+ *
+ * 2026-11-26（Windows 本机）：Node 的 `symlinkSync(target, path, "dir")` 在
+ * Windows 上走的是**真符号链接**，需要 SeCreateSymbolicLinkPrivilege
+ * （开发者模式或管理员）。本机没开 ⇒ EPERM ⇒ 家族闸门在 Windows 上
+ * **一条都跑不起来**（不是判据红，是农场建不出来）。
+ * `"junction"`（目录联接）走 NTFS reparse point，**不需要任何特权**，
+ * 路径对判据完全透明，且 `rmSync(link, {recursive:true})` 只删链接不动目标
+ * （已实测：目标里的文件还在）。POSIX 上 `"junction"` 不认，仍用 `"dir"`。 */
+function linkDir(target, path) {
+  symlinkSync(target, path, process.platform === "win32" ? "junction" : "dir");
+}
+
 function buildFarm() {
   if (existsSync(FARM)) rmSync(FARM, { recursive: true, force: true });
   mkdirSync(FARM, { recursive: true });
 
   // 闸门都以 <root>/docs/rocktier/tokens.css 为母版。农场里放软链，
   // 保持「母版只有一份」——复制过来就又生出一份会漂移的副本。
-  symlinkSync(resolve(ROOT, "docs"), join(FARM, "docs"), "dir");
+  linkDir(resolve(ROOT, "docs"), join(FARM, "docs"));
 
   const missing = [];
   for (const [id, dir] of Object.entries(LEGACY_DIRS)) {
@@ -82,7 +96,7 @@ function buildFarm() {
       missing.push(`${id} (apps/${id})`);
       continue;
     }
-    symlinkSync(src, join(FARM, dir), "dir");
+    linkDir(src, join(FARM, dir));
   }
   if (missing.length) {
     console.error(`✗ 缺产品目录：${missing.join(", ")}`);
