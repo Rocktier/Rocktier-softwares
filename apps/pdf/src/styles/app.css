@@ -46,7 +46,7 @@
 /* Letter mark — the app-icon tile: dark in both themes so it matches the Dock
    icon; the hairline border keeps it from vanishing on the near-black toolbar. */
 .brand-mark .brand-tile {
-  fill: #0a0a0a;
+  fill: #0A0B0D;
   stroke: var(--border-hover);
   stroke-width: 1;
 }
@@ -120,16 +120,15 @@
 }
 
 .btn-primary {
-  background: var(--accent);
-  border-color: var(--accent);
+  background: var(--accent-fill);
+  border-color: var(--accent-fill);
   color: var(--on-accent);
   font-weight: 600;
 }
 
 .btn-primary:hover:not(:disabled) {
-  background: var(--accent);
-  opacity: 0.88;
-  border-color: var(--accent);
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
 }
 
 .btn-icon {
@@ -279,7 +278,7 @@
   width: 16px;
   height: 16px;
   border-radius: 50%;
-  background: var(--accent);
+  background: var(--accent-fill);
   color: var(--on-accent);
   font-size: 9px;
   font-weight: 700;

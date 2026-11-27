@@ -136,6 +136,10 @@
             <li data-i18n="pr.familyF2">Windows and macOS</li>
             <li data-i18n="pr.familyF3">Apps added later are included too</li>
           </ul>
+          <!-- 对账行：Best value 的算术证据。合计 $84.91 = 价目表八款之和
+               （4.99+6.99+9.99×3+12.99+14.99×2），改价时两处必须同步。
+               价格由 i18n 的 {pN} 回填（见 extract-site-i18n.mjs 的 prices 机制）。 -->
+          <p class="plan-save" data-i18n="pr.familySave">Eight apps bought separately: $84.91. The family saves you $54.92 (65%).</p>
           <!-- FL 现在有真实支付入口。原先是 /#products -- 按钮写 "Get the whole family"，
                点了却滚回产品网格，等于给了一个空承诺。 -->
           <div class="cta-row">
@@ -191,6 +195,36 @@
             Every download includes a 7-day full-feature trial, so you can check it fits your work first.
           </p>
         </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="wrap">
+      <div class="sec-head">
+        <h2 class="sec-title" data-i18n="pr.faqTitle">Before you buy</h2>
+      </div>
+      <!-- 四问是外部评审点名的转化阻力位（试用到期 / 设备数 / 退款 / 全家桶范围）。
+           全部事实来自既有政策原文：3 台 = license.html 设备区；
+           7 天窗口 = refund-policy §2；后续应用 = 上方 familyF3；
+           试用到期弹购买框 = 家族准则 §12.3。不复述数字以外的新承诺。 -->
+      <div class="faq">
+        <details>
+          <summary data-i18n="pr.faqT1">How many computers can I use?</summary>
+          <p data-i18n="pr.faqA1">One code works on up to 3 computers, Windows, macOS or both. If you replace a machine, you release the old one yourself on the licence page.</p>
+        </details>
+        <details>
+          <summary data-i18n="pr.faqT2">What happens when the 7-day trial ends?</summary>
+          <p data-i18n="pr.faqA2">The app asks for a one-time purchase to keep going, and your activation code unlocks it on the spot. Anything you made during the trial stays on your machine.</p>
+        </details>
+        <details>
+          <summary data-i18n="pr.faqT3">Can I get a refund?</summary>
+          <p><span data-i18n="pr.faqA3a">Every purchase includes a 7-day money-back window: email us with your order reference and we refund in full, no forms and no questions. For EU and UK statutory rights, the</span> <a href="/refund-policy" data-i18n="pr.refLink">refund policy</a><span data-i18n="pr.refP2">explains the window and how to request one.</span></p>
+        </details>
+        <details>
+          <summary data-i18n="pr.faqT4">Are future apps included in the family?</summary>
+          <p data-i18n="pr.faqA4">Yes. One payment covers every app that exists today and the ones added later.</p>
+        </details>
       </div>
     </div>
   </section>

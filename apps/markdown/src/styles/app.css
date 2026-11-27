@@ -359,8 +359,8 @@ html.is-mac .toolbar {
 }
 
 /* ── 主操作按钮：导出 PDF（设计稿 .primary-btn）──────────────────────
-   实底反白用家族单色 accent（深色白底黑字 / 浅色黑底白字），
-   不占用品牌红 —— 红只作状态点（家族常量 1）。胶囊形状 + 顶部高光，
+   实底走 --accent-fill（深蓝 + 白字 5.42:1），不占用品牌红 ——
+   红只作状态点（家族常量 1）。胶囊形状 + 顶部高光，
    是 lenso 里「唯一一枚实心控件」的处理。 */
 .export-btn {
   height: 29px;
@@ -368,7 +368,7 @@ html.is-mac .toolbar {
   margin-left: 4px;
   border: none;
   border-radius: var(--radius-pill);
-  background: var(--accent);
+  background: var(--accent-fill);
   color: var(--on-accent);
   font-size: 12px;
   font-weight: 500;
@@ -1224,10 +1224,10 @@ html.is-mac .toolbar {
 
 .fr-btn--active,
 .fr-btn--active:hover:not(:disabled) {
-  background: var(--accent, rgba(255, 255, 255, 0.15));
-  /* --accent-foreground 全库未定义（浅色主题回落 #0a0a0a = 黑字黑底 1.06:1）；
-     家族单色 accent 的反色就是 --bg-primary，两主题各 21:1 */
-  color: var(--bg-primary, #0a0a0a);
+  background: var(--accent-fill);
+  /* 实底走 --accent-fill + --on-accent（白字 5.42:1）；
+     --bg-primary 只在强调色是黑白单色时才是它的反色，换蓝后不再成立。 */
+  color: var(--on-accent);
 }
 
 .fr-btn:disabled {
@@ -1474,7 +1474,7 @@ html.is-mac .toolbar {
 
 /* 「获取 v…」主按钮：有新版时唯一需要用户点的动作，用 accent 让它显眼。 */
 .update-footer button.update-get-btn {
-  background: var(--accent);
+  background: var(--accent-fill);
   border-color: transparent;
   color: var(--on-accent, #fff);
   font-weight: 600;

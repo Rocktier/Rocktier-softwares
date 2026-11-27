@@ -42,7 +42,8 @@
   --text-muted: #6e6e73;
   --accent: #007aff;
   --on-accent: #ffffff;
-  --accent-hover: #0066d6;
+  --accent-fill: #0066d6;
+  --accent-hover: #0050ac;
   --accent-muted: rgba(0, 0, 0, 0.05);
   --accent-brand: #ff3b30;
   --brand: #ff3b30;
@@ -84,7 +85,8 @@
   --text-muted: #a1a1a6;
   --accent: #0a84ff;
   --on-accent: #ffffff;
-  --accent-hover: #3d9bff;
+  --accent-fill: #0066d6;
+  --accent-hover: #0a70e8;
   --accent-muted: rgba(255, 255, 255, 0.07);
   --accent-brand: #ff453a;
   --brand: #ff453a;
@@ -725,7 +727,7 @@ button:focus-visible, select:focus-visible, input:focus-visible,
   padding: 0 14px;
   border: none;
   border-radius: var(--radius-sm);
-  background: var(--accent);
+  background: var(--accent-fill);
   color: var(--on-accent);
   font-size: 13px;
   font-weight: 500;
@@ -833,7 +835,7 @@ button:focus-visible, select:focus-visible, input:focus-visible,
   text-align: left;
   white-space: nowrap;
 }
-.popup-item:hover { background: var(--accent); color: var(--on-accent); }
+.popup-item:hover { background: var(--accent-fill); color: var(--on-accent); }
 .popup-item.danger { color: var(--danger); }
 .popup-item.danger:hover { background: var(--danger); color: #fff; }
 .popup-item .tick { width: 12px; font-size: 11px; flex: none; }

@@ -1,13 +1,22 @@
 /* Rocktier 家族设计令牌（L0 母版）——构建期拷贝，各产品不得手改。
    铁律：[data-theme="light"] 必须定义与 :root 完全相同的令牌集。
    2026-10-16：--fs-* 字号阶梯与 --sp-* 间距栅格降级为「参考实现」——密度属产品层
-   （UI 规范 §1.2/§2.2），产品可裸写 px；引用令牌时其值仍以本文件为唯一真源。 */
+   （UI 规范 §1.2/§2.2），产品可裸写 px；引用令牌时其值仍以本文件为唯一真源。
+   2026-11-27：调色板 v2（designs/system.jsx 的 RT Core 落地）——
+   近黑画布 #0A0B0D / 侧栏 #121317 / 面板 #17181C / 抬升面 #22242A；
+   强调色由黑白改为系统蓝，并拆成两枚（见 --accent 旁注释）；
+   12px 字号下限写进 --fs-2xs / --fs-xs；动效曲线换为设计稿的四档 + out 曲线。
+   浅色档未采用设计稿的 #E9E9EE 侧栏：它会让锁定的 --success 跌到 4.16:1，
+   与 contrast-gate ④ 冲突；要用设计值必须先改 DECISIONS 里的绿裁定。
+   次级/弱化文字保留 alpha 写法（不做成实色灰）：玻璃见透率有下限（drawer ≥20%），
+   实色灰压在半透玻璃上的白底扫描件时掉到 2.7~4.4:1，verify-glass 31 项报红；
+   alpha 白/黑会随玻璃背后的内容自适应，是这套材质下唯一能同时满足两端的写法。 */
 
 :root,
 [data-theme="dark"] {
-  --bg-primary: #000000;
-  --bg-secondary: #0a0a0a;
-  --bg-elevated: #121212;
+  --bg-primary: #0A0B0D;
+  --bg-secondary: #121317;
+  --bg-elevated: #17181C;
   --bg-card: rgba(255, 255, 255, 0.03);
   --bg-card-hover: rgba(255, 255, 255, 0.06);
   --bg-inset: rgba(255, 255, 255, 0.02);
@@ -15,18 +24,20 @@
   --border: rgba(255, 255, 255, 0.08);
   --border-hover: rgba(255, 255, 255, 0.16);
   --border-strong: rgba(255, 255, 255, 0.38);
-  --text-primary: rgba(255, 255, 255, 0.95);
+  --text-primary: #F5F5F7;
   --text-secondary: rgba(255, 255, 255, 0.72);
   --text-tertiary: rgba(255, 255, 255, 0.58);
-  --accent: #ffffff;
-  --on-accent: #000000;
-  /* 悬停/按下语义（2026-11-03 定稿）：
-     --accent-hover 只用于「本身就是 --accent 实底的控件」（如 .primary / .export-btn），
-     且必须同时把文字设为 --on-accent。它叠在深底上接近白、叠在浅底上接近黑，
-     当「中性悬停底」用会让未翻色的文字消失（实测合成对比 1.1~1.3:1）。
-     中性 hover / active 一律用 --accent-muted + --text-primary。 */
-  --accent-hover: rgba(255, 255, 255, 0.88);
-  --accent-glow: rgba(255, 255, 255, 0.15);
+  --accent: #0A84FF;
+  --on-accent: #FFFFFF;
+  /* 强调色两枚（2026-11-27）：--accent 只做文字/描边/选中底，--accent-fill 只做
+     实底控件的底色（.primary / .export-btn 等），实底必须同时把文字设为 --on-accent。
+     拆开的原因是对比度：白字压 #0A84FF 只有 3.65:1，压 --accent-fill #0066D6 是
+     5.42:1；反过来 #0A84FF 当文字压 #17181C 是 4.86:1，而 #0066D6 只有 3.58:1。
+     --accent-hover 是实底的悬停档（白字 4.67:1），不得当「中性悬停底」用 ——
+     中性 hover / active 一律 --accent-muted + --text-primary。 */
+  --accent-fill: #0066D6;
+  --accent-hover: #0A70E8;
+  --accent-glow: rgba(10, 132, 255, 0.22);
   --red: #ff4a3d;
   --red-strong: #cc3a30;
   --red-soft: #ff6b5e;
@@ -38,9 +49,9 @@
   --on-brand: #ffffff;
   --accent-brand: var(--red);
   --danger: #ff4a3d;
-  --warning: #e8912a;
+  --warning: #FF9F0A;
   /* 成功 = 绿，保留（2026-10-05 最终裁定，此前在「去绿 / 保留绿」之间反复过三次，
-     至此定案：不再改）。对纯黑 8.42:1，深色档无需调整，沿用原值。
+     至此定案：不再改）。对 #0A0B0D 约 8.0:1，深色档无需调整，沿用原值。
      若将来有人再提「去绿」，请先看浅色档那段注释里的往复记录。 */
   --success: rgba(48, 209, 88, 0.9);
   --dot: rgba(255, 255, 255, 0.55);
@@ -65,13 +76,13 @@
   --press-scale: 0.98;
   --scrollbar: rgba(255, 255, 255, 0.10);
   --scrollbar-hover: rgba(255, 255, 255, 0.20);
-  --selection: rgba(255, 255, 255, 0.15);
+  --selection: rgba(10, 132, 255, 0.30);
   --radius-sm: 12px;
   --radius-md: 20px;
   --radius-lg: 28px;
   --radius-pill: 999px;
-  --fs-2xs: 10px;
-  --fs-xs: 11px;
+  --fs-2xs: 12px;
+  --fs-xs: 12px;
   --fs-sm: 12px;
   --fs-md: 13px;
   --fs-lg: 14px;
@@ -88,16 +99,17 @@
     sans-serif;
   --font-mono: "Geist Mono", "SF Mono", "JetBrains Mono", "Fira Code", ui-monospace,
     monospace;
-  --ease: cubic-bezier(0.25, 0.1, 0.25, 1);
+  --ease: cubic-bezier(0.32, 0.72, 0, 1);
   /* 时长四档，单位一律 ms（2026-11-24 收敛）。
      原先是两套并存：本组 hover/state/enter 用 ms，另一组 fast/normal/slow 用 s。
      其中 --dur-fast 0.15s 与 --dur-hover 150ms **完全等值**，--dur-slow 零引用，
      已分别合并与删除。单位混用是真风险：`calc()` 里 ms 与 s 相加会悄悄算错，
      读代码也得先换算才敢判断快慢。 */
-  --dur-hover: 150ms;
-  --dur-state: 200ms;
-  --dur-normal: 250ms;
+  --dur-hover: 120ms;
+  --dur-state: 220ms;
+  --dur-normal: 220ms;
   --dur-enter: 300ms;
+  --dur-exit: 200ms;
   --titlebar-h: 44px;
   --toolbar-h: 44px;
   --statusbar-h: 28px;
@@ -109,35 +121,35 @@
   --font-sans: "Geist", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
     "Helvetica Neue", Arial, "PingFang SC", "Hiragino Sans GB",
     "Microsoft YaHei", sans-serif;
-  --text3: rgba(255, 255, 255, 0.5);
+  --text3: rgba(255, 255, 255, 0.58);
   --mono: "Geist Mono", "SF Mono", "JetBrains Mono", "Fira Code", ui-monospace, Menlo, monospace;
-  --text: rgba(255, 255, 255, 0.95);
+  --text: #F5F5F7;
   /* --text-muted 深色档原为 rgba(255,255,255,.30) = **2.46:1**，远低于 AA 正文 4.5:1。
      而它被**全部 9 个产品**引用（30 处 var()），只有 Compressor 覆盖了它 ——
      也就是说另外 8 个产品一直在渲染 2.46:1 的「次要文字」。
-     改为 0.58，与同档 --text-tertiary 一致（6.91:1），沿用家族既有阶梯而非另立一套。 */
+     改为与同档 --text-tertiary 同值（0.58，对 #0A0B0D 6.8:1），沿用家族既有阶梯而非另立一套。 */
   --text-muted: rgba(255, 255, 255, 0.58);
   --brand: #ff4a3d;
   --text2: rgba(255, 255, 255, 0.72);
   --border-mid: rgba(255, 255, 255, 0.10);
   --radius-xs: 3px;
   --card: rgba(255, 255, 255, 0.03);
-  --bg-floating: #141414;
-  --bg-surface: #0a0a0a;
-  --bg: #000000;
+  --bg-floating: #1E2026;
+  --bg-surface: #0E0F12;
+  --bg: #0A0B0D;
   /* --bg2 深色档原为 #f5f5f5 —— 把**浅色档的值**放进了深色块（复制粘贴遗留）。
      浅色档 --bg2 = #f5f5f5 是对的；深色档应是暗色次级背景，
-     改用与 --bg-secondary 同值 #0a0a0a。 */
-  --bg2: #0a0a0a;
+     改用与 --bg-secondary 同值（现 #121317）。 */
+  --bg2: #121317;
   --code-comment: #7d8590;
   --code-keyword: #ff7b72;
   --code-function: #d2a8ff;
   --code-type: #ffa657;
   --card-hover: rgba(255, 255, 255, 0.06);
-  --surface: #141414;
+  --surface: #17181C;
   --glow-md: 0 0 20px rgba(255, 255, 255, 0.08);
   --fs-base: 13px;
-  --head-bg: rgba(0, 0, 0, 0.8);
+  --head-bg: rgba(10, 11, 13, 0.8);
   --font-serif: "New York", "New York Small", Georgia, "Times New Roman",
     "Songti SC", "Source Han Serif SC", "Noto Serif CJK SC",
     "Microsoft YaHei UI", "Microsoft YaHei", "PingFang SC", serif;
@@ -145,9 +157,9 @@
   --code-number: #79c0ff;
   --code-variable: #79c0ff;
   --code-tag: #7ee787;
-  --focus-ring: rgba(255, 255, 255, 0.65);
+  --focus-ring: rgba(10, 132, 255, 0.80);
   --radius: 12px;
-  --surface-2: #1c1c1c;
+  --surface-2: #22242A;
   --warn: rgba(255, 176, 46, 0.9);
   --sidebar-w: 260px;
   --accent-warn: #d98a00;
@@ -158,7 +170,7 @@
    正确方向：深色底上该用**浅色**前景。浅色档那两处同样贴反了，一并对调。 */
   --scrollbar-thumb: rgba(255, 255, 255, 0.38);
   --brand-dot: #e8e8e8;
-  --focus-glow: rgba(255, 255, 255, 0.14);
+  --focus-glow: rgba(10, 132, 255, 0.28);
   --brand-hover: #cc3a30;
 }
 
@@ -170,9 +182,9 @@
      表面类改为「白或浅灰」而不是反转明度。--code-* 走 GitHub Light 色系
      （.hljs 背景是 transparent，代码文字直接落在页面底色上）。
      深色档一个值都没动 —— 铁律是只补浅色档，不许借机改深色。 */
-  --bg-primary: #ffffff;
-  --bg-secondary: #f5f5f5;
-  --bg-elevated: #ffffff;
+  --bg-primary: #FAFAFC;
+  --bg-secondary: #F5F5F5;
+  --bg-elevated: #FFFFFF;
   --bg-card: rgba(0, 0, 0, 0.03);
   --bg-card-hover: rgba(0, 0, 0, 0.06);
   --bg-inset: rgba(0, 0, 0, 0.02);
@@ -180,15 +192,16 @@
   --border: rgba(0, 0, 0, 0.08);
   --border-hover: rgba(0, 0, 0, 0.16);
   --border-strong: rgba(0, 0, 0, 0.45);
-  --text-primary: rgba(0, 0, 0, 0.92);
+  --text-primary: #1D1D1F;
   --text-secondary: rgba(0, 0, 0, 0.64);
   --text-tertiary: rgba(0, 0, 0, 0.60);
-  --accent: #000000;
-  --on-accent: #ffffff;
+  --accent: #005CC4;
+  --on-accent: #FFFFFF;
   /* 语义同深色档 --accent-hover：仅用于配 --on-accent 的 accent 实底控件；
      浅色档叠加后接近黑，绝不能当通用悬停底。 */
-  --accent-hover: rgba(0, 0, 0, 0.88);
-  --accent-glow: rgba(0, 0, 0, 0.12);
+  --accent-fill: #0066D6;
+  --accent-hover: #0050AC;
+  --accent-glow: rgba(0, 102, 214, 0.18);
   --red: #e64537;
   --red-strong: #c0392b;
   --red-soft: #ff6b5e;
@@ -235,13 +248,13 @@
   --press-scale: 0.98;
   --scrollbar: rgba(0, 0, 0, 0.15);
   --scrollbar-hover: rgba(0, 0, 0, 0.25);
-  --selection: rgba(0, 0, 0, 0.12);
+  --selection: rgba(0, 102, 214, 0.20);
   --radius-sm: 12px;
   --radius-md: 20px;
   --radius-lg: 28px;
   --radius-pill: 999px;
-  --fs-2xs: 10px;
-  --fs-xs: 11px;
+  --fs-2xs: 12px;
+  --fs-xs: 12px;
   --fs-sm: 12px;
   --fs-md: 13px;
   --fs-lg: 14px;
@@ -258,16 +271,17 @@
     sans-serif;
   --font-mono: "Geist Mono", "SF Mono", "JetBrains Mono", "Fira Code", ui-monospace,
     monospace;
-  --ease: cubic-bezier(0.25, 0.1, 0.25, 1);
+  --ease: cubic-bezier(0.32, 0.72, 0, 1);
   /* 时长四档，单位一律 ms（2026-11-24 收敛）。
      原先是两套并存：本组 hover/state/enter 用 ms，另一组 fast/normal/slow 用 s。
      其中 --dur-fast 0.15s 与 --dur-hover 150ms **完全等值**，--dur-slow 零引用，
      已分别合并与删除。单位混用是真风险：`calc()` 里 ms 与 s 相加会悄悄算错，
      读代码也得先换算才敢判断快慢。 */
-  --dur-hover: 150ms;
-  --dur-state: 200ms;
-  --dur-normal: 250ms;
+  --dur-hover: 120ms;
+  --dur-state: 220ms;
+  --dur-normal: 220ms;
   --dur-enter: 300ms;
+  --dur-exit: 200ms;
   --titlebar-h: 44px;
   --toolbar-h: 44px;
   --statusbar-h: 28px;
@@ -280,26 +294,26 @@
     "Microsoft YaHei", sans-serif;
   --text3: rgba(0, 0, 0, 0.58);
   --mono: "Geist Mono", "SF Mono", "JetBrains Mono", "Fira Code", ui-monospace, Menlo, monospace;
-  --text: rgba(0, 0, 0, 0.95);
+  --text: #1D1D1F;
   --text-muted: rgba(0, 0, 0, 0.58);
   --brand: #ff4a3d;
   --text2: rgba(0, 0, 0, 0.72);
   --border-mid: rgba(0, 0, 0, 0.14);
   --radius-xs: 3px;
   --card: rgba(0, 0, 0, 0.03);
-  --bg-floating: #ffffff;
-  --bg-surface: #f5f5f5;
-  --bg: #ffffff;
-  --bg2: #f5f5f5;
+  --bg-floating: #FFFFFF;
+  --bg-surface: #FAFAFC;
+  --bg: #FAFAFC;
+  --bg2: #F5F5F5;
   --code-comment: #57606a;
   --code-keyword: #cf222e;
   --code-function: #8250df;
   --code-type: #953800;
   --card-hover: rgba(0, 0, 0, 0.06);
-  --surface: #ffffff;
+  --surface: #FFFFFF;
   --glow-md: 0 0 20px rgba(0, 0, 0, 0.08);
   --fs-base: 13px;
-  --head-bg: rgba(255, 255, 255, 0.8);
+  --head-bg: rgba(255, 255, 255, 0.85);
   --font-serif: "New York", "New York Small", Georgia, "Times New Roman",
     "Songti SC", "Source Han Serif SC", "Noto Serif CJK SC",
     "Microsoft YaHei UI", "Microsoft YaHei", "PingFang SC", serif;
@@ -307,9 +321,9 @@
   --code-number: #0550ae;
   --code-variable: #953800;
   --code-tag: #116329;
-  --focus-ring: rgba(0, 0, 0, 0.45);
+  --focus-ring: rgba(0, 92, 196, 0.85);
   --radius: 12px;
-  --surface-2: #f5f5f5;
+  --surface-2: #F7F7FA;
   --warn: #8a5a00;
   --sidebar-w: 260px;
   --accent-warn: #8a5a00;
@@ -317,7 +331,7 @@
   /* 浅色档：深色前景才看得见（原先两处与深色档贴反了） */
   --scrollbar-thumb: rgba(0, 0, 0, 0.45);
   --brand-dot: #181818;
-  --focus-glow: rgba(0, 0, 0, 0.12);
+  --focus-glow: rgba(0, 102, 214, 0.22);
   --brand-hover: #cc3a30;
 }
 
@@ -344,6 +358,7 @@
   --text-tertiary: rgba(43, 32, 18, 0.72);
   --accent: #2b2012;
   --on-accent: #fbf6ea;
+  --accent-fill: #2b2012;
   --accent-hover: rgba(43, 32, 18, 0.88);
   --accent-glow: rgba(43, 32, 18, 0.12);
   --red: #d0392a;
@@ -385,9 +400,9 @@
 
   --radius-pill: 999px;
 
-  --fs-2xs: 10px;
+  --fs-2xs: 12px;
 
-  --fs-xs: 11px;
+  --fs-xs: 12px;
 
   --fs-sm: 12px;
 
@@ -418,15 +433,17 @@
   --font-mono: "Geist Mono", "SF Mono", "JetBrains Mono", "Fira Code", ui-monospace,
     monospace;
 
-  --ease: cubic-bezier(0.25, 0.1, 0.25, 1);
+  --ease: cubic-bezier(0.32, 0.72, 0, 1);
 
-  --dur-hover: 150ms;
+  --dur-hover: 120ms;
 
-  --dur-state: 200ms;
+  --dur-state: 220ms;
 
-  --dur-normal: 250ms;
+  --dur-normal: 220ms;
 
   --dur-enter: 300ms;
+
+  --dur-exit: 200ms;
 
   --titlebar-h: 44px;
 
@@ -515,6 +532,7 @@
   --text-tertiary: rgba(0, 0, 0, 0.76);
   --accent: #000000;
   --on-accent: #ffffff;
+  --accent-fill: #000000;
   --accent-hover: #000000;
   --accent-glow: rgba(0, 0, 0, 0.18);
   --red: #d0392a;
@@ -556,9 +574,9 @@
 
   --radius-pill: 999px;
 
-  --fs-2xs: 10px;
+  --fs-2xs: 12px;
 
-  --fs-xs: 11px;
+  --fs-xs: 12px;
 
   --fs-sm: 12px;
 
@@ -589,15 +607,17 @@
   --font-mono: "Geist Mono", "SF Mono", "JetBrains Mono", "Fira Code", ui-monospace,
     monospace;
 
-  --ease: cubic-bezier(0.25, 0.1, 0.25, 1);
+  --ease: cubic-bezier(0.32, 0.72, 0, 1);
 
-  --dur-hover: 150ms;
+  --dur-hover: 120ms;
 
-  --dur-state: 200ms;
+  --dur-state: 220ms;
 
-  --dur-normal: 250ms;
+  --dur-normal: 220ms;
 
   --dur-enter: 300ms;
+
+  --dur-exit: 200ms;
 
   --titlebar-h: 44px;
 

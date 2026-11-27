@@ -257,7 +257,7 @@ body {
   padding: 10px;
   border-radius: var(--radius-sm);
   border: none;
-  background: var(--accent);
+  background: var(--accent-fill);
   color: var(--on-accent);
   font-size: 14px;
   font-weight: 500;
@@ -573,7 +573,7 @@ body {
   padding: 6px 16px;
   border-radius: var(--radius-sm);
   border: none;
-  background: var(--accent);
+  background: var(--accent-fill);
   color: var(--on-accent);
   font-family: var(--font);
   font-size: var(--fs-md);
@@ -734,8 +734,8 @@ body {
   color: var(--text-primary);
 }
 .tbar-btn.is-active {
-  background: var(--accent);
-  /* --accent 是单色（深 #fff / 浅 #000），#fff 在默认深色主题下白底白字 1.00:1 */
+  background: var(--accent-fill);
+  /* 选中态用实底 --accent-fill + 白字（5.42:1）；--accent 只做描边/文字 */
   color: var(--on-accent);
 }
 .tbar-btn:disabled {
@@ -1007,7 +1007,7 @@ body {
 }
 
 .calendar-cell.selected {
-  background: var(--accent);
+  background: var(--accent-fill);
   color: var(--on-accent);
 }
 
@@ -1335,7 +1335,7 @@ body {
   padding: 8px 16px;
   border-radius: var(--radius-sm);
   border: none;
-  background: var(--accent);
+  background: var(--accent-fill);
   color: var(--on-accent);
   font-size: 13px;
   cursor: pointer;
@@ -1620,7 +1620,7 @@ body {
   padding: 10px;
   border-radius: var(--radius-sm);
   border: none;
-  background: var(--accent);
+  background: var(--accent-fill);
   color: var(--on-accent);
   font-size: 14px;
   font-weight: 500;
@@ -1788,14 +1788,13 @@ body {
 }
 
 .license-footer button.license-activate {
-  background: var(--accent);
+  background: var(--accent-fill);
   border-color: transparent;
   color: var(--on-accent);
   font-weight: 600;
 }
 .license-footer button.license-activate:hover:not(:disabled) {
-  background: var(--accent);
-  filter: brightness(1.1);
+  background: var(--accent-hover);
 }
 
 /* ── 检查更新对话框（入口：帮助菜单「检查更新…」）────────────────────
@@ -1886,7 +1885,7 @@ body {
 
 /* 「获取 v…」主按钮：有新版时唯一需要用户点的动作，用 accent 让它显眼。 */
 .update-footer button.update-get-btn {
-  background: var(--accent);
+  background: var(--accent-fill);
   border-color: transparent;
   color: var(--on-accent, #fff);
   font-weight: 600;

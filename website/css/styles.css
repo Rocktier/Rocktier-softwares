@@ -251,6 +251,16 @@ body{font-family:var(--font);color:var(--text);line-height:var(--lh);-webkit-fon
   .hero-strip{grid-template-columns:minmax(0,1fr);gap:var(--s2)}
   .hero-strip figure:nth-child(n+2){display:none}
 }
+/* ═══ 产品页首屏主视觉（8 页同一套处理，只换 src）═════════════════════
+ * 三份外部评审（2026-11-22/23）的同一结论：产品页第一屏只有字，
+ * 真实 UI 出现得太晚，与「Details, not mockups」自相矛盾。
+ * 解法与首页 .hero-strip 同语法：一张「定场图」接在 CTA 之后，
+ * 位置、圆角、发丝边、衬底全站只有一个来源；宽度 = 取景的 1:1 CSS
+ * 尺寸（width/height 属性写 px/2，Retina 上 2 物理像素对 1 CSS 像素），
+ * 居中不铺满；比例跟取景走（shots.json 纪律：不强行统一比例）——
+ * 统一的是处理与位置，不是尺寸，这与下方细节卷轴同一立场。 */
+.hero-visual{margin:var(--s6) auto 0;width:fit-content;max-width:100%;position:relative;z-index:2}
+.hero-visual img{display:block;max-width:100%;height:auto;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--bg2)}
 .hero-in > :last-child{margin-block-end:0}
 .hero-in{text-align:center;position:relative;z-index:2}
 /* 打字动画会把标题从 1 行「长」到 2 行，结束时把 .lead 与按钮整体下推。
@@ -620,6 +630,10 @@ body:has(#consent:not(.hidden)){padding-block-end:8rem}
 /* pricing page: three plan cards, reusing .card / .card-top / .card-name / .card-dl */
 .plan{padding:var(--s5)}
 .plan .price-amount{font-size:clamp(2.2rem,5vw,2.8rem)}
+/* 全家桶卡的对账行：八款单买的合计与省额。这是「Best value」chip 的
+   算术证据 —— 评审指出合并购买的性价比没有呈现出来。等宽 + tabular-nums，
+   与价目表的数字同档；价格数字由 i18n 的 {pN} 回填，改价只动 HTML。 */
+.plan-save{margin:var(--s4) 0 0;font-family:var(--mono);font-size:.78rem;letter-spacing:.02em;color:var(--text2);font-variant-numeric:tabular-nums}
 .plan-list{list-style:none;margin:var(--s4) 0 0;padding:0;display:grid;gap:.55rem;color:var(--text2);font-size:.95rem}
 .plan-list li{display:flex;gap:.55rem;line-height:1.5}
 .plan-list li::before{content:"✓";color:var(--accent);font-weight:700;flex:none}
@@ -1094,9 +1108,16 @@ a.pt-row:hover,a.pt-row:focus-visible{color:var(--accent)}
    （别再靠「内容数对不上就自动流」的样子判断对错：grid 的自动放置不会报错，
    只会把每个元素塞进下一格。） */
 .idx{list-style:none;margin:var(--s4) 0 0;padding:0;border-top:1px solid var(--border-hover)}
-.idx-row{display:grid;grid-template-columns:minmax(0,1fr) 5.5rem 7rem 12rem;
+.idx-row{display:grid;grid-template-columns:7rem minmax(0,1fr) 5.5rem 7rem 12rem;
   column-gap:var(--s4);align-items:center;min-height:6.75rem;padding:0 .375rem;
   border-bottom:1px solid var(--border);transition:background-color .15s}
+/* 行首缩略图：与该产品产品页首屏主视觉同一条取景（同一文件，同一套
+   发丝边处理），扫列表即可「认出」产品，不必逐行读描述（2026-11-23
+   外部评审共识）。7rem × 1.6，2x 源下采样保持锐利；圆角用 8px ——
+   小元素档，与 .card-dl .btn.dl 同档，不占用 radius-sm 的 12px。
+   alt 为空：产品名就在旁边，图是装饰性重复，读屏不该念两遍。 */
+.idx-thumb{width:7rem;aspect-ratio:1.6;object-fit:cover;object-position:top center;display:block;
+  border-radius:8px;border:1px solid var(--border);background:var(--bg2)}
 .idx-row:hover{background:var(--accent-muted)}
 /* 产品名是整行的主入口，但它是行内链接，盒高只有 22px。
    WCAG 2.5.8 的 24px 下限在这里该满足：给成 inline-block 并抬到 24。 */
@@ -1139,6 +1160,9 @@ a.pt-row:hover,a.pt-row:focus-visible{color:var(--accent)}
 @media (max-width:960px){
   .idx-row{grid-template-columns:minmax(0,1fr) 5.5rem 10rem;column-gap:.75rem;row-gap:.35rem;min-height:0;padding:.9rem .375rem}
   .idx-plat{display:none}
+  /* 缩略图与平台列同批收起：窄屏行高是内容撑的，再塞一张图会把
+     每行抬高 60px，8 行就是半屏 —— 手机上让位给文字。 */
+  .idx-thumb{display:none}
   /* 描述句不再单行截断：390 下原样式把「整个文件夹」这类差异点切掉，
      而只有 en/zh 两门，放开换行最多多一行，不值得为此丢信息。 */
   .idx-desc{margin:.15rem 0 0;font-size:.9rem;white-space:normal;text-overflow:clip}

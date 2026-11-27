@@ -17,8 +17,8 @@
    所以浅色档必须把这一组令牌原样再写一遍 —— 铁律：两档令牌集必须完全相同。
    --radius / --font-* 是主题无关的结构性令牌，留在 :root 即可。 */
 :root {
-  --surface: #141414;
-  --surface-2: #1c1c1c;
+  --surface: #17181C;
+  --surface-2: #22242A;
   --brand: #ff4a3d;
   --brand-hover: #cc3a30;
   --radius: 12px;
@@ -27,12 +27,12 @@
 /* 浅色档。值取自 L0 母版 tokens.css 的 [data-theme="light"]：
    同一族浅色界面必须看起来是同一个产品，色阶不对齐会立刻穿帮。 */
 [data-theme="light"] {
-  --bg: #ffffff;
+  --bg: #FAFAFC;
   /* 这两条原先缺失，导致浅色档回落到 :root 的近黑值(#141414/#1c1c1c)，
      而文字令牌已按浅色档变近黑 —— 黑字压近黑底，实测 1.05~1.22:1。
      铁律：浅色档必须定义与 :root 完全相同的令牌集。 */
   --surface: #ffffff;
-  --surface-2: #f5f5f5;
+  --surface-2: #F7F7FA;
 }
 
 /* ── Elevation 档位图（UI 规范 v2.2 §2.3，findings D-71；2026-10-24 首个试点）─
@@ -560,7 +560,7 @@ body {
   color: var(--text);
 }
 .seg button[aria-pressed="true"] {
-  background: var(--accent);
+  background: var(--accent-fill);
   color: var(--on-accent);
   font-weight: 550;
 }
@@ -628,10 +628,10 @@ body {
   white-space: nowrap;
 }
 .primary {
-  /* 家族规范：主按钮是白底黑字（--accent / --on-accent）。
+  /* 家族规范：主按钮是实底强调色（--accent-fill / --on-accent，白字 5.42:1）。
      此前用品牌红实心底，把「状态色」当「行动色」用了 —— 全家族 18 处 --brand
      里这是最重的一处，规范 v2 已点名批评。 */
-  background: var(--accent);
+  background: var(--accent-fill);
   border: none;
   color: var(--on-accent);
   height: 32px;
@@ -647,8 +647,7 @@ body {
   transition: transform var(--dur-hover) var(--ease), filter var(--dur-hover) var(--ease);
 }
 .primary:hover:not(:disabled) {
-  background: var(--accent);
-  filter: brightness(1.1);
+  background: var(--accent-hover);
 }
 .primary:active:not(:disabled) {
   transform: scale(var(--press-scale));
@@ -841,14 +840,13 @@ body {
 }
 
 .license-footer button.license-activate {
-  background: var(--accent);
+  background: var(--accent-fill);
   border-color: transparent;
   color: var(--on-accent);
   font-weight: 600;
 }
 .license-footer button.license-activate:hover:not(:disabled) {
-  background: var(--accent);
-  filter: brightness(1.1);
+  background: var(--accent-hover);
 }
 
 /* ── 检查更新对话框（入口：帮助菜单「检查更新…」）────────────────────
@@ -939,7 +937,7 @@ body {
 
 /* 「获取 v…」主按钮：有新版时唯一需要用户点的动作，用 accent 让它显眼。 */
 .update-footer button.update-get-btn {
-  background: var(--accent);
+  background: var(--accent-fill);
   border-color: transparent;
   color: var(--on-accent);
   font-weight: 600;

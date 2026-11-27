@@ -209,9 +209,9 @@ html.is-mac .topbar {
   padding: 0 9px;
 }
 
-/* 全屏唯一的主操作：实心 accent 块（设计稿 .btn.primary = ink 反白） */
+/* 全屏唯一的主操作：实心强调色块（--accent-fill + --on-accent，白字 5.42:1） */
 .tbar-btn.primary {
-  background: var(--accent);
+  background: var(--accent-fill);
   color: var(--on-accent);
   font-weight: 500;
 }
@@ -246,7 +246,7 @@ html.is-mac .topbar {
   color: var(--text-primary);
 }
 
-.tbar-btn .state.on { background: var(--accent); color: var(--on-accent); }
+.tbar-btn .state.on { background: var(--accent-fill); color: var(--on-accent); }
 
 /* Open ▾ 拆分按钮：主体开文件，小箭头开最近列表 */
 .split {
@@ -688,7 +688,7 @@ html.is-mac .topbar {
 }
 
 .view-switch-btn.active {
-  background: var(--accent);
+  background: var(--accent-fill);
   color: var(--on-accent);
   font-weight: 550;
 }
@@ -1274,7 +1274,7 @@ html.is-mac .topbar {
 
 .fm-save,
 .fm-add {
-  background: var(--accent);
+  background: var(--accent-fill);
   color: var(--on-accent);
   border: none;
   border-radius: var(--radius-xs);
@@ -1284,7 +1284,7 @@ html.is-mac .topbar {
   font-weight: 600;
 }
 
-.fm-save { background: var(--accent); }
+.fm-save { background: var(--accent-fill); }
 .fm-add { background: transparent; color: var(--accent); padding: 4px 2px; }
 
 .fm-empty {
@@ -1354,7 +1354,7 @@ html.is-mac .topbar {
 }
 
 .view-toggle.active {
-  background: var(--accent);
+  background: var(--accent-fill);
   color: var(--on-accent);
 }
 
@@ -2124,7 +2124,7 @@ html.is-mac .topbar {
 
 /* 「获取 v…」主按钮：有新版时唯一需要用户点的动作，用 accent 让它显眼。 */
 .update-footer button.update-get-btn {
-  background: var(--accent);
+  background: var(--accent-fill);
   border-color: transparent;
   color: var(--on-accent, #fff);
   font-weight: 600;
